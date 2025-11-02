@@ -41,7 +41,7 @@ app = FastAPI(title=settings.app_name, version=settings.app_version)
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
+    allow_origins=settings.cors_origins_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -75,6 +75,31 @@ DATA_DIR.mkdir(exist_ok=True)
 @app.get("/")
 async def root():
     return {"message": "NEX.AI - AI Native Data Platform API", "status": "running"}
+
+
+@app.get("/health")
+async def health():
+    """Health check endpoint with database connectivity."""
+    from sqlalchemy import create_engine, text
+    from core.config import settings
+    
+    health_status = {
+        "status": "healthy",
+        "service": "NEX.AI API",
+        "database": "unknown"
+    }
+    
+    try:
+        # Test database connection
+        engine = create_engine(settings.database_url)
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        health_status["database"] = "connected"
+    except Exception as e:
+        health_status["status"] = "degraded"
+        health_status["database"] = f"error: {str(e)}"
+    
+    return health_status
 
 
 @app.post("/api/upload")

@@ -14,10 +14,10 @@ class Settings(BaseSettings):
     
     # API
     api_prefix: str = "/api/v1"
-    cors_origins: list[str] = ["http://localhost:3000", "http://localhost:5173"]
+    cors_origins: str = "http://localhost:3000,http://localhost:5173"
     
     # Database
-    database_url: Optional[str] = None  # TODO: Set default SQLite path
+    database_url: str = "postgresql+psycopg://nex:nex@localhost:5432/nex"
     
     # Security
     secret_key: Optional[str] = None  # TODO: Generate or load from env
@@ -26,6 +26,11 @@ class Settings(BaseSettings):
     # Logging
     log_level: str = "INFO"
     log_file: Optional[Path] = None
+    
+    @property
+    def cors_origins_list(self) -> list[str]:
+        """Parse CORS origins from comma-separated string."""
+        return [origin.strip() for origin in self.cors_origins.split(",")]
     
     class Config:
         env_file = ".env"
