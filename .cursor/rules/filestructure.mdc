@@ -1,0 +1,10 @@
+---
+applies_to: codegen
+---
+# File Structure Adherence
+- Strict hierarchy: /backend, /backend/service, /frontend
+- Components: src/components/TreeConnections.tsx, PersonaEditor.tsx, SynthGen.tsx, ChatEvals.tsx, DictExport.tsx.
+- Utils: src/utils/versionControl.js (simple-git), syntheticData.js (PyTorch/PennyLane).
+- Never create flat files or deviate—e.g., no dumping in root; always modular (one feature per file).
+- On edits: Validate against this structure; refactor if off-spec.
+- Example: New persona versioning → src/features/personas/versionManager.ts + test in tests/features/.

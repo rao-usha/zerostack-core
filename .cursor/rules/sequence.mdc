@@ -1,0 +1,22 @@
+---
+applies_to: all
+priority: 1
+---
+# Agent Execution Pipeline — STRICT ORDER
+
+Every agent action must follow this **sequential pipeline**:
+
+1. **PLAN**  
+   - Output: `PLAN.md` in task folder  
+   - Content: Goal, steps, files to touch, test plan  
+   - Never skip — even for "small" changes
+
+2. **WRITE**  
+   - Create/modify files **only** listed in `PLAN.md`  
+   - One feature per commit  
+   - No logic without tests
+
+3. **TEST**  
+   - Run **all** relevant tests:  
+     ```bash
+     npm run test:unit && npm run test:feature

@@ -1,0 +1,8 @@
+---
+applies_to: all
+---
+# OpenAI-Only Rule
+- Use exclusively OpenAI models (gpt-4o default; o1-mini for reasoning).
+- No other providers (e.g., no Claude/Anthropic)—route all calls via user's OpenAI key.
+- If key fails, pause and log error; do not fallback.
+- Cost awareness: Limit tokens <4K per call; prefer concise outputs.

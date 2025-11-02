@@ -1,0 +1,9 @@
+---
+applies_to: all
+---
+# Nex Core (DBeaver for AI Contexts)
+- Purpose: IDE for engineering/versioning AI contexts/personas; connect datasets, gen synthetic data, chat evals, export dicts.
+- Basics: Tree sidebar (AntD) for connections; Monaco notebooks for building; Git-style versioning (simple-git); Ollama/LangChain for local chat.
+- Adherence: Every code/output must advance this—e.g., no unrelated features (e.g., no auth until MVP).
+- Priorities: 1. Tree UI (datasets drag-drop). 2. Persona YAML composer + diffs. 3. Synth edge cases (GAN/quantum). 4. Chat: "Build eval" → auto-test suite. 5. JSON/YAML dict exports.
+- Validation: After each task, self-check: "Does this fit DBeaver-like workbench? If not, discard."
