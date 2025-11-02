@@ -1,0 +1,93 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Neon Colors */
+    --neon-blue: #00d4ff;
+    --neon-purple: #a855f7;
+    --neon-pink: #ff10f0;
+    --neon-cyan: #00fff9;
+    --neon-green: #00ff94;
+    --neon-orange: #ff6b35;
+    
+    /* Glow Colors */
+    --glow-blue: #3b82f6;
+    --glow-purple: #8b5cf6;
+    --glow-pink: #ec4899;
+    --glow-cyan: #06b6d4;
+    --glow-green: #10b981;
+  }
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: #0a0a0f;
+  color: #f0f0f5;
+}
+
+#root {
+  color: #f0f0f5;
+  min-height: 100vh;
+  background: #0a0a0f;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* Custom scrollbar for dark mode */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: #13131a;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #00d4ff, #a855f7);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #00fff9, #ff10f0);
+}
+
+/* Ensure gradients render properly */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #a855f7 #13131a;
+}
+
+/* Fix all input fields, textareas, and selects */
+input, textarea, select {
+  background-color: #1a1a24 !important;
+  color: #f0f0f5 !important;
+  border-color: rgba(168, 216, 255, 0.3) !important;
+}
+
+input::placeholder, textarea::placeholder {
+  color: #b0b8c0 !important;
+  opacity: 0.6 !important;
+}
+
+select option {
+  background-color: #1a1a24 !important;
+  color: #f0f0f5 !important;
+}
+
+input:focus, textarea:focus, select:focus {
+  background-color: #1a1a24 !important;
+  border-color: rgba(168, 216, 255, 0.6) !important;
+  outline: none !important;
+  box-shadow: 0 0 0 2px rgba(168, 216, 255, 0.2) !important;
+}
+
