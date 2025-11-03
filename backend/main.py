@@ -17,16 +17,49 @@ from services.data_quality import DataQualityAnalyzer
 from services.knowledge_gaps import KnowledgeGapIdentifier
 from database import Database
 
-app = FastAPI(title="NEX.AI - AI Native Data Platform", version="1.0.0")
+# Domain routers
+from domains.connectors.router import router as connectors_router
+from domains.context.router import router as context_router
+from domains.contexts.router import router as contexts_router
+from domains.personas.router import router as personas_router
+from domains.mcp.router import router as mcp_router
+from domains.datasets.router import router as datasets_router
+from domains.evaluations.router import router as evaluations_router
+from domains.governance.router import router as governance_router
+from domains.auth.router import router as auth_router
+from domains.jobs.router import router as jobs_router
+from domains.insights.router import router as insights_router
+
+# Core setup
+from core.config import settings
+from core.logging import setup_logging
+
+# Setup logging
+setup_logging()
+
+app = FastAPI(title=settings.app_name, version=settings.app_version)
 
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173"],
+    allow_origins=settings.cors_origins_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include domain routers
+app.include_router(auth_router, prefix=settings.api_prefix)
+app.include_router(connectors_router, prefix=settings.api_prefix)
+app.include_router(context_router, prefix=settings.api_prefix)
+app.include_router(contexts_router, prefix=settings.api_prefix)
+app.include_router(personas_router, prefix=settings.api_prefix)
+app.include_router(mcp_router, prefix=settings.api_prefix)
+app.include_router(datasets_router, prefix=settings.api_prefix)
+app.include_router(evaluations_router, prefix=settings.api_prefix)
+app.include_router(governance_router, prefix=settings.api_prefix)
+app.include_router(jobs_router, prefix=settings.api_prefix)
+app.include_router(insights_router, prefix=settings.api_prefix)
 
 # Initialize services
 db = Database()
@@ -44,6 +77,50 @@ DATA_DIR.mkdir(exist_ok=True)
 @app.get("/")
 async def root():
     return {"message": "NEX.AI - AI Native Data Platform API", "status": "running"}
+
+@app.get("/health/config")
+async def health_config():
+    """Check configuration, especially OpenAI API key status."""
+    from core.config import settings
+    import os
+    
+    has_settings_key = bool(settings.openai_api_key)
+    has_env_key = bool(os.environ.get('OPENAI_API_KEY'))
+    
+    return {
+        "openai_api_key_configured": has_settings_key or has_env_key,
+        "from_settings": has_settings_key,
+        "from_env": has_env_key,
+        "key_preview": (
+            settings.openai_api_key[:10] + "..." if settings.openai_api_key 
+            else (os.environ.get('OPENAI_API_KEY', '')[:10] + "..." if os.environ.get('OPENAI_API_KEY') else None)
+        )
+    }
+
+
+@app.get("/health")
+async def health():
+    """Health check endpoint with database connectivity."""
+    from sqlalchemy import create_engine, text
+    from core.config import settings
+    
+    health_status = {
+        "status": "healthy",
+        "service": "NEX.AI API",
+        "database": "unknown"
+    }
+    
+    try:
+        # Test database connection
+        engine = create_engine(settings.database_url)
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        health_status["database"] = "connected"
+    except Exception as e:
+        health_status["status"] = "degraded"
+        health_status["database"] = f"error: {str(e)}"
+    
+    return health_status
 
 
 @app.post("/api/upload")

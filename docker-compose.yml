@@ -1,0 +1,74 @@
+version: '3.8'
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: nex_db
+    environment:
+      POSTGRES_USER: nex
+      POSTGRES_PASSWORD: nex
+      POSTGRES_DB: nex
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nex -d nex"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - nex-network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: nex-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - DEBUG=false
+      - DATABASE_URL=postgresql+psycopg://nex:nex@db:5432/nex
+      - SECRET_KEY=${SECRET_KEY:-dev-secret-key-change-in-production}
+      - LOG_LEVEL=INFO
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:5173,http://localhost:80
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./backend/data_storage:/app/data_storage
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - nex-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: http://localhost:8000
+    container_name: nex-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - nex-network
+
+networks:
+  nex-network:
+    name: nex-network
+    driver: bridge
+
+volumes:
+  pgdata:
+

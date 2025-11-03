@@ -8,7 +8,8 @@ import {
   CheckCircle2,
   AlertCircle,
   TrendingUp,
-  Database
+  Database,
+  Layers
 } from 'lucide-react'
 import FloatingChat from './FloatingChat'
 
@@ -22,6 +23,7 @@ export default function Layout({ children }: LayoutProps) {
   const navItems = [
     { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
     { path: '/upload', icon: Upload, label: 'Upload Data' },
+    { path: '/contexts', icon: Layers, label: 'Contexts' },
     { path: '/insights', icon: Sparkles, label: 'Insights' },
     { path: '/quality', icon: CheckCircle2, label: 'Data Quality' },
     { path: '/gaps', icon: AlertCircle, label: 'Knowledge Gaps' },

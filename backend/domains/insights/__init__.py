@@ -1,0 +1,2 @@
+"""Insights domain - lightweight reporting."""
+
