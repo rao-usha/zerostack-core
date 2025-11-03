@@ -7,6 +7,7 @@ import Quality from './pages/Quality'
 import KnowledgeGaps from './pages/KnowledgeGaps'
 import Models from './pages/Models'
 import SyntheticData from './pages/SyntheticData'
+import Contexts from './pages/Contexts'
 
 function App() {
   return (
@@ -15,6 +16,7 @@ function App() {
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/upload" element={<DataUpload />} />
+          <Route path="/contexts" element={<Contexts />} />
           <Route path="/insights" element={<Insights />} />
           <Route path="/quality" element={<Quality />} />
           <Route path="/gaps" element={<KnowledgeGaps />} />

@@ -1,5 +1,5 @@
 """Dataset API router."""
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from typing import List, Optional
 from uuid import UUID
 from domains.datasets.models import (
@@ -21,11 +21,28 @@ async def create_dataset(dataset: DatasetCreate):
     raise HTTPException(status_code=501, detail="Not implemented")
 
 
-@router.post("/upload", response_model=Dataset, status_code=201)
-async def upload_dataset(file: UploadFile = File(...)):
-    """Upload a dataset file."""
-    # TODO: Keep existing upload functionality, integrate with new dataset registry
-    raise HTTPException(status_code=501, detail="Not implemented")
+@router.post("/upload", status_code=201)
+async def upload_dataset(
+    name: str = Form(...),
+    org_id: str = Form("demo"),
+    file: UploadFile = File(...)
+):
+    """
+    Upload a dataset file.
+    
+    TODO: stream to ObjectStore, compute sha256, basic sniff for schema
+    """
+    return {
+        "dataset": {"name": name, "org_id": org_id},
+        "version": {"id": "dv_stub", "sha256": "stub", "path": f"/objects/{name}"},
+        "status": "stub"
+    }
+
+
+@router.get("/{dataset_id}/versions")
+def list_versions(dataset_id: str):
+    """List versions for a dataset."""
+    return {"dataset_id": dataset_id, "versions": []}
 
 
 @router.get("", response_model=List[Dataset])

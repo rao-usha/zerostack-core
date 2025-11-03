@@ -20,8 +20,16 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     # Import metadata and models to create all tables
-    from backend.db.meta import METADATA
-    from backend.db import models  # noqa: F401
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+    
+    try:
+        from backend.db.meta import METADATA
+        from backend.db import models  # noqa: F401
+    except ImportError:
+        from db.meta import METADATA
+        from db import models  # noqa: F401
     
     # Create all tables
     METADATA.create_all(op.get_bind())
@@ -29,7 +37,14 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     # Drop all tables in reverse order
-    from backend.db.meta import METADATA
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+    
+    try:
+        from backend.db.meta import METADATA
+    except ImportError:
+        from db.meta import METADATA
     
     for table in reversed(METADATA.sorted_tables):
         op.drop_table(table.name)

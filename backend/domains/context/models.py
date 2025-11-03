@@ -77,3 +77,35 @@ class ContextStore(BaseModel):
     class Config:
         from_attributes = True
 
+
+# Context Engineering Models
+
+class ContextLayer(BaseModel):
+    """Context layer for stackable enrichments."""
+    kind: str  # "select" | "transform" | "dictionary" | "persona" | "mcp" | "rule"
+    name: str
+    spec: Dict[str, Any] = Field(default_factory=dict)  # e.g., SQL filter, regex, mapping, tool params
+    enabled: bool = True
+
+
+class ContextSpec(BaseModel):
+    """Context specification with datasets and layers."""
+    name: str
+    description: Optional[str] = None
+    dataset_version_ids: List[str] = Field(default_factory=list)  # references to DatasetVersions
+    layers: List[ContextLayer] = Field(default_factory=list)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class ContextVersion(BaseModel):
+    """Versioned context snapshot."""
+    context_id: str
+    version: str
+    digest: str  # content-addressed hash of spec
+    diff_summary: Optional[str] = None
+
+
+class ContextDictionary(BaseModel):
+    """Exportable key/value glossary & ontologies."""
+    name: str
+    entries: Dict[str, str] = Field(default_factory=dict)  # term -> definition or mapping

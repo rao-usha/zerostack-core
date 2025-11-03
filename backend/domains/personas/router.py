@@ -10,10 +10,14 @@ router = APIRouter(prefix="/personas", tags=["personas"])
 persona_service = PersonaService()
 
 
-@router.post("", response_model=Persona, status_code=201)
+@router.post("", status_code=201)
 async def create_persona(persona: PersonaCreate):
-    """Create a new persona."""
-    raise HTTPException(status_code=501, detail="Not implemented")
+    """
+    Create a new persona.
+    
+    TODO: Store persona in database, validate constraints.
+    """
+    return {"persona_id": "per_stub", "status": "stub"}
 
 
 @router.get("", response_model=List[Persona])

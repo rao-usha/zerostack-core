@@ -20,6 +20,7 @@ from database import Database
 # Domain routers
 from domains.connectors.router import router as connectors_router
 from domains.context.router import router as context_router
+from domains.contexts.router import router as contexts_router
 from domains.personas.router import router as personas_router
 from domains.mcp.router import router as mcp_router
 from domains.datasets.router import router as datasets_router
@@ -51,6 +52,7 @@ app.add_middleware(
 app.include_router(auth_router, prefix=settings.api_prefix)
 app.include_router(connectors_router, prefix=settings.api_prefix)
 app.include_router(context_router, prefix=settings.api_prefix)
+app.include_router(contexts_router, prefix=settings.api_prefix)
 app.include_router(personas_router, prefix=settings.api_prefix)
 app.include_router(mcp_router, prefix=settings.api_prefix)
 app.include_router(datasets_router, prefix=settings.api_prefix)
@@ -75,6 +77,25 @@ DATA_DIR.mkdir(exist_ok=True)
 @app.get("/")
 async def root():
     return {"message": "NEX.AI - AI Native Data Platform API", "status": "running"}
+
+@app.get("/health/config")
+async def health_config():
+    """Check configuration, especially OpenAI API key status."""
+    from core.config import settings
+    import os
+    
+    has_settings_key = bool(settings.openai_api_key)
+    has_env_key = bool(os.environ.get('OPENAI_API_KEY'))
+    
+    return {
+        "openai_api_key_configured": has_settings_key or has_env_key,
+        "from_settings": has_settings_key,
+        "from_env": has_env_key,
+        "key_preview": (
+            settings.openai_api_key[:10] + "..." if settings.openai_api_key 
+            else (os.environ.get('OPENAI_API_KEY', '')[:10] + "..." if os.environ.get('OPENAI_API_KEY') else None)
+        )
+    }
 
 
 @app.get("/health")

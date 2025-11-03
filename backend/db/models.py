@@ -1,5 +1,5 @@
 """Database table definitions using SQLAlchemy Core."""
-from sqlalchemy import Table, Column, ForeignKey, Boolean, String, JSON, Text, TIMESTAMP
+from sqlalchemy import Table, Column, ForeignKey, Boolean, Integer, String, JSON, Text, TIMESTAMP
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 from .meta import METADATA
@@ -83,8 +83,51 @@ context_versions = Table(
     Column("id", UUID, primary_key=True),
     Column("context_id", UUID, ForeignKey("contexts.id"), nullable=False),
     Column("version", String(64), nullable=False),
+    Column("digest", String(64), nullable=False),  # content-addressed hash
     Column("data_refs", JSON, nullable=False, server_default="[]"),  # dataset_version ids, MCP tools, personas
+    Column("layers", JSON, nullable=False, server_default="[]"),  # layer definitions
     Column("diff_summary", Text),
+    Column("created_at", TIMESTAMP(timezone=True), server_default=func.now()),
+)
+
+context_layers = Table(
+    "context_layers",
+    METADATA,
+    Column("id", UUID, primary_key=True),
+    Column("context_id", UUID, ForeignKey("contexts.id"), nullable=False),
+    Column("kind", String(64), nullable=False),  # "select" | "transform" | "dictionary" | "persona" | "mcp" | "rule"
+    Column("name", String(255), nullable=False),
+    Column("spec", JSON, nullable=False, server_default="{}"),
+    Column("enabled", Boolean, nullable=False, default=True),
+    Column("order", Integer, nullable=False, default=0),
+    Column("created_at", TIMESTAMP(timezone=True), server_default=func.now()),
+)
+
+context_dictionaries = Table(
+    "context_dictionaries",
+    METADATA,
+    Column("id", UUID, primary_key=True),
+    Column("context_id", UUID, ForeignKey("contexts.id"), nullable=False),
+    Column("name", String(255), nullable=False),
+    Column("entries", JSON, nullable=False, server_default="{}"),  # term -> definition mapping
+    Column("created_at", TIMESTAMP(timezone=True), server_default=func.now()),
+    Column("updated_at", TIMESTAMP(timezone=True), server_default=func.now()),
+)
+
+context_documents = Table(
+    "context_documents",
+    METADATA,
+    Column("id", UUID, primary_key=True),
+    Column("context_id", UUID, ForeignKey("contexts.id"), nullable=False),
+    Column("name", String(255), nullable=False),
+    Column("filename", String(512), nullable=False),
+    Column("storage_path", String(512), nullable=False),  # path in ObjectStore
+    Column("content_type", String(128), nullable=False),
+    Column("file_size", Integer, nullable=False),
+    Column("sha256", String(64), nullable=True),  # content hash
+    Column("summary", Text),  # AI-generated summary
+    Column("text_content", Text),  # extracted text content (for text files)
+    Column("metadata", JSON, nullable=False, server_default="{}"),
     Column("created_at", TIMESTAMP(timezone=True), server_default=func.now()),
 )
 

@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     log_file: Optional[Path] = None
     
+    # OpenAI
+    openai_api_key: Optional[str] = None
+    
     @property
     def cors_origins_list(self) -> list[str]:
         """Parse CORS origins from comma-separated string."""
@@ -34,7 +37,10 @@ class Settings(BaseSettings):
     
     class Config:
         env_file = ".env"
+        env_file_encoding = "utf-8"
         case_sensitive = False
+        # Allow loading from environment variables (for Docker)
+        extra = "allow"
 
 
 settings = Settings()
