@@ -1,0 +1,65 @@
+{
+  "rubric_id": "default",
+  "utility": {
+    "min_length": 100,
+    "max_length": 10000,
+    "min_word_count": 20,
+    "require_sections": true,
+    "min_constraint_count": 0,
+    "min_imperative_count": 3
+  },
+  "safety": {
+    "deny_patterns": [
+      "(?i)\\b(password|secret|api[_-]?key|token)\\s*[:=]",
+      "(?i)\\b(ssn|social\\s+security|credit\\s+card)\\b",
+      "(?i)\\b(ignore\\s+previous|forget\\s+all|system\\s+prompt)"
+    ],
+    "pii_patterns": [
+      "\\b\\d{3}-\\d{2}-\\d{4}\\b",
+      "\\b\\d{4}\\s+\\d{4}\\s+\\d{4}\\s+\\d{4}\\b",
+      "\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Z|a-z]{2,}\\b"
+    ],
+    "injection_patterns": [
+      "(?i)ignore\\s+(all|previous|above)",
+      "(?i)forget\\s+(everything|all)",
+      "(?i)system\\s*:"
+    ]
+  },
+  "hallucination_risk": {
+    "require_citations": false,
+    "max_contradiction_markers": 5,
+    "min_specificity_indicators": 0
+  },
+  "cost_latency": {
+    "max_estimated_tokens": 50000,
+    "target_model": "gpt-4o-mini",
+    "pricing": {
+      "gpt-4o-mini": {
+        "input_per_1m": 0.15,
+        "output_per_1m": 0.60
+      }
+    }
+  },
+  "scoring": {
+    "risk_weights": {
+      "deny_patterns": 30,
+      "pii": 40,
+      "injection_risk": 30,
+      "no_citations": 10,
+      "contradictions": 10
+    },
+    "utility_weights": {
+      "length_ok": 20,
+      "has_sections": 20,
+      "constraints": 20,
+      "instruction_clarity": 40
+    },
+    "decision_thresholds": {
+      "reject_risk_min": 60,
+      "reject_utility_max": 20,
+      "approve_risk_max": 30,
+      "approve_utility_min": 50
+    }
+  }
+}
+
