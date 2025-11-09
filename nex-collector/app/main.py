@@ -1,7 +1,7 @@
 """Main FastAPI application."""
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from .routes import contexts, aggregator, datasets, teachers
+from .routes import contexts, aggregator, datasets, teachers, explorer
 from .auth import verify_token
 from .config import settings
 
@@ -43,6 +43,7 @@ app.include_router(contexts.router)
 app.include_router(aggregator.router)
 app.include_router(datasets.router)
 app.include_router(teachers.router)
+app.include_router(explorer.router)
 
 
 if __name__ == "__main__":
