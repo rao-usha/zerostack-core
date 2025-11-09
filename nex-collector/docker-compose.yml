@@ -26,7 +26,7 @@ services:
     build: .
     command: uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
     environment:
-      DATABASE_URL: postgresql+psycopg://nex:nex@nex_db:5432/nex_collector
+      DATABASE_URL: postgresql+psycopg://nex:nex@nex_db_dev:5432/nex_collector
       REDIS_URL: redis://nex-collector_redis:6379/0
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       NEX_WRITE_TOKEN: ${NEX_WRITE_TOKEN:-dev-secret}
@@ -49,7 +49,7 @@ services:
     build: .
     command: rq worker -u redis://nex-collector_redis:6379/0 nex_queue
     environment:
-      DATABASE_URL: postgresql+psycopg://nex:nex@nex_db:5432/nex_collector
+      DATABASE_URL: postgresql+psycopg://nex:nex@nex_db_dev:5432/nex_collector
       REDIS_URL: redis://nex-collector_redis:6379/0
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       DATA_DIR: /code/data
