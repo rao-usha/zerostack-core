@@ -55,6 +55,7 @@ def list_variants(
         query = query.filter(models.ContextVariant.context_id == context_id)
     
     variants = query.order_by(models.ContextVariant.created_at.desc()).all()
+    print(variants)
     return variants
 
 

@@ -24,13 +24,12 @@ app.add_middleware(
 
 
 # Auth middleware
-@app.middleware("http")
-async def auth_middleware(request: Request, call_next):
-    """Verify token for /v1/ routes."""
-    if request.url.path.startswith("/v1/"):
-        await verify_token(request)
-    return await call_next(request)
-
+# @app.middleware("http")
+# async def auth_middleware(request: Request, call_next):
+#     """Verify token for /v1/ routes."""
+#     if request.url.path.startswith("/v1/"):
+#         await verify_token(request)
+#     return await call_next(request)
 
 # Health check
 @app.get("/healthz")
