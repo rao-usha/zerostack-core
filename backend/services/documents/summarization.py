@@ -13,11 +13,15 @@ class DocumentSummarizer:
     
     def __init__(self):
         api_key = settings.openai_api_key or os.environ.get('OPENAI_API_KEY')
-        if not api_key:
-            logger.warning("OpenAI API key not found. Summarization will be disabled.")
+        if not api_key or api_key.startswith('dummy') or api_key.startswith('your-'):
+            logger.warning("OpenAI API key not configured or is dummy. Summarization will be disabled.")
             self.client = None
         else:
-            self.client = OpenAI(api_key=api_key)
+            try:
+                self.client = OpenAI(api_key=api_key)
+            except Exception as e:
+                logger.error(f"Failed to initialize OpenAI client: {e}")
+                self.client = None
     
     def summarize(
         self,

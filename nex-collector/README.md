@@ -1,53 +1,118 @@
 # NEX Context Aggregator
 
-A Python service for **context aggregation** and **dataset building** that helps you create consistent, high-quality training data from off-the-shelf LLMs.
+## 🧪 AI-Native Data Distillation Pipeline
+
+A sophisticated service for **context aggregation** and **dataset distillation** that transforms off-the-shelf LLMs into specialized, domain-expert models through teacher-student knowledge transfer.
 
 ## What This Tool Does
 
-The NEX Context Aggregator is designed to:
+The NEX Context Aggregator implements a complete AI-native data distillation workflow:
 
-1. **Aggregate Contexts** - Continuously generate and refresh context documents from OTS (off-the-shelf) LLMs like GPT-4
-2. **Extract Features** - Automatically identify domain, persona, task, and style facets
-3. **Build Datasets** - Turn contexts into synthetic examples and fine-tune packs for smaller models
-4. **Mix & Match** - Compose new contexts by combining facets from existing variants
-5. **Query by Domain** - Filter and query contexts by domain, persona, or task
+### 1. **🧠 Context Aggregation**
+- Continuously generate and refresh context documents from GPT-4 and other LLMs
+- Automatic domain knowledge extraction and structuring
+- Multi-faceted context creation (domain, persona, task, style)
 
-## Quick Start
+### 2. **🔍 Feature Extraction**
+- Automatic identification of domain, persona, task, and style facets
+- Semantic chunking and vector embedding generation
+- Facet-based context organization and retrieval
 
-**Windows**: Run `.\nex-collector\start.bat` or see [GETTING_STARTED.md](GETTING_STARTED.md)
+### 3. **🧪 Synthetic Example Generation**
+- Privacy-safe training data creation from distilled contexts
+- Teacher-student distillation using advanced LLMs
+- Quality-controlled example generation with rationales
 
-**Linux/Mac**: Run `bash nex-collector/start.sh` or see [GETTING_STARTED.md](GETTING_STARTED.md)
+### 4. **📦 Fine-Tune Pack Building**
+- Curated dataset assembly for model specialization
+- Multi-variant composition and mixing
+- Ready-to-use training datasets for smaller models
 
-### Prerequisites
+### 5. **🔄 Mix & Match Composition**
+- Combine facets from existing variants to create new contexts
+- Intelligent context merging and deduplication
+- Domain adaptation through facet recombination
 
-1. **Main NEX database running**: The service connects to the main NEX `nex_db` container
-2. **Docker Desktop**: Required for running services
-3. **OPENAI_API_KEY**: Set in root `.env` file (see [SETUP.md](SETUP.md))
+## 🚀 Quick Start with Docker
 
-### Quick Start
+### One-Command Setup (Recommended)
 
 ```bash
-# 1. Start main NEX database
-docker-compose up -d db
+# Start the complete NEX platform with distillation
+docker-compose -f docker-compose.dev.yml up -d
 
-# 2. Start nex-collector
-.\nex-collector\start.bat  # Windows
-# or
-bash nex-collector/start.sh  # Linux/Mac
+# Seed demo distillation data
+docker exec nex-collector-api-1 python scripts/seed_demo.py
 
-# 3. Verify it's running
-curl http://localhost:8080/healthz
+# Access the Distillation Explorer
+open http://localhost:3000  # Click "Distillation" tab
 ```
 
-See [GETTING_STARTED.md](GETTING_STARTED.md) for detailed instructions.
+### Manual Setup
 
-## Features
+**Prerequisites:**
+1. **Docker Desktop** (20.10+)
+2. **OpenAI API Key** (for AI distillation features)
+3. **Main NEX platform** running (see main README)
 
-- **Context Aggregation**: Continuously sample OTS LLMs to generate/refresh contexts
-- **Feature Extraction**: Extract domain/persona/task/style facets for mix-and-match
-- **Dataset Building**: Turn contexts → examples → fine-tune packs
-- **Document Store**: Contexts as bodies of text with variants + embeddings
-- **Scalable Domains**: Support any domain (insurance, finance, healthcare, etc.) without schema changes
+```bash
+# 1. Start main NEX services
+cd /path/to/nex
+docker-compose -f docker-compose.dev.yml up -d db backend frontend
+
+# 2. Start NEX-Collector
+cd nex-collector
+docker-compose --profile init up -d
+
+# 3. Seed sample data
+docker exec nex-collector-api-1 python scripts/seed_demo.py
+
+# 4. Verify all services
+curl http://localhost:8080/healthz  # NEX-Collector
+curl http://localhost:8000/healthz  # Main Backend
+curl -I http://localhost:3000       # Frontend
+```
+
+### 🖥️ **Access Points**
+- **Distillation Explorer**: http://localhost:3000 (Distillation tab)
+- **API Documentation**: http://localhost:8080/docs
+- **Main Platform**: http://localhost:8000/docs
+
+### 📊 **Sample Data Available**
+After seeding, explore these pre-built distillation packs:
+- **Retail Customer Service** (Macy's scenarios)
+- **Insurance Underwriting** (Risk assessment)
+- **Finance Analysis** (CFO persona)
+- **General Retail** (Multi-domain contexts)
+
+## ✨ Key Features
+
+### 🧠 **Context Intelligence**
+- **Continuous Aggregation**: Automatically generate and refresh context documents from GPT-4
+- **Multi-Faceted Contexts**: Domain, persona, task, and style-aware context creation
+- **Semantic Understanding**: Vector embeddings for context similarity and retrieval
+
+### 🔬 **Distillation Pipeline**
+- **Synthetic Example Generation**: Privacy-safe training data from distilled contexts
+- **Teacher-Student Learning**: Knowledge transfer from large LLMs to specialized models
+- **Quality Assurance**: Automated quality checks and rationale generation
+
+### 🏗️ **Dataset Engineering**
+- **Fine-Tune Pack Assembly**: Curated datasets ready for model training
+- **Variant Composition**: Mix and match context facets for domain adaptation
+- **Scalable Architecture**: Support any domain without schema changes
+
+### 🔗 **Platform Integration**
+- **Distillation Explorer UI**: Interactive exploration in the main NEX frontend
+- **Unified API**: Seamless integration with main platform services
+- **Shared Database**: Consistent data access across services
+
+### 📊 **Pre-Built Data Packs**
+Explore these ready-to-use distillation datasets:
+- **🛍️ Retail Customer Service**: Macy's support scenarios with multiple personas
+- **💼 Insurance Underwriting**: Risk assessment with different tolerance levels
+- **🏦 Finance Analysis**: CFO persona for financial decision-making
+- **🏪 General Retail**: Broad retail contexts for domain generalization
 
 ## Project Structure
 

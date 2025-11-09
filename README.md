@@ -2,249 +2,300 @@
 
 ## AI Native Data Platform
 
-A comprehensive, AI-powered data platform that serves as a one-stop solution for all data-related needs in large organizations. This platform eliminates data governance concerns while providing powerful analytics, predictive modeling, and insights generation capabilities.
+A comprehensive, AI-powered data platform that serves as a one-stop solution for all data-related needs in large organizations. This platform eliminates data governance concerns while providing powerful analytics, predictive modeling, and **AI-native data distillation** capabilities.
+
+## 🚀 Quick Start (Docker)
+
+```bash
+# Clone and start everything
+git clone <repository-url>
+cd Nex
+
+# Start all services (database, backend, frontend, distillation)
+docker-compose -f docker-compose.dev.yml up -d
+
+# Seed sample distillation data
+```bash
+docker exec nex-collector-api-1 python scripts/seed_demo.py
+```
+
+**Access:** http://localhost:3000
+
+**Features to explore:**
+- 📊 **Data Upload & Analysis** - CSV datasets with AI insights
+- 🤖 **Predictive Modeling** - One-click ML models with feature importance
+- 🔄 **Synthetic Data** - Privacy-safe synthetic dataset generation
+- 🧪 **Distillation Explorer** - Browse AI-generated contexts and training data
 
 ## Features
 
 ### 🚀 Core Capabilities
 
 1. **Data Upload & Management**
-   - Upload CSV datasets
-   - Store and manage multiple datasets
-   - Preview data before analysis
+   - Upload CSV datasets with automatic type detection
+   - Store and manage multiple datasets with versioning
+   - Real-time data preview and profiling
 
 2. **Synthetic Data Generation**
    - Generate privacy-safe synthetic data from your datasets
-   - Preserves statistical properties and distributions
+   - Preserves statistical properties, correlations, and distributions
    - No data governance issues - completely synthetic
 
 3. **Predictive Modeling**
-   - Build regression and classification models
-   - Automatic feature importance analysis
-   - Performance metrics (R², accuracy)
+   - Build regression and classification models with one click
+   - Automatic feature engineering and selection
+   - Performance metrics (R², accuracy, F1, precision, recall)
+   - Feature importance analysis with SHAP values
 
 4. **AI-Powered Insights**
-   - Automatic strategic insights generation
-   - Trend identification
-   - Anomaly detection
-   - Correlation analysis
-   - Context-aware recommendations
+   - Automatic strategic insights generation using advanced LLMs
+   - Trend identification and anomaly detection
+   - Correlation analysis and causal inference
+   - Context-aware recommendations and actionable insights
 
 5. **Natural Language Chat Interface**
    - Ask questions about your data in plain English
-   - Get instant answers about statistics, trends, and patterns
-   - Dataset-aware responses
+   - Get instant answers with statistical analysis
+   - Dataset-aware responses with citations
+   - Multi-dataset conversational context
 
 6. **Data Quality Assessment**
-   - Comprehensive data quality scoring
-   - Completeness analysis
-   - Consistency checks
-   - Accuracy validation
-   - Issue identification and recommendations
+   - Comprehensive data quality scoring (0-100)
+   - Completeness, consistency, accuracy, and validity checks
+   - Automated issue identification and prioritized recommendations
+   - Quality trend monitoring over time
 
 7. **Knowledge Gap Identification**
-   - Identify missing features and data gaps
-   - Temporal coverage analysis
-   - Data diversity assessment
-   - Relationship gap detection
-   - Actionable recommendations
+   - Identify missing features and data gaps using ML
+   - Temporal coverage analysis and gap filling recommendations
+   - Data diversity assessment and bias detection
+   - Relationship gap detection with network analysis
 
-## Tech Stack
+8. **🆕 Data Distillation Explorer**
+   - **NEW**: Explore contexts and synthetic datasets from distillation pipeline
+   - Browse AI-generated domain knowledge and context variants
+   - View distillation statistics and dataset metadata
+   - Interactive exploration of fine-tune packs and training data
 
-### Backend
-- **FastAPI** - Modern Python web framework
-- **Pandas** - Data manipulation and analysis
-- **Scikit-learn** - Machine learning models
-- **SQLite** - Lightweight database for data storage
-- **NumPy, SciPy** - Numerical computations
+## 🏗️ Architecture
 
-### Frontend
-- **React 18** - UI framework
-- **TypeScript** - Type safety
-- **Vite** - Build tool
-- **Tailwind CSS** - Styling
-- **React Router** - Navigation
-- **Axios** - API client
-- **Lucide React** - Icons
+NEX.AI consists of three interconnected services:
 
-## Getting Started
+### 🔧 **Core Services**
+- **Main Backend** (Port 8000) - Core data platform with analytics, ML, and synthetic data generation
+- **Frontend** (Port 3000) - Modern React UI for data exploration and management
+- **NEX-Collector** (Port 8080) - Data distillation pipeline for context aggregation and dataset building
+
+### 🗃️ **Databases & Infrastructure**
+- **PostgreSQL + pgvector** (Port 5432) - Vector database for embeddings and relational data
+- **NEX-Collector DB** - Separate instance for distillation metadata
+- **Redis** (Port 6380) - Job queuing for background tasks
+
+## 🐳 Docker Setup (Recommended)
 
 ### Prerequisites
+- **Docker Desktop** (20.10+)
+- **Git**
+- **OpenAI API Key** (for AI features)
 
-- Python 3.8+
-- Node.js 18+
-- npm or yarn
+### Quick Start
 
-### Installation
+```bash
+# Clone the repository
+git clone <repository-url>
+cd Nex
 
-1. **Clone or navigate to the project directory**
-   ```bash
-   cd /Users/usharao/Documents/Nex
-   ```
+# Start all services (database, backend, frontend, distillation)
+docker-compose -f docker-compose.dev.yml up -d
 
-2. **Setup Backend**
-   ```bash
-   cd backend
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   pip install -r requirements.txt
-   ```
+# Seed sample distillation data (optional)
+docker exec nex-collector-api-1 python scripts/seed_demo.py
 
-3. **Setup Frontend**
-   ```bash
-   cd frontend
-   npm install
-   ```
+# View logs (optional)
+docker-compose -f docker-compose.dev.yml logs -f
+```
 
-### Running the Application
+### Access Points
+- **Frontend UI**: http://localhost:3000
+- **Main API Docs**: http://localhost:8000/docs
+- **Distillation API**: http://localhost:8080/docs
+- **Health Checks**: All services include health endpoints
 
-1. **Start the Backend Server**
-   ```bash
-   cd backend
-   source venv/bin/activate
-   python main.py
-   ```
-   The API will be available at `http://localhost:8000`
+### Docker Commands
 
-2. **Start the Frontend Development Server**
-   ```bash
-   cd frontend
-   npm run dev
-   ```
-   The frontend will be available at `http://localhost:3000`
+```bash
+# Stop services
+docker-compose -f docker-compose.dev.yml down
 
-3. **Access the Application**
-   Open your browser and navigate to `http://localhost:3000`
+# Rebuild after code changes
+docker-compose -f docker-compose.dev.yml build --no-cache
+
+# View container status
+docker-compose -f docker-compose.dev.yml ps
+
+# Execute commands in containers
+docker-compose -f docker-compose.dev.yml exec backend bash
+```
 
 ## Usage Guide
 
-### 1. Upload Data
-- Navigate to "Upload Data" section
-- Select a CSV file
-- File will be processed and stored
+### 🏠 **Dashboard**
+- Overview of all datasets, models, and recent activity
+- Quick access to all platform features
+- System health monitoring
 
-### 2. Generate Insights
-- Go to "Insights" page
-- Select your dataset
-- Optionally provide context (e.g., "retail", "healthcare")
-- Click "Generate Insights" to get AI-powered analysis
+### 📤 **Upload Data**
+- Drag & drop or select CSV files
+- Automatic data type detection and profiling
+- Preview data before processing
+- Support for large datasets with streaming upload
 
-### 3. Build Predictive Models
-- Navigate to "Predictive Models"
-- Select dataset and target column
-- Choose model type (regression or classification)
-- View model performance and feature importance
+### 🧠 **Generate Insights**
+- AI-powered strategic insights using GPT-4
+- Trend identification and anomaly detection
+- Correlation analysis with statistical significance
+- Context-aware recommendations and actionable insights
 
-### 4. Generate Synthetic Data
-- Go to "Synthetic Data" page
-- Select source dataset
-- Specify number of rows to generate
-- Get privacy-safe synthetic dataset
+### 🤖 **Predictive Models**
+- One-click model building for regression/classification
+- Automatic feature engineering and selection
+- Performance metrics with confidence intervals
+- Feature importance with SHAP value explanations
+- Model comparison and versioning
 
-### 5. Assess Data Quality
-- Navigate to "Data Quality"
-- Select dataset for analysis
-- Review quality scores and issues
-- Get recommendations for improvement
+### 🔄 **Synthetic Data**
+- Generate privacy-safe synthetic datasets
+- Preserve statistical properties and relationships
+- Configurable generation parameters
+- Quality validation of synthetic data
 
-### 6. Identify Knowledge Gaps
-- Go to "Knowledge Gaps" page
-- Select dataset
-- View identified gaps and recommendations
+### 📊 **Data Quality**
+- Comprehensive quality scoring (0-100)
+- Automated issue detection and prioritization
+- Quality trend monitoring
+- Actionable improvement recommendations
 
-### 7. Chat with AI
-- Navigate to "Chat" section
-- Select a dataset (optional)
-- Ask questions in natural language
-- Get instant answers about your data
+### 🔍 **Knowledge Gaps**
+- ML-powered gap identification
+- Temporal coverage analysis
+- Data diversity assessment
+- Relationship gap detection
 
-## API Endpoints
+### 💬 **Chat Interface**
+- Natural language queries about your data
+- Multi-dataset conversational context
+- Statistical analysis with citations
+- Visual chart generation from text queries
 
-### Data Management
-- `POST /api/upload` - Upload a dataset
-- `GET /api/datasets` - List all datasets
-- `GET /api/dataset/{dataset_id}` - Get dataset details
+### 🧪 **🆕 Distillation Explorer**
+- **NEW**: Explore AI-generated contexts and variants
+- Browse domain knowledge across personas/tasks/styles
+- View distillation pipeline statistics
+- Interactive exploration of fine-tune datasets
+- Sample data packs for retail, insurance, and finance domains
 
-### Synthetic Data
-- `POST /api/synthetic/generate` - Generate synthetic data
+## 🔌 API Documentation
 
-### Predictive Modeling
-- `POST /api/models/predictive` - Build a predictive model
+- **Main Backend**: http://localhost:8000/docs (Swagger UI)
+- **Distillation API**: http://localhost:8080/docs (Swagger UI)
 
-### Insights
-- `POST /api/insights/generate` - Generate strategic insights
-
-### Chat
-- `POST /api/chat` - Query data using natural language
-
-### Data Quality
-- `GET /api/quality/{dataset_id}` - Get data quality report
-
-### Knowledge Gaps
-- `GET /api/knowledge-gaps/{dataset_id}` - Identify knowledge gaps
+### Key Endpoints
+- `POST /api/upload` - Upload and analyze CSV datasets
+- `POST /api/synthetic/generate` - Create privacy-safe synthetic data
+- `POST /api/models/predictive` - Build ML models with explanations
+- `POST /api/insights/generate` - Generate AI-powered insights
+- `POST /api/chat` - Natural language data queries
 
 ## Project Structure
 
 ```
 Nex/
-├── backend/
-│   ├── main.py                 # FastAPI application
-│   ├── database.py             # Database operations
-│   ├── requirements.txt        # Python dependencies
-│   ├── services/
-│   │   ├── synthetic_data.py   # Synthetic data generation
-│   │   ├── insights.py         # Insights generation
-│   │   ├── chat.py            # Chat service
-│   │   ├── data_quality.py    # Data quality analysis
-│   │   └── knowledge_gaps.py  # Knowledge gap identification
-│   └── data_storage/          # Database and data storage
+├── backend/                    # Main data platform
+│   ├── main.py                # FastAPI application
+│   ├── requirements.txt       # Python dependencies
+│   ├── domains/               # Business domain modules
+│   │   ├── datasets/         # Dataset management
+│   │   ├── contexts/         # Context engineering
+│   │   ├── insights/         # AI insights generation
+│   │   └── models/           # Predictive modeling
+│   └── services/             # Core services
+│       ├── synthetic_data.py # Privacy-safe data generation
+│       ├── data_quality.py   # Quality assessment
+│       └── knowledge_gaps.py # Gap identification
 │
-├── frontend/
+├── frontend/                  # React TypeScript UI
 │   ├── src/
-│   │   ├── pages/             # React page components
-│   │   ├── components/        # Reusable components
-│   │   ├── api/               # API client
-│   │   └── App.tsx            # Main app component
+│   │   ├── pages/            # Page components
+│   │   │   ├── Dashboard.tsx
+│   │   │   ├── DataUpload.tsx
+│   │   │   ├── SyntheticData.tsx
+│   │   │   └── Distillation.tsx # 🆕 NEW
+│   │   ├── components/       # Reusable components
+│   │   ├── api/              # API client
+│   │   └── App.tsx           # Main app component
 │   ├── package.json
-│   └── vite.config.ts
+│   └── tailwind.config.js
 │
+├── nex-collector/             # Data distillation pipeline
+│   ├── app/
+│   │   ├── routes/           # API routes
+│   │   ├── distill/          # Distillation pipeline
+│   │   │   ├── sampler.py    # Example sampling
+│   │   │   ├── builder.py    # Dataset building
+│   │   │   └── rationales.py # Teacher outputs
+│   │   ├── ingest/           # Data ingestion
+│   │   │   ├── generator.py  # Context generation
+│   │   │   └── embed.py      # Vector embeddings
+│   │   └── providers/        # LLM providers
+│   ├── data/packs/           # Pre-built datasets
+│   │   ├── retail-customer-service@1.0.0/
+│   │   ├── insurance-underwriter-risk-assessment@1.0.0/
+│   │   └── macys-retail-customer-service@1.0.0/
+│   └── scripts/              # Seed and utility scripts
+│       ├── seed_demo.py      # Demo data seeding
+│       └── seed_insurance_dataset.py
+│
+├── docker-compose.yml        # Production deployment
+├── docker-compose.dev.yml    # Development environment
 └── README.md
 ```
 
-## Features Highlights
+## 📦 Sample Data Packs
 
-### Privacy & Governance
-- Synthetic data generation eliminates privacy concerns
-- No sensitive data exposure in insights or models
-- Local processing - data stays on your infrastructure
+NEX includes pre-built distillation data packs for immediate exploration:
+- **🛍️ Retail Customer Service** - Macy's support scenarios with multiple personas
+- **💼 Insurance Underwriting** - Risk assessment with different tolerance levels
+- **🏦 Finance Analysis** - CFO persona for financial decision-making
+- **🏪 General Retail** - Broad retail contexts for domain generalization
 
-### AI-Powered
-- Natural language queries
-- Automatic insights generation
-- Context-aware recommendations
-- Intelligent gap identification
+## ⭐ Key Features
 
-### Comprehensive Analytics
-- Statistical analysis
-- Predictive modeling
-- Data quality assessment
-- Relationship discovery
+- **🛡️ Privacy-First**: Synthetic data generation eliminates governance concerns
+- **🤖 AI-Native**: GPT-4 integration with explainable AI insights
+- **🔬 Data Distillation**: Teacher-student distillation for specialized models
+- **📊 Full Analytics**: Statistical analysis, ML modeling, and quality assessment
+- **💬 Natural Language**: Plain English queries about your data
 
-## Future Enhancements
+## 📚 Documentation
 
-- Real-time data streaming support
-- Advanced ML model types (neural networks, etc.)
-- Data visualization dashboards
-- Export capabilities (PDF reports, CSV exports)
-- Multi-user support with authentication
-- Integration with cloud storage providers
-- Advanced synthetic data techniques (GANs, VAEs)
+- **[Docker Setup](./docs/docker.md)** - Complete container configuration
+- **[API Reference](./docs/api.md)** - Full endpoint documentation
+- **[Development](./docs/development.md)** - Local setup and debugging
+- **[Testing](./docs/testing.md)** - Quality assurance and CI/CD
 
-## License
+## 🤝 Contributing
 
-This is a prototype application for demonstration purposes.
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
-## Support
+## 📄 License
 
-For issues or questions, please check the code comments or API documentation at `http://localhost:8000/docs` when the backend is running.
+This is a prototype application for demonstration and research purposes.
+
+---
+
+**🚀 Ready to explore AI-native data distillation? Start with `docker-compose -f docker-compose.dev.yml up -d` and visit http://localhost:3000**
 
