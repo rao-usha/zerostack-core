@@ -1,5 +1,5 @@
 {
-  "id": "ds-885855ccef59",
+  "id": "ds-9588adbb2ef5",
   "name": "insurance-underwriter-risk-assessment",
   "version": "1.0.0",
   "kind": "finetune_pack",
@@ -13,15 +13,15 @@
     {
       "name": "train.jsonl",
       "path": "/code/data/packs/insurance-underwriter-risk-assessment@1.0.0/train.jsonl",
-      "hash": "87c192f89bc25a6dcfa117908d2b69aeaf16999a3628a564da91e1f5b595ed5c"
+      "hash": "0c4f21cc0fbc53a0c46d888c6aa8eab4e33d6d25ee00c24586e41439447a75fc"
     },
     {
       "name": "eval.jsonl",
       "path": "/code/data/packs/insurance-underwriter-risk-assessment@1.0.0/eval.jsonl",
-      "hash": "8fb5cd46f965f3836551a7bfb77cb11860defa1d79c770259274e7b3c2971428"
+      "hash": "2b5e74f5ce8306168a6bb609be12874625b5108430aa9f9f55816dd698ad66ae"
     }
   ],
-  "num_examples": 10,
-  "train_size": 9,
-  "eval_size": 1
+  "num_examples": 60,
+  "train_size": 54,
+  "eval_size": 6
 }

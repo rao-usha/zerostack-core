@@ -1,10 +1,11 @@
 """Database models for context aggregator."""
-from sqlalchemy import Column, String, DateTime, Boolean, JSON, ForeignKey, Integer, Enum as SQLEnum, Text, Float
+from sqlalchemy import Column, String, DateTime, Boolean, JSON, ForeignKey, Integer, Enum as SQLEnum, Text, Float, and_
 from sqlalchemy.dialects.postgresql import ARRAY
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, foreign
 from enum import Enum as PyEnum
 from .db import Base
 from sqlalchemy.sql import func
+import uuid
 
 
 class ExampleType(PyEnum):
@@ -22,6 +23,32 @@ class DatasetKind(PyEnum):
     FINETUNE_PACK = "finetune_pack"
 
 
+class QualityAssessment(Base):
+    """Quality assessment for various entities."""
+    __tablename__ = "quality_assessments"
+    
+    id = Column(String, primary_key=True, default=lambda: f"qa-{uuid.uuid4().hex[:12]}")
+    # Polymorphic relationship: entity_type + entity_id
+    entity_type = Column(String, nullable=False, index=True)  # 'chunk', 'teacher_run', 'targets', 'context_doc', 'context_variant'
+    entity_id = Column(String, nullable=False, index=True)  # ID of the related entity
+    # Quality metrics
+    coherence = Column(Float, nullable=True)  # Coherence score (0.0-1.0)
+    faithfulness = Column(Float, nullable=True)  # Faithfulness score (0.0-1.0)
+    toxicity = Column(Float, nullable=True)  # Toxicity score (0.0-1.0)
+    pii_flags = Column(ARRAY(String), nullable=True)  # PII flags detected
+    readability = Column(Float, nullable=True)  # Readability score
+    completeness = Column(Float, nullable=True)  # Completeness score
+    relevance = Column(Float, nullable=True)  # Relevance score
+    accuracy = Column(Float, nullable=True)  # Accuracy score
+    # Overall assessment
+    confidence = Column(Float, nullable=True)  # Overall confidence score (0.0-1.0)
+    # Additional metadata
+    assessment_method = Column(String, nullable=True)  # e.g., 'judger_prompt', 'reward_model', 'human_eval'
+    assessor_model = Column(String, nullable=True)  # Model used for assessment
+    metadata_json = Column(JSON, nullable=True)  # Additional assessment metadata
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
 class ContextDoc(Base):
     """Context document (body of text with metadata)."""
     __tablename__ = "context_docs"
@@ -33,6 +60,8 @@ class ContextDoc(Base):
     metadata_json = Column(JSON, nullable=False, default={})
     nex_context_id = Column(String, nullable=True, index=True)  # Optional link to NEX
     nex_context_version = Column(String, nullable=True)
+    # De-duplication & drift control
+    embedding_centroid = Column(JSON, nullable=True)  # Average embedding vector per version for drift detection
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
     # Relationships
@@ -79,9 +108,9 @@ class Chunk(Base):
     text_hash = Column(String, nullable=True, index=True)  # Hash(text) for de-duplication
     license = Column(String, nullable=True)  # License information
     usage_rights = Column(String, nullable=True)  # Usage rights information
-    # Quality signals
-    quality_scores_json = Column(JSON, nullable=True)  # Quality scores: {coherence, faithfulness, toxicity, pii_flags, ...}
-    confidence = Column(Float, nullable=True)  # Overall confidence score (0.0-1.0)
+    # Quality signals - removed, use QualityAssessment table instead
+    # quality_scores_json = Column(JSON, nullable=True)  # DEPRECATED: Use QualityAssessment table
+    # confidence = Column(Float, nullable=True)  # DEPRECATED: Use QualityAssessment table
     # Smarter chunking for retrieval
     neighbors = Column(ARRAY(String), nullable=True)  # Bidirectional links to neighboring chunk IDs
     section_hierarchy = Column(JSON, nullable=True)  # Document structure: {level: int, section: str, subsection: str, ...}
@@ -92,6 +121,9 @@ class Chunk(Base):
     
     # Relationships
     variant = relationship("ContextVariant", back_populates="chunks")
+    quality_assessments = relationship("QualityAssessment", 
+                                       primaryjoin="and_(Chunk.id==foreign(QualityAssessment.entity_id), QualityAssessment.entity_type=='chunk')",
+                                       lazy="dynamic")
 
 
 class FeatureVector(Base):
@@ -124,6 +156,10 @@ class SyntheticExample(Base):
     text_hash = Column(String, nullable=True, index=True)  # Hash(input_json) for de-duplication
     license = Column(String, nullable=True)  # License information
     usage_rights = Column(String, nullable=True)  # Usage rights information
+    # MMR & query-aware selection
+    retrieval_context_ids = Column(ARRAY(String), nullable=True)  # Chunk IDs used during retrieval (for MMR/query-aware selection)
+    # De-duplication & drift control
+    semantic_hash = Column(String, nullable=True, index=True)  # SimHash/MinHash for near-duplicate detection
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
     # Relationships
@@ -143,13 +179,22 @@ class TeacherRun(Base):
     params_json = Column(JSON, nullable=False)
     output_json = Column(JSON, nullable=True)  # {text, usage, logprobs?}
     usage_json = Column(JSON, nullable=True)
-    # Quality signals
-    quality_scores_json = Column(JSON, nullable=True)  # Quality scores: {coherence, faithfulness, toxicity, pii_flags, ...}
-    confidence = Column(Float, nullable=True)  # Overall confidence score (0.0-1.0)
+    # Teacher ensembles & reproducibility
+    rand_seed = Column(Integer, nullable=True)  # Random seed for reproducibility
+    temperature = Column(Float, nullable=True)  # Temperature parameter
+    decoding_params = Column(JSON, nullable=True)  # Additional decoding parameters (top_p, top_k, etc.)
+    # Quality signals - removed, use QualityAssessment table instead
+    # quality_scores_json = Column(JSON, nullable=True)  # DEPRECATED: Use QualityAssessment table
+    # confidence = Column(Float, nullable=True)  # DEPRECATED: Use QualityAssessment table
+    # Rationales & critique
+    rationale_json = Column(JSON, nullable=True)  # Chain-of-thought reasoning (private, not exposed to student)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
     # Relationships
     example = relationship("SyntheticExample", back_populates="teacher_runs")
+    quality_assessments = relationship("QualityAssessment",
+                                       primaryjoin="and_(TeacherRun.id==foreign(QualityAssessment.entity_id), QualityAssessment.entity_type=='teacher_run')",
+                                       lazy="dynamic")
 
 
 class Targets(Base):
@@ -165,13 +210,19 @@ class Targets(Base):
     source_uri = Column(String, nullable=True)  # URI of source document
     source_span = Column(JSON, nullable=True)  # Character offsets: {start: int, end: int}
     citation_ids = Column(ARRAY(String), nullable=True)  # Array of citation IDs
-    # Quality signals
-    quality_scores_json = Column(JSON, nullable=True)  # Quality scores: {coherence, faithfulness, toxicity, pii_flags, ...}
-    confidence = Column(Float, nullable=True)  # Overall confidence score (0.0-1.0)
+    # Quality signals - removed, use QualityAssessment table instead
+    # quality_scores_json = Column(JSON, nullable=True)  # DEPRECATED: Use QualityAssessment table
+    # confidence = Column(Float, nullable=True)  # DEPRECATED: Use QualityAssessment table
+    # Rationales & critique
+    justification = Column(Text, nullable=True)  # Short, verifiable justification (distilled from rationales, safe for student)
+    faithfulness_score = Column(Float, nullable=True)  # Score from critic pass (0.0-1.0) indicating faithfulness to source
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
     # Relationships
     example = relationship("SyntheticExample", back_populates="targets")
+    quality_assessments = relationship("QualityAssessment",
+                                      primaryjoin="and_(Targets.id==foreign(QualityAssessment.entity_id), QualityAssessment.entity_type=='targets')",
+                                      lazy="dynamic")
 
 
 class DatasetManifest(Base):

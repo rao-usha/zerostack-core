@@ -29,9 +29,9 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # Recreate the enum
-    op.execute("CREATE TYPE underwritingdecision AS ENUM ('approve', 'hold', 'reject')")
-    
+    # Recreate the enum if it doesn't exist
+    op.execute("DO $$ BEGIN CREATE TYPE underwritingdecision AS ENUM ('approve', 'hold', 'reject'); EXCEPTION WHEN duplicate_object THEN null; END $$;")
+
     # Recreate the table
     op.create_table('underwriting_runs',
     sa.Column('id', sa.String(), nullable=False),

@@ -1,0 +1,27 @@
+{
+  "id": "ds-789c50e277bb",
+  "name": "retail-customer-service",
+  "version": "1.0.0",
+  "kind": "finetune_pack",
+  "variant_ids": [
+    "var-retail-customer-service"
+  ],
+  "filters": {
+    "has_teacher_output": false
+  },
+  "files": [
+    {
+      "name": "train.jsonl",
+      "path": "/code/data/packs/retail-customer-service@1.0.0/train.jsonl",
+      "hash": "619ce597d2643b8145151b173c6c65ab8523de195d37ac160fa130f0f2a25bee"
+    },
+    {
+      "name": "eval.jsonl",
+      "path": "/code/data/packs/retail-customer-service@1.0.0/eval.jsonl",
+      "hash": "940d8d3680f3c426f380fbb99d8d57f86337b4d41e2b31b8b3c234ea78cf4c34"
+    }
+  ],
+  "num_examples": 65,
+  "train_size": 58,
+  "eval_size": 7
+}

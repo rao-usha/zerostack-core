@@ -67,6 +67,7 @@ ContextDoc (1) ──< (many) DatasetManifest
 - `body_text` (Text): The actual context content
 - `metadata_json` (JSON): Additional metadata
 - `nex_context_id` (String, optional): Link to NEX system
+- `embedding_centroid` (JSON, optional): Average embedding vector per version for concept drift detection
 - `created_at` (DateTime): Creation timestamp
 
 **Example**:
@@ -77,6 +78,7 @@ ContextDoc (1) ──< (many) DatasetManifest
   "version": "1.0.0",
   "body_text": "# Insurance Underwriting Context\n\n## Role: Senior Insurance Underwriter\n\nYou are an experienced insurance underwriter...",
   "metadata_json": {},
+  "embedding_centroid": [0.1, 0.2, 0.3, ...],
   "created_at": "2025-01-15T10:30:00Z"
 }
 ```
@@ -223,6 +225,8 @@ WHERE domain = 'insurance'
 - `text_hash` (String, optional, indexed): Hash of input_json for de-duplication
 - `license` (String, optional): License information for compliance
 - `usage_rights` (String, optional): Usage rights information
+- `retrieval_context_ids` (Array[String], optional): Chunk IDs used during retrieval (for MMR/query-aware selection)
+- `semantic_hash` (String, optional, indexed): SimHash/MinHash for near-duplicate detection
 - `created_at` (DateTime): Creation timestamp
 
 **Example Types**:
@@ -242,6 +246,7 @@ WHERE domain = 'insurance'
   },
   "constraints_json": {},
   "tags": ["domain:insurance", "persona:underwriter", "task:risk_assessment"],
+  "retrieval_context_ids": ["chunk-var-insurance-underwriter-risk-assessment-0", "chunk-var-insurance-underwriter-risk-assessment-1"],
   "created_at": "2025-01-15T10:35:00Z"
 }
 ```
@@ -293,6 +298,9 @@ WHERE domain = 'insurance'
 - `params_json` (JSON): Generation parameters
 - `output_json` (JSON): Model output (text, usage, logprobs)
 - `usage_json` (JSON): Token usage statistics
+- `rand_seed` (Integer, optional): Random seed for reproducibility
+- `temperature` (Float, optional): Temperature parameter used for generation
+- `decoding_params` (JSON, optional): Additional decoding parameters (e.g., `{top_p: 0.9, top_k: 50}`)
 - `quality_scores_json` (JSON, optional): Quality scores (e.g., `{coherence: 0.9, faithfulness: 0.85, toxicity: 0.1, pii_flags: []}`)
 - `confidence` (Float, optional): Overall confidence score (0.0-1.0)
 - `created_at` (DateTime): Creation timestamp
@@ -307,6 +315,12 @@ WHERE domain = 'insurance'
   "params_json": {
     "temperature": 0.7,
     "max_tokens": 200
+  },
+  "rand_seed": 42,
+  "temperature": 0.7,
+  "decoding_params": {
+    "top_p": 0.9,
+    "top_k": 50
   },
   "output_json": {
     "text": "Based on the provided context, I would assess the risk level as moderate...",
@@ -328,6 +342,14 @@ WHERE domain = 'insurance'
     "pii_flags": []
   },
   "confidence": 0.87,
+  "rationale_json": {
+    "reasoning_steps": [
+      "First, I need to analyze the risk factors mentioned in the context",
+      "Then, I'll compare them against standard underwriting criteria",
+      "Finally, I'll determine the appropriate risk level"
+    ],
+    "conclusion": "Based on the analysis, the risk level is moderate."
+  },
   "created_at": "2025-01-15T10:40:00Z"
 }
 ```
@@ -347,6 +369,8 @@ WHERE domain = 'insurance'
 - `citation_ids` (Array[String], optional): Array of citation IDs referencing source material
 - `quality_scores_json` (JSON, optional): Quality scores (e.g., `{coherence: 0.9, faithfulness: 0.85, toxicity: 0.1, pii_flags: []}`)
 - `confidence` (Float, optional): Overall confidence score (0.0-1.0)
+- `justification` (Text, optional): Short, verifiable justification distilled from teacher rationales (safe for student, no private CoT)
+- `faithfulness_score` (Float, optional): Score from critic pass (0.0-1.0) indicating faithfulness to source material
 - `created_at` (DateTime): Creation timestamp
 
 **Example**:
@@ -355,7 +379,20 @@ WHERE domain = 'insurance'
   "id": "target-abc123def456",
   "example_id": "ex-abc123def456",
   "y_text": "Based on the provided context, I would assess the risk level as moderate...",
-  "y_probs_json": null,
+  "y_probs_json": {
+    "token_probs": {
+      "moderate": 0.45,
+      "low": 0.30,
+      "high": 0.25
+    },
+    "class_probs": {
+      "moderate": 0.50,
+      "low": 0.30,
+      "high": 0.20
+    },
+    "num_runs": 3,
+    "aggregation_method": "weighted_mean"
+  },
   "y_scores_json": {
     "quality": 0.85,
     "relevance": 0.92
@@ -370,6 +407,8 @@ WHERE domain = 'insurance'
     "pii_flags": []
   },
   "confidence": 0.91,
+  "justification": "Based on risk assessment guidelines, the risk level is moderate due to standard factors.",
+  "faithfulness_score": 0.88,
   "created_at": "2025-01-15T10:41:00Z"
 }
 ```
