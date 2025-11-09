@@ -1,5 +1,5 @@
 {
-  "id": "ds-789c50e277bb",
+  "id": "ds-2859f0185b71",
   "name": "retail-customer-service",
   "version": "1.0.0",
   "kind": "finetune_pack",
@@ -13,15 +13,15 @@
     {
       "name": "train.jsonl",
       "path": "/code/data/packs/retail-customer-service@1.0.0/train.jsonl",
-      "hash": "619ce597d2643b8145151b173c6c65ab8523de195d37ac160fa130f0f2a25bee"
+      "hash": "7b49bf89508595b24f9510cda37dc0e452ac47bf88837a9d2ea3e49f45f98631"
     },
     {
       "name": "eval.jsonl",
       "path": "/code/data/packs/retail-customer-service@1.0.0/eval.jsonl",
-      "hash": "940d8d3680f3c426f380fbb99d8d57f86337b4d41e2b31b8b3c234ea78cf4c34"
+      "hash": "214b04397e86a7edc0203fd45095d461254fe85c520739cb1ef7c6ed03324b01"
     }
   ],
-  "num_examples": 65,
-  "train_size": 58,
-  "eval_size": 7
+  "num_examples": 39,
+  "train_size": 35,
+  "eval_size": 4
 }
