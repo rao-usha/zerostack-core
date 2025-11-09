@@ -154,42 +154,6 @@ def create_variant(
     return obj
 
 
-@router.get("/variants", response_model=List[schemas.ContextVariantResponse])
-def list_variants(
-    domain: Optional[str] = None,
-    persona: Optional[str] = None,
-    task: Optional[str] = None,
-    context_id: Optional[str] = None,
-    db: Session = Depends(get_db)
-):
-    """List ContextVariants with optional filters by domain, persona, task, or context_id."""
-    query = db.query(models.ContextVariant)
-    
-    if domain:
-        query = query.filter(models.ContextVariant.domain == domain)
-    if persona:
-        query = query.filter(models.ContextVariant.persona == persona)
-    if task:
-        query = query.filter(models.ContextVariant.task == task)
-    if context_id:
-        query = query.filter(models.ContextVariant.context_id == context_id)
-    
-    variants = query.order_by(models.ContextVariant.created_at.desc()).all()
-    return variants
-
-
-@router.get("/variants/{variant_id}", response_model=schemas.ContextVariantResponse)
-def get_variant(
-    variant_id: str,
-    db: Session = Depends(get_db)
-):
-    """Get a ContextVariant by ID."""
-    obj = db.query(models.ContextVariant).filter(models.ContextVariant.id == variant_id).first()
-    if not obj:
-        raise HTTPException(status_code=404, detail="Variant not found")
-    return obj
-
-
 @router.post("/variants/compose", status_code=201, response_model=schemas.ContextVariantResponse)
 def compose_variant(
     payload: schemas.VariantComposeRequest,

@@ -3,7 +3,7 @@ import click
 import asyncio
 from sqlalchemy.orm import Session
 from app.db import SessionLocal
-from app.models import TeacherBatch, TeacherRun
+from app.models import TeacherRun
 from app.distill.pipeline import DistillationPipeline
 from app.workers.jobs import enqueue_teacher_run_job
 
@@ -15,19 +15,14 @@ def cli():
 
 
 @cli.command()
-@click.argument("batch_id")
-def enqueue_batch(batch_id: str):
-    """Enqueue all runs in a batch."""
+@click.argument("example_id")
+def enqueue_example_runs(example_id: str):
+    """Enqueue all runs for a specific example."""
     db: Session = SessionLocal()
     try:
-        batch = db.query(TeacherBatch).filter(TeacherBatch.id == batch_id).first()
-        if not batch:
-            click.echo(f"Batch {batch_id} not found", err=True)
-            return
-        
-        runs = db.query(TeacherRun).filter(TeacherRun.batch_id == batch_id).all()
+        runs = db.query(TeacherRun).filter(TeacherRun.example_id == example_id).all()
         if not runs:
-            click.echo(f"No runs found for batch {batch_id}")
+            click.echo(f"No runs found for example {example_id}")
             return
         
         for run in runs:
@@ -42,12 +37,11 @@ def enqueue_batch(batch_id: str):
 @cli.command()
 @click.option("--name", required=True)
 @click.option("--version", required=True)
-@click.option("--kind", type=click.Choice(["train", "eval", "synthetic"]), required=True)
-@click.option("--context-ref-id", required=True)
-@click.option("--batch-ids", multiple=True, required=True)
+@click.option("--kind", type=click.Choice(["train", "eval", "synthetic", "finetune_pack"]), required=True)
+@click.option("--variant-ids", multiple=True, required=True)
 @click.option("--min-length", type=int)
 @click.option("--max-length", type=int)
-def distill_build(name: str, version: str, kind: str, context_ref_id: str, batch_ids: tuple, min_length: int, max_length: int):
+def distill_build(name: str, version: str, kind: str, variant_ids: tuple, min_length: int, max_length: int):
     """Build a distilled dataset."""
     db: Session = SessionLocal()
     try:
@@ -66,8 +60,7 @@ def distill_build(name: str, version: str, kind: str, context_ref_id: str, batch
             name=name,
             version=version,
             kind=kind,
-            context_ref_id=context_ref_id,
-            batch_ids=list(batch_ids),
+            variant_ids=list(variant_ids),
             filters=filters
         )
         
