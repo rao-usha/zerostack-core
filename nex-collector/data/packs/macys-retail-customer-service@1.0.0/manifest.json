@@ -1,0 +1,27 @@
+{
+  "id": "ds-6d0cc233885a",
+  "name": "macys-retail-customer-service",
+  "version": "1.0.0",
+  "kind": "finetune_pack",
+  "variant_ids": [
+    "var-macys-retail-customer-service"
+  ],
+  "filters": {
+    "has_teacher_output": false
+  },
+  "files": [
+    {
+      "name": "train.jsonl",
+      "path": "/code/data/packs/macys-retail-customer-service@1.0.0/train.jsonl",
+      "hash": "830cc20bfa7dcf8eebe9ad5746c162812e1f9fe23e227e432ceb25a58ea8aa16"
+    },
+    {
+      "name": "eval.jsonl",
+      "path": "/code/data/packs/macys-retail-customer-service@1.0.0/eval.jsonl",
+      "hash": "b14b2c9298d4c93088b01bc69ad3e5dadcafeea481eeb9357d8b9ab108dee53d"
+    }
+  ],
+  "num_examples": 13,
+  "train_size": 11,
+  "eval_size": 2
+}
