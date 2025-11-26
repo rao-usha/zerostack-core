@@ -13,6 +13,7 @@ from pathlib import Path
 from services.synthetic_data import SyntheticDataGenerator
 from services.insights import InsightsGenerator
 from services.chat import ChatService
+from services.ontology_chat import OntologyChatService
 from services.data_quality import DataQualityAnalyzer
 from services.knowledge_gaps import KnowledgeGapIdentifier
 from database import Database
@@ -29,6 +30,7 @@ from domains.governance.router import router as governance_router
 from domains.auth.router import router as auth_router
 from domains.jobs.router import router as jobs_router
 from domains.insights.router import router as insights_router
+from domains.ontology.router import router as ontology_router
 
 # Core setup
 from core.config import settings
@@ -60,12 +62,14 @@ app.include_router(evaluations_router, prefix=settings.api_prefix)
 app.include_router(governance_router, prefix=settings.api_prefix)
 app.include_router(jobs_router, prefix=settings.api_prefix)
 app.include_router(insights_router, prefix=settings.api_prefix)
+app.include_router(ontology_router, prefix=settings.api_prefix)
 
 # Initialize services
 db = Database()
 synthetic_gen = SyntheticDataGenerator()
 insights_gen = InsightsGenerator()
 chat_service = ChatService()
+ontology_chat_service = OntologyChatService()
 quality_analyzer = DataQualityAnalyzer()
 gap_identifier = KnowledgeGapIdentifier()
 
@@ -298,11 +302,61 @@ async def generate_insights(request: Dict[str, Any]):
 
 @app.post("/api/chat")
 async def chat(request: Dict[str, Any]):
-    """Chat interface for asking questions about data"""
+    """Enhanced chat interface supporting both data analysis and ontology management"""
     try:
-        query = request.get("query")
+        query = request.get("query", "")
         dataset_id = request.get("dataset_id")
+        session_id = request.get("session_id", "default")
+        action = request.get("action")
+        payload = request.get("payload")
         
+        # If there's an action (like "confirm"), execute it
+        if action == "confirm" and payload:
+            action_type = payload.get("type")
+            params = payload.get("params", {})
+            
+            if action_type == "create_ontology":
+                # Execute ontology creation
+                from services.ontology.manager import OntologyManager
+                mgr = OntologyManager()
+                result = mgr.create(
+                    params.get("org_id", "demo"),
+                    params.get("name", "New Ontology"),
+                    params.get("description"),
+                    params.get("actor", "user")
+                )
+                
+                # Set as current ontology in session
+                ontology_chat_service.set_current_ontology(session_id, {
+                    "id": result["ontology_id"],
+                    "name": params.get("name", "New Ontology")
+                })
+                
+                return {
+                    "query": query,
+                    "response": f"✅ Created ontology **{params.get('name')}**!\n\nOntology ID: `{result['ontology_id']}`\n\n💡 You can now:\n• Add terms: \"suggest terms for {params.get('name').lower()}\"\n• View it: \"show me the ontology\"\n• Publish a version: \"publish version\"",
+                    "response_type": "success",
+                    "metadata": {"ontology_id": result["ontology_id"]},
+                    "timestamp": datetime.now().isoformat()
+                }
+        
+        # Check if this is an ontology-related query
+        ontology_intent = ontology_chat_service.detect_ontology_intent(query, session_id)
+        
+        if ontology_intent:
+            # This is an ontology query - return structured response
+            structured_response = ontology_chat_service.generate_response(ontology_intent, session_id)
+            return {
+                "query": query,
+                "response": structured_response.get("message"),
+                "response_type": structured_response.get("type"),
+                "action": structured_response.get("action"),
+                "ui_elements": structured_response.get("ui_elements", []),
+                "metadata": structured_response.get("metadata", {}),
+                "timestamp": datetime.now().isoformat()
+            }
+        
+        # Not an ontology query - handle as data analysis
         if dataset_id:
             dataset = db.get_dataset(dataset_id)
             if dataset is None:
@@ -316,6 +370,7 @@ async def chat(request: Dict[str, Any]):
         return {
             "query": query,
             "response": response,
+            "response_type": "text",
             "timestamp": datetime.now().isoformat()
         }
     except Exception as e:

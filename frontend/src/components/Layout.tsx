@@ -11,7 +11,8 @@ import {
   Database,
   Layers,
   Table,
-  FlaskConical
+  FlaskConical,
+  Network
 } from 'lucide-react'
 import FloatingChat from './FloatingChat'
 
@@ -25,6 +26,7 @@ export default function Layout({ children }: LayoutProps) {
   const navItems = [
     { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
     { path: '/upload', icon: Upload, label: 'Upload Data' },
+    { path: '/ontology', icon: Network, label: 'Ontology' },
     { path: '/contexts', icon: Layers, label: 'Contexts' },
     { path: '/distillation', icon: FlaskConical, label: 'Distillation' },
     { path: '/explorer', icon: Table, label: 'Data Explorer' },
@@ -89,12 +91,12 @@ export default function Layout({ children }: LayoutProps) {
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1 p-8 bg-dark-bg mr-96 min-h-screen">
+        <main className={`flex-1 p-8 bg-dark-bg min-h-screen ${location.pathname !== '/ontology' ? 'mr-96' : ''}`}>
           {children}
         </main>
 
-        {/* Fixed Right Chat Sidebar */}
-        <FloatingChat />
+        {/* Fixed Right Chat Sidebar - hide on ontology page */}
+        {location.pathname !== '/ontology' && <FloatingChat />}
       </div>
     </div>
   )
