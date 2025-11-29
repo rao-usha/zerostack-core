@@ -1,0 +1,82 @@
+services:
+  # Connect to shared database from main NEX service
+  # Requires main NEX db to be running first (nex_db container)
+
+  db_check:
+    image: postgres:16
+    command: >
+      sh -c "
+      echo 'Waiting for nex_db to be ready...'
+      until pg_isready -h nex_db -U nex -d postgres; do
+        sleep 2
+      done
+      echo 'Database is ready!'
+      PGPASSWORD=nex psql -h nex_db -U nex -d postgres -c 'CREATE DATABASE nex_collector;' || echo 'Database may already exist'
+      echo 'Database nex_collector ready'
+      "
+    environment:
+      PGPASSWORD: nex
+    networks:
+      - nex-network
+    restart: "no"
+    profiles:
+      - init
+
+  api:
+    build: .
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
+    environment:
+      DATABASE_URL: postgresql+psycopg://nex:nex@nex_db_dev:5432/nex_collector
+      REDIS_URL: redis://nex-collector_redis:6379/0
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      NEX_WRITE_TOKEN: ${NEX_WRITE_TOKEN:-dev-secret}
+      MODE_INTEGRATION: ${MODE_INTEGRATION:-separate}
+      NEX_API_BASE: ${NEX_API_BASE:-}
+      NEX_TOKEN: ${NEX_TOKEN:-}
+      DATA_DIR: /code/data
+    depends_on:
+      - redis
+    ports:
+      - "8080:8080"
+    volumes:
+      - .:/code
+      - ./data:/code/data
+    working_dir: /code
+    networks:
+      - nex-network
+
+  worker:
+    build: .
+    command: rq worker -u redis://nex-collector_redis:6379/0 nex_queue
+    environment:
+      DATABASE_URL: postgresql+psycopg://nex:nex@nex_db_dev:5432/nex_collector
+      REDIS_URL: redis://nex-collector_redis:6379/0
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      DATA_DIR: /code/data
+    depends_on:
+      - redis
+    volumes:
+      - .:/code
+      - ./data:/code/data
+    working_dir: /code
+    networks:
+      - nex-network
+
+  # Local Redis (only if main NEX doesn't have Redis)
+  redis:
+    image: redis:7
+    container_name: nex-collector_redis
+    ports:
+      - "6380:6379"  # Different port to avoid conflicts
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - nex-network
+
+networks:
+  nex-network:
+    external: true
+    name: nex-network

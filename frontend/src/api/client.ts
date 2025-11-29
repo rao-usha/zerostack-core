@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8000'
 
 const client = axios.create({
   baseURL: API_BASE_URL,
@@ -222,6 +222,7 @@ export const deleteContextDocument = async (documentId: string) => {
   return response.data
 }
 
+<<<<<<< HEAD
 // Data Explorer API
 export const getExplorerDatabases = async () => {
   const response = await client.get('/api/v1/data-explorer/databases')
@@ -276,6 +277,99 @@ export const executeExplorerQuery = async (
     sql,
     page,
     page_size: pageSize,
+  })
+  return response.data
+}
+
+// NEX Collector API (localhost:8080)
+const collectorClient = axios.create({
+  baseURL: (import.meta as any).env?.VITE_COLLECTOR_API_URL || 'http://localhost:8080',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+})
+
+// Health check
+export const checkCollectorHealth = async () => {
+  const response = await collectorClient.get('/healthz')
+  return response.data
+}
+
+// Context Docs API
+export const listCollectorContexts = async () => {
+  const response = await collectorClient.get('/v1/contexts/variants')
+  return response.data || []
+}
+
+export const getCollectorContext = async (contextId: string) => {
+  const response = await collectorClient.get(`/v1/contexts/${contextId}`)
+  return response.data
+}
+
+export const getCollectorVariant = async (variantId: string) => {
+  const response = await collectorClient.get(`/v1/contexts/variants/${variantId}`)
+  return response.data
+}
+
+// Datasets API
+export const listCollectorDatasets = async () => {
+  const response = await collectorClient.get('/v1/datasets')
+  return response.data || []
+}
+
+export const getCollectorDataset = async (datasetId: string) => {
+  const response = await collectorClient.get(`/v1/datasets/${datasetId}`)
+  return response.data
+}
+
+// Explorer API - query all tables
+export const listExplorerTables = async () => {
+  const response = await collectorClient.get('/v1/explorer/tables')
+  return response.data.tables || []
+}
+
+export const queryTable = async (tableName: string, limit: number = 100, offset: number = 0) => {
+  const response = await collectorClient.get(`/v1/explorer/tables/${tableName}`, {
+    params: { limit, offset }
+  })
+  return response.data
+}
+
+export const getTableCount = async (tableName: string) => {
+  const response = await collectorClient.get(`/v1/explorer/tables/${tableName}/count`)
+  return response.data
+}
+
+// Distillation API
+export const distillExamples = async (
+  variantIds: string[],
+  exampleType: 'instruction' | 'qa' | 'task',
+  quotaPerVariant: number = 10,
+  rules: Record<string, any> = {}
+) => {
+  const response = await collectorClient.post('/v1/datasets/distill/examples', {
+    variant_ids: variantIds,
+    example_type: exampleType,
+    quota_per_variant: quotaPerVariant,
+    rules
+  })
+  return response.data
+}
+
+export const buildDistilledDataset = async (
+  name: string,
+  version: string,
+  kind: 'train' | 'eval' | 'synthetic' | 'finetune_pack',
+  variantIds: string[],
+  filters: Record<string, any> = {}
+) => {
+  const response = await collectorClient.post('/v1/datasets/distill/build', {
+    name,
+    version,
+    kind,
+    variant_ids: variantIds,
+    filters
+>>>>>>> db9fc84889ffcdeed9c3bd3ec689f779532d0def
   })
   return response.data
 }
