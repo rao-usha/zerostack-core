@@ -1,0 +1,15 @@
+# Add these lines to your backend/.env file:
+
+EXPLORER_DB_HOST=localhost
+EXPLORER_DB_PORT=5433
+EXPLORER_DB_USER=nexdata
+EXPLORER_DB_PASSWORD=nexdata_dev_password
+EXPLORER_DB_NAME=nexdata
+
+# Or adjust these values to match your actual PostgreSQL database:
+# EXPLORER_DB_HOST=your-host
+# EXPLORER_DB_PORT=your-port
+# EXPLORER_DB_USER=your-user
+# EXPLORER_DB_PASSWORD=your-password
+# EXPLORER_DB_NAME=your-database
+

@@ -1,5 +1,6 @@
 """Application configuration."""
 from pydantic_settings import BaseSettings
+from pydantic import field_validator
 from typing import Optional
 from pathlib import Path
 
@@ -15,6 +16,14 @@ class Settings(BaseSettings):
     # API
     api_prefix: str = "/api/v1"
     cors_origins: str = "http://localhost:3000,http://localhost:5173"
+    
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def validate_cors_origins(cls, v):
+        """Handle empty CORS_ORIGINS values."""
+        if v is None or v == "":
+            return "http://localhost:3000,http://localhost:5173"
+        return v
     
     # Database
     database_url: str = "postgresql+psycopg://nex:nex@localhost:5432/nex"

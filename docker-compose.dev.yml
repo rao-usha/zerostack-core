@@ -37,6 +37,36 @@ services:
       - LOG_LEVEL=DEBUG
       - CORS_ORIGINS=http://localhost:3000,http://localhost:5173,http://localhost:80
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      # Data Explorer - Database 1 (override localhost with host.docker.internal for Docker)
+      - EXPLORER_DB_HOST=host.docker.internal
+      - EXPLORER_DB_PORT=${EXPLORER_DB_PORT:-5433}
+      - EXPLORER_DB_USER=${EXPLORER_DB_USER:-nexdata}
+      - EXPLORER_DB_PASSWORD=${EXPLORER_DB_PASSWORD:-nexdata_dev_password}
+      - EXPLORER_DB_NAME=${EXPLORER_DB_NAME:-nexdata}
+      # Data Explorer - Database 2
+      - EXPLORER2_DB_HOST=${EXPLORER2_DB_HOST:-}
+      - EXPLORER2_DB_PORT=${EXPLORER2_DB_PORT:-}
+      - EXPLORER2_DB_USER=${EXPLORER2_DB_USER:-}
+      - EXPLORER2_DB_PASSWORD=${EXPLORER2_DB_PASSWORD:-}
+      - EXPLORER2_DB_NAME=${EXPLORER2_DB_NAME:-}
+      # Data Explorer - Database 3
+      - EXPLORER3_DB_HOST=${EXPLORER3_DB_HOST:-}
+      - EXPLORER3_DB_PORT=${EXPLORER3_DB_PORT:-}
+      - EXPLORER3_DB_USER=${EXPLORER3_DB_USER:-}
+      - EXPLORER3_DB_PASSWORD=${EXPLORER3_DB_PASSWORD:-}
+      - EXPLORER3_DB_NAME=${EXPLORER3_DB_NAME:-}
+      # Data Explorer - Database 4
+      - EXPLORER4_DB_HOST=${EXPLORER4_DB_HOST:-}
+      - EXPLORER4_DB_PORT=${EXPLORER4_DB_PORT:-}
+      - EXPLORER4_DB_USER=${EXPLORER4_DB_USER:-}
+      - EXPLORER4_DB_PASSWORD=${EXPLORER4_DB_PASSWORD:-}
+      - EXPLORER4_DB_NAME=${EXPLORER4_DB_NAME:-}
+      # Data Explorer - Database 5
+      - EXPLORER5_DB_HOST=${EXPLORER5_DB_HOST:-}
+      - EXPLORER5_DB_PORT=${EXPLORER5_DB_PORT:-}
+      - EXPLORER5_DB_USER=${EXPLORER5_DB_USER:-}
+      - EXPLORER5_DB_PASSWORD=${EXPLORER5_DB_PASSWORD:-}
+      - EXPLORER5_DB_NAME=${EXPLORER5_DB_NAME:-}
     depends_on:
       db:
         condition: service_healthy

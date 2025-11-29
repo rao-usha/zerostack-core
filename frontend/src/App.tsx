@@ -8,6 +8,8 @@ import KnowledgeGaps from './pages/KnowledgeGaps'
 import Models from './pages/Models'
 import SyntheticData from './pages/SyntheticData'
 import Contexts from './pages/Contexts'
+import DataExplorer from './pages/DataExplorer'
+import Distillation from './pages/Distillation'
 
 function App() {
   return (
@@ -17,6 +19,8 @@ function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/upload" element={<DataUpload />} />
           <Route path="/contexts" element={<Contexts />} />
+          <Route path="/distillation" element={<Distillation />} />
+          <Route path="/explorer" element={<DataExplorer />} />
           <Route path="/insights" element={<Insights />} />
           <Route path="/quality" element={<Quality />} />
           <Route path="/gaps" element={<KnowledgeGaps />} />

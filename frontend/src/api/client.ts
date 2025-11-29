@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8000'
 
 const client = axios.create({
   baseURL: API_BASE_URL,
@@ -219,6 +219,156 @@ export const summarizeDocument = async (documentId: string, style: string = 'con
 
 export const deleteContextDocument = async (documentId: string) => {
   const response = await client.delete(`/api/v1/contexts/documents/${documentId}`)
+  return response.data
+}
+
+// Data Explorer API
+export const getExplorerDatabases = async () => {
+  const response = await client.get('/api/v1/data-explorer/databases')
+  return response.data
+}
+
+export const getExplorerHealth = async (dbId: string = 'default') => {
+  const response = await client.get(`/api/v1/data-explorer/health?db_id=${dbId}`)
+  return response.data
+}
+
+export const getExplorerSchemas = async (dbId: string = 'default') => {
+  const response = await client.get(`/api/v1/data-explorer/schemas?db_id=${dbId}`)
+  return response.data
+}
+
+export const getExplorerTables = async (schema: string = 'public', dbId: string = 'default') => {
+  const response = await client.get(`/api/v1/data-explorer/tables?schema=${schema}&db_id=${dbId}`)
+  return response.data
+}
+
+export const getExplorerTableColumns = async (schema: string, table: string, dbId: string = 'default') => {
+  const response = await client.get(`/api/v1/data-explorer/tables/${schema}/${table}/columns?db_id=${dbId}`)
+  return response.data
+}
+
+export const getExplorerTableRows = async (
+  schema: string,
+  table: string,
+  page: number = 1,
+  pageSize: number = 50,
+  dbId: string = 'default'
+) => {
+  const response = await client.get(
+    `/api/v1/data-explorer/tables/${schema}/${table}/rows?page=${page}&page_size=${pageSize}&db_id=${dbId}`
+  )
+  return response.data
+}
+
+export const getExplorerTableSummary = async (schema: string, table: string, dbId: string = 'default') => {
+  const response = await client.get(`/api/v1/data-explorer/tables/${schema}/${table}/summary?db_id=${dbId}`)
+  return response.data
+}
+
+export const executeExplorerQuery = async (
+  sql: string,
+  page: number = 1,
+  pageSize: number = 100,
+  dbId: string = 'default'
+) => {
+  const response = await client.post(`/api/v1/data-explorer/query?db_id=${dbId}`, {
+    sql,
+    page,
+    page_size: pageSize,
+  })
+  return response.data
+}
+
+// NEX Collector API (localhost:8080)
+const collectorClient = axios.create({
+  baseURL: (import.meta as any).env?.VITE_COLLECTOR_API_URL || 'http://localhost:8080',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+})
+
+// Health check
+export const checkCollectorHealth = async () => {
+  const response = await collectorClient.get('/healthz')
+  return response.data
+}
+
+// Context Docs API
+export const listCollectorContexts = async () => {
+  const response = await collectorClient.get('/v1/contexts/variants')
+  return response.data || []
+}
+
+export const getCollectorContext = async (contextId: string) => {
+  const response = await collectorClient.get(`/v1/contexts/${contextId}`)
+  return response.data
+}
+
+export const getCollectorVariant = async (variantId: string) => {
+  const response = await collectorClient.get(`/v1/contexts/variants/${variantId}`)
+  return response.data
+}
+
+// Datasets API
+export const listCollectorDatasets = async () => {
+  const response = await collectorClient.get('/v1/datasets')
+  return response.data || []
+}
+
+export const getCollectorDataset = async (datasetId: string) => {
+  const response = await collectorClient.get(`/v1/datasets/${datasetId}`)
+  return response.data
+}
+
+// Explorer API - query all tables
+export const listExplorerTables = async () => {
+  const response = await collectorClient.get('/v1/explorer/tables')
+  return response.data.tables || []
+}
+
+export const queryTable = async (tableName: string, limit: number = 100, offset: number = 0) => {
+  const response = await collectorClient.get(`/v1/explorer/tables/${tableName}`, {
+    params: { limit, offset }
+  })
+  return response.data
+}
+
+export const getTableCount = async (tableName: string) => {
+  const response = await collectorClient.get(`/v1/explorer/tables/${tableName}/count`)
+  return response.data
+}
+
+// Distillation API
+export const distillExamples = async (
+  variantIds: string[],
+  exampleType: 'instruction' | 'qa' | 'task',
+  quotaPerVariant: number = 10,
+  rules: Record<string, any> = {}
+) => {
+  const response = await collectorClient.post('/v1/datasets/distill/examples', {
+    variant_ids: variantIds,
+    example_type: exampleType,
+    quota_per_variant: quotaPerVariant,
+    rules
+  })
+  return response.data
+}
+
+export const buildDistilledDataset = async (
+  name: string,
+  version: string,
+  kind: 'train' | 'eval' | 'synthetic' | 'finetune_pack',
+  variantIds: string[],
+  filters: Record<string, any> = {}
+) => {
+  const response = await collectorClient.post('/v1/datasets/distill/build', {
+    name,
+    version,
+    kind,
+    variant_ids: variantIds,
+    filters
+  })
   return response.data
 }
 
