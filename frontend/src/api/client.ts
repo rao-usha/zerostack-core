@@ -222,7 +222,6 @@ export const deleteContextDocument = async (documentId: string) => {
   return response.data
 }
 
-<<<<<<< HEAD
 // Data Explorer API
 export const getExplorerDatabases = async () => {
   const response = await client.get('/api/v1/data-explorer/databases')
@@ -369,7 +368,6 @@ export const buildDistilledDataset = async (
     kind,
     variant_ids: variantIds,
     filters
->>>>>>> db9fc84889ffcdeed9c3bd3ec689f779532d0def
   })
   return response.data
 }

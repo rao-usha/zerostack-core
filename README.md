@@ -66,7 +66,6 @@ docker exec nex-collector-api-1 python scripts/seed_demo.py
    - Quality trend monitoring over time
 
 7. **Knowledge Gap Identification**
-<<<<<<< HEAD
    - Identify missing features and data gaps
    - Temporal coverage analysis
    - Data diversity assessment
@@ -102,7 +101,7 @@ docker exec nex-collector-api-1 python scripts/seed_demo.py
 
 ## Getting Started
 
-8. **🆕 Data Distillation Explorer**
+9. **🆕 Data Distillation Explorer**
    - **NEW**: Explore contexts and synthetic datasets from distillation pipeline
    - Browse AI-generated domain knowledge and context variants
    - View distillation statistics and dataset metadata
