@@ -9,7 +9,8 @@ import {
   AlertCircle,
   TrendingUp,
   Database,
-  Layers
+  Layers,
+  Search
 } from 'lucide-react'
 import FloatingChat from './FloatingChat'
 
@@ -24,6 +25,7 @@ export default function Layout({ children }: LayoutProps) {
     { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
     { path: '/upload', icon: Upload, label: 'Upload Data' },
     { path: '/contexts', icon: Layers, label: 'Contexts' },
+    { path: '/data-explorer', icon: Search, label: 'Data Explorer' },
     { path: '/insights', icon: Sparkles, label: 'Insights' },
     { path: '/quality', icon: CheckCircle2, label: 'Data Quality' },
     { path: '/gaps', icon: AlertCircle, label: 'Knowledge Gaps' },

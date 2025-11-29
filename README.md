@@ -49,10 +49,19 @@ A comprehensive, AI-powered data platform that serves as a one-stop solution for
    - Relationship gap detection
    - Actionable recommendations
 
+8. **Data Explorer** 🆕
+   - Browse and explore Postgres databases directly
+   - View schemas, tables, and column metadata
+   - Preview table data with pagination
+   - Execute ad-hoc SQL queries (read-only)
+   - View table summary statistics
+   - Built-in query safety validation
+
 ## Tech Stack
 
 ### Backend
 - **FastAPI** - Modern Python web framework
+- **PostgreSQL** - Main database (via SQLAlchemy + psycopg)
 - **Pandas** - Data manipulation and analysis
 - **Scikit-learn** - Machine learning models
 - **SQLite** - Lightweight database for data storage
@@ -152,7 +161,17 @@ A comprehensive, AI-powered data platform that serves as a one-stop solution for
 - Select dataset
 - View identified gaps and recommendations
 
-### 7. Chat with AI
+### 7. Explore Database with Data Explorer 🆕
+- Navigate to "Data Explorer" page
+- Browse schemas and tables in your Postgres database
+- Click on any table to view:
+  - **Preview**: Paginated table data
+  - **Columns**: Column metadata and types
+  - **Query**: Execute custom SQL queries (read-only)
+  - **Summary**: Automatic statistics for all columns
+- Write and run ad-hoc SELECT queries with built-in safety validation
+
+### 8. Chat with AI
 - Navigate to "Chat" section
 - Select a dataset (optional)
 - Ask questions in natural language
@@ -182,6 +201,17 @@ A comprehensive, AI-powered data platform that serves as a one-stop solution for
 
 ### Knowledge Gaps
 - `GET /api/knowledge-gaps/{dataset_id}` - Identify knowledge gaps
+
+### Data Explorer 🆕
+- `GET /api/v1/data-explorer/health` - Check database connection
+- `GET /api/v1/data-explorer/schemas` - List all schemas
+- `GET /api/v1/data-explorer/tables` - List tables in a schema
+- `GET /api/v1/data-explorer/tables/{schema}/{table}/columns` - Get table columns
+- `GET /api/v1/data-explorer/tables/{schema}/{table}/rows` - Get table rows (paginated)
+- `GET /api/v1/data-explorer/tables/{schema}/{table}/summary` - Get table statistics
+- `POST /api/v1/data-explorer/query` - Execute read-only SQL query
+
+See [DATA_EXPLORER.md](backend/DATA_EXPLORER.md) for detailed documentation.
 
 ## Project Structure
 

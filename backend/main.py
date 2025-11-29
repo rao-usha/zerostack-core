@@ -29,6 +29,7 @@ from domains.governance.router import router as governance_router
 from domains.auth.router import router as auth_router
 from domains.jobs.router import router as jobs_router
 from domains.insights.router import router as insights_router
+from domains.data_explorer.router import router as data_explorer_router
 
 # Core setup
 from core.config import settings
@@ -60,6 +61,7 @@ app.include_router(evaluations_router, prefix=settings.api_prefix)
 app.include_router(governance_router, prefix=settings.api_prefix)
 app.include_router(jobs_router, prefix=settings.api_prefix)
 app.include_router(insights_router, prefix=settings.api_prefix)
+app.include_router(data_explorer_router, prefix=settings.api_prefix)
 
 # Initialize services
 db = Database()

@@ -222,3 +222,61 @@ export const deleteContextDocument = async (documentId: string) => {
   return response.data
 }
 
+// Data Explorer API
+export const getExplorerDatabases = async () => {
+  const response = await client.get('/api/v1/data-explorer/databases')
+  return response.data
+}
+
+export const getExplorerHealth = async (dbId: string = 'default') => {
+  const response = await client.get(`/api/v1/data-explorer/health?db_id=${dbId}`)
+  return response.data
+}
+
+export const getExplorerSchemas = async (dbId: string = 'default') => {
+  const response = await client.get(`/api/v1/data-explorer/schemas?db_id=${dbId}`)
+  return response.data
+}
+
+export const getExplorerTables = async (schema: string = 'public', dbId: string = 'default') => {
+  const response = await client.get(`/api/v1/data-explorer/tables?schema=${schema}&db_id=${dbId}`)
+  return response.data
+}
+
+export const getExplorerTableColumns = async (schema: string, table: string, dbId: string = 'default') => {
+  const response = await client.get(`/api/v1/data-explorer/tables/${schema}/${table}/columns?db_id=${dbId}`)
+  return response.data
+}
+
+export const getExplorerTableRows = async (
+  schema: string,
+  table: string,
+  page: number = 1,
+  pageSize: number = 50,
+  dbId: string = 'default'
+) => {
+  const response = await client.get(
+    `/api/v1/data-explorer/tables/${schema}/${table}/rows?page=${page}&page_size=${pageSize}&db_id=${dbId}`
+  )
+  return response.data
+}
+
+export const getExplorerTableSummary = async (schema: string, table: string, dbId: string = 'default') => {
+  const response = await client.get(`/api/v1/data-explorer/tables/${schema}/${table}/summary?db_id=${dbId}`)
+  return response.data
+}
+
+export const executeExplorerQuery = async (
+  sql: string,
+  page: number = 1,
+  pageSize: number = 100,
+  dbId: string = 'default'
+) => {
+  const response = await client.post(`/api/v1/data-explorer/query?db_id=${dbId}`, {
+    sql,
+    page,
+    page_size: pageSize,
+  })
+  return response.data
+}
+
