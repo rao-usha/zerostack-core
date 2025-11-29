@@ -23,13 +23,13 @@ services:
 
   backend:
     build:
-      context: ./backend
+      context: ../backend
       dockerfile: Dockerfile
     container_name: nex-backend-dev
     ports:
       - "8000:8000"
     env_file:
-      - .env
+      - ../.env
     environment:
       - DEBUG=true
       - DATABASE_URL=postgresql+psycopg://nex:nex@db:5432/nex
@@ -37,12 +37,12 @@ services:
       - LOG_LEVEL=DEBUG
       - CORS_ORIGINS=http://localhost:3000,http://localhost:5173,http://localhost:80
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      # Data Explorer - Database 1 (override localhost with host.docker.internal for Docker)
-      - EXPLORER_DB_HOST=host.docker.internal
-      - EXPLORER_DB_PORT=${EXPLORER_DB_PORT:-5433}
-      - EXPLORER_DB_USER=${EXPLORER_DB_USER:-nexdata}
-      - EXPLORER_DB_PASSWORD=${EXPLORER_DB_PASSWORD:-nexdata_dev_password}
-      - EXPLORER_DB_NAME=${EXPLORER_DB_NAME:-nexdata}
+      # Data Explorer - Database 1 (pointing to main NEX database by default)
+      - EXPLORER_DB_HOST=${EXPLORER_DB_HOST:-db}
+      - EXPLORER_DB_PORT=${EXPLORER_DB_PORT:-5432}
+      - EXPLORER_DB_USER=${EXPLORER_DB_USER:-nex}
+      - EXPLORER_DB_PASSWORD=${EXPLORER_DB_PASSWORD:-nex}
+      - EXPLORER_DB_NAME=${EXPLORER_DB_NAME:-nex}
       # Data Explorer - Database 2
       - EXPLORER2_DB_HOST=${EXPLORER2_DB_HOST:-}
       - EXPLORER2_DB_PORT=${EXPLORER2_DB_PORT:-}
@@ -72,9 +72,9 @@ services:
         condition: service_healthy
     volumes:
       # Mount source code for hot reload
-      - ./backend:/app
+      - ../backend:/app
       # Persist data
-      - ./backend/data_storage:/app/data_storage
+      - ../backend/data_storage:/app/data_storage
     command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
     restart: unless-stopped
     networks:
@@ -82,7 +82,7 @@ services:
 
   frontend:
     build:
-      context: ./frontend
+      context: ../frontend
       dockerfile: Dockerfile.dev
     container_name: nex-frontend-dev
     ports:
@@ -90,7 +90,7 @@ services:
     environment:
       - VITE_API_URL=http://localhost:8000
     volumes:
-      - ./frontend:/app
+      - ../frontend:/app
       - /app/node_modules
     depends_on:
       - backend

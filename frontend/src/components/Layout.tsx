@@ -13,7 +13,6 @@ import {
   Table,
   FlaskConical
 } from 'lucide-react'
-import FloatingChat from './FloatingChat'
 
 interface LayoutProps {
   children: ReactNode
@@ -28,6 +27,7 @@ export default function Layout({ children }: LayoutProps) {
     { path: '/contexts', icon: Layers, label: 'Contexts' },
     { path: '/distillation', icon: FlaskConical, label: 'Distillation' },
     { path: '/explorer', icon: Table, label: 'Data Explorer' },
+    { path: '/chat', icon: MessageCircle, label: 'Chat with Data' },
     { path: '/insights', icon: Sparkles, label: 'Insights' },
     { path: '/quality', icon: CheckCircle2, label: 'Data Quality' },
     { path: '/gaps', icon: AlertCircle, label: 'Knowledge Gaps' },
@@ -89,12 +89,9 @@ export default function Layout({ children }: LayoutProps) {
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1 p-8 bg-dark-bg mr-96 min-h-screen">
+        <main className="flex-1 p-8 bg-dark-bg min-h-screen">
           {children}
         </main>
-
-        {/* Fixed Right Chat Sidebar */}
-        <FloatingChat />
       </div>
     </div>
   )

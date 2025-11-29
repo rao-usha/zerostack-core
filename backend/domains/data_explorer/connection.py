@@ -16,10 +16,10 @@ class ExplorerDBConfig:
     
     def __init__(self):
         self.host = os.getenv("EXPLORER_DB_HOST", "localhost")
-        self.port = int(os.getenv("EXPLORER_DB_PORT", "5433"))
-        self.user = os.getenv("EXPLORER_DB_USER", "nexdata")
-        self.password = os.getenv("EXPLORER_DB_PASSWORD", "nexdata_dev_password")
-        self.database = os.getenv("EXPLORER_DB_NAME", "nexdata")
+        self.port = int(os.getenv("EXPLORER_DB_PORT", "5432"))
+        self.user = os.getenv("EXPLORER_DB_USER", "nex")
+        self.password = os.getenv("EXPLORER_DB_PASSWORD", "nex")
+        self.database = os.getenv("EXPLORER_DB_NAME", "nex")
         
     def get_connection_string(self) -> str:
         """Build psycopg connection string."""

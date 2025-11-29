@@ -372,3 +372,60 @@ export const buildDistilledDataset = async (
   return response.data
 }
 
+// =====================================================================
+// Chat API functions
+// =====================================================================
+
+export const createConversation = async (data: {
+  title?: string
+  provider: string
+  model: string
+  connection_id?: string
+}) => {
+  const response = await client.post('/api/v1/chat/conversations', data)
+  return response.data
+}
+
+export const listConversations = async (skip: number = 0, limit: number = 50, provider?: string) => {
+  const response = await client.get('/api/v1/chat/conversations', {
+    params: { skip, limit, provider }
+  })
+  return response.data
+}
+
+export const getConversation = async (conversationId: string) => {
+  const response = await client.get(`/api/v1/chat/conversations/${conversationId}`)
+  return response.data
+}
+
+export const updateConversation = async (conversationId: string, data: {
+  title?: string
+  metadata?: any
+}) => {
+  const response = await client.patch(`/api/v1/chat/conversations/${conversationId}`, data)
+  return response.data
+}
+
+export const deleteConversation = async (conversationId: string) => {
+  const response = await client.delete(`/api/v1/chat/conversations/${conversationId}`)
+  return response.data
+}
+
+export const sendMessage = async (conversationId: string, data: {
+  content: string
+  provider?: string
+  model?: string
+  connection_id?: string
+  stream?: boolean
+}) => {
+  const response = await client.post(`/api/v1/chat/conversations/${conversationId}/messages`, data)
+  
+  // If streaming, return URL for EventSource
+  if (data.stream) {
+    const url = `${API_BASE_URL}/api/v1/chat/conversations/${conversationId}/messages`
+    return { url, ...response.data }
+  }
+  
+  return response.data
+}
+

@@ -10,6 +10,7 @@ import SyntheticData from './pages/SyntheticData'
 import Contexts from './pages/Contexts'
 import DataExplorer from './pages/DataExplorer'
 import Distillation from './pages/Distillation'
+import Chat from './pages/Chat'
 
 function App() {
   return (
@@ -21,6 +22,7 @@ function App() {
           <Route path="/contexts" element={<Contexts />} />
           <Route path="/distillation" element={<Distillation />} />
           <Route path="/explorer" element={<DataExplorer />} />
+          <Route path="/chat" element={<Chat />} />
           <Route path="/insights" element={<Insights />} />
           <Route path="/quality" element={<Quality />} />
           <Route path="/gaps" element={<KnowledgeGaps />} />

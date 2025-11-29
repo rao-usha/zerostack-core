@@ -80,6 +80,23 @@ docker exec nex-collector-api-1 python scripts/seed_demo.py
    - View table summary statistics
    - Built-in query safety validation
 
+9. **MCP Data Explorer** ⚡ NEW
+   - Model Context Protocol server for AI-powered database exploration
+   - Native Claude Desktop integration for conversational data discovery
+   - HTTP bridge for xAI, Gemini, ChatGPT, and other LLMs
+   - 7 specialized tools: schema discovery, data profiling, safe querying
+   - Multi-database support with automatic configuration detection
+   - Enterprise-grade safety: read-only sessions, query validation, timeouts
+
+10. **Chat with Your Data** 🆕 LATEST
+   - Full ChatGPT-like experience integrated into the platform
+   - Multi-provider support: OpenAI (GPT-4), Anthropic (Claude), Google (Gemini), xAI (Grok)
+   - Real-time streaming responses with Server-Sent Events
+   - Complete conversation persistence in Postgres
+   - Automatic tool calling with MCP Data Explorer integration
+   - Beautiful modern UI with conversation management
+   - Ask questions, get insights, explore data conversationally
+
 ## Tech Stack
 
 ### Backend
@@ -224,6 +241,31 @@ docker-compose -f docker-compose.dev.yml exec backend bash
 - Interactive exploration of fine-tune datasets
 - Sample data packs for retail, insurance, and finance domains
 
+### ⚡ **🆕 MCP Data Explorer**
+- **NEW**: AI-powered database exploration with Model Context Protocol
+- **Claude Desktop Integration**: Native conversational database access
+  - "What tables are in my database?"
+  - "Profile the orders table and show me data quality issues"
+  - "Find all customers who made purchases last month"
+- **Universal LLM Support**: HTTP bridge for xAI, Gemini, ChatGPT
+- **7 Specialized Tools**: Discovery, profiling, and safe querying
+- **Multi-Database**: Explore multiple Postgres instances simultaneously
+- **Enterprise Safety**: Read-only sessions, query validation, resource limits
+
+**Quick Start:**
+```bash
+# Test the MCP server
+cd backend
+python mcp_server.py
+
+# Or use HTTP bridge (already running with docker-compose)
+curl -X POST http://localhost:8000/api/v1/data-explorer/tool/list_tables \
+  -H "Content-Type: application/json" \
+  -d '{"schema": "public"}'
+```
+
+See [MCP_DATA_EXPLORER_SETUP.md](docs/setup/MCP_DATA_EXPLORER_SETUP.md) for complete setup guide.
+
 ## 🔌 API Documentation
 
 - **Main Backend**: http://localhost:8000/docs (Swagger UI)
@@ -246,6 +288,19 @@ docker-compose -f docker-compose.dev.yml exec backend bash
 - `POST /api/v1/data-explorer/query` - Execute read-only SQL query
 
 See [DATA_EXPLORER.md](backend/DATA_EXPLORER.md) for detailed documentation.
+
+### MCP Data Explorer ⚡ NEW
+- **MCP Server:** `python backend/mcp_server.py` - Native MCP protocol server
+- **HTTP Bridge:** `/api/v1/data-explorer/tool/*` - REST endpoints for non-MCP LLMs
+  - `POST /tool/list_connections` - List available databases
+  - `POST /tool/list_schemas` - List database schemas
+  - `POST /tool/list_tables` - List tables in schema
+  - `POST /tool/get_table_info` - Get table column metadata
+  - `POST /tool/sample_rows` - Sample table data
+  - `POST /tool/profile_table` - Get comprehensive statistics
+  - `POST /tool/run_query` - Execute safe SELECT queries
+
+See [MCP_DATA_EXPLORER_SETUP.md](docs/setup/MCP_DATA_EXPLORER_SETUP.md) for quick setup or [docs/mcp-data-explorer.md](docs/mcp-data-explorer.md) for complete documentation.
 
 ## Project Structure
 
@@ -296,9 +351,54 @@ Nex/
 │       ├── seed_demo.py      # Demo data seeding
 │       └── seed_insurance_dataset.py
 │
-├── docker-compose.yml        # Production deployment
-├── docker-compose.dev.yml    # Development environment
-└── README.md
+├── docs/                      # 📚 Documentation
+│   ├── guides/               # User guides and tutorials
+│   │   ├── QUICKSTART.md
+│   │   ├── START_HERE.md
+│   │   ├── START_DATA_EXPLORER.md
+│   │   └── NEXT_STEPS.md
+│   ├── setup/                # Setup and installation guides
+│   │   ├── INSTALLATION.md
+│   │   ├── SETUP_GUIDE.md
+│   │   ├── DATA_EXPLORER_ENV_SETUP.md
+│   │   └── MCP_DATA_EXPLORER_SETUP.md
+│   ├── api.md                # API documentation
+│   ├── development.md        # Development guide
+│   ├── docker.md             # Docker setup
+│   ├── testing.md            # Testing guide
+│   ├── RUN_TESTS.md          # Test execution
+│   ├── BRANDING.md           # Brand guidelines
+│   └── COLOR_SCHEME.md       # Design system
+│
+├── config/                    # ⚙️ Configuration files
+│   ├── docker-compose.yml    # Production deployment
+│   ├── docker-compose.dev.yml # Development environment
+│   ├── docker-compose.ci.yml # CI/CD configuration
+│   ├── Makefile              # Build automation
+│   ├── pytest.ini            # Test configuration
+│   └── requirements-dev.txt  # Dev dependencies
+│
+├── scripts/                   # 🔧 Utility scripts
+│   ├── start.sh              # Start all services
+│   ├── start_backend.sh      # Start backend only
+│   ├── start_frontend.sh     # Start frontend only
+│   ├── install_all.sh        # Install dependencies
+│   ├── install_node.sh       # Install Node.js
+│   ├── check_setup.sh        # Verify setup
+│   ├── load_data_packs.py    # Load sample data
+│   ├── seed_nex_collector.py # Seed distillation data
+│   └── agent_ci.sh           # CI automation
+│
+├── tests/                     # 🧪 Test files
+│   ├── test_context_api.py
+│   ├── test_document_upload.py
+│   ├── test_summarization_full.py
+│   └── test_summarization_integration.py
+│
+├── example_data/              # Sample datasets
+│   └── sample_sales_data.csv
+│
+└── README.md                  # This file
 ```
 
 ## 📦 Sample Data Packs
@@ -319,10 +419,22 @@ NEX includes pre-built distillation data packs for immediate exploration:
 
 ## 📚 Documentation
 
+### Getting Started
+- **[Quick Start Guide](./docs/guides/QUICKSTART.md)** - Get up and running in minutes
+- **[Start Here](./docs/guides/START_HERE.md)** - First steps with NEX.AI
+- **[Installation Guide](./docs/setup/INSTALLATION.md)** - Detailed installation instructions
+- **[Setup Guide](./docs/setup/SETUP_GUIDE.md)** - Complete setup walkthrough
+
+### Technical Documentation
 - **[Docker Setup](./docs/docker.md)** - Complete container configuration
 - **[API Reference](./docs/api.md)** - Full endpoint documentation
 - **[Development](./docs/development.md)** - Local setup and debugging
 - **[Testing](./docs/testing.md)** - Quality assurance and CI/CD
+
+### Feature Guides
+- **[Data Explorer](./docs/guides/START_DATA_EXPLORER.md)** - Database exploration guide
+- **[MCP Setup](./docs/setup/MCP_DATA_EXPLORER_SETUP.md)** - Model Context Protocol configuration
+- **[Next Steps](./docs/guides/NEXT_STEPS.md)** - What to do after setup
 
 ## 🤝 Contributing
 

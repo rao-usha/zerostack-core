@@ -1,15 +1,19 @@
-# Add these lines to your backend/.env file:
+# Add these lines to your .env file (in project root):
 
+# Data Explorer - Points to main NEX database by default
 EXPLORER_DB_HOST=localhost
-EXPLORER_DB_PORT=5433
-EXPLORER_DB_USER=nexdata
-EXPLORER_DB_PASSWORD=nexdata_dev_password
-EXPLORER_DB_NAME=nexdata
+EXPLORER_DB_PORT=5432
+EXPLORER_DB_USER=nex
+EXPLORER_DB_PASSWORD=nex
+EXPLORER_DB_NAME=nex
 
-# Or adjust these values to match your actual PostgreSQL database:
+# Or adjust these values to explore a different PostgreSQL database:
 # EXPLORER_DB_HOST=your-host
 # EXPLORER_DB_PORT=your-port
 # EXPLORER_DB_USER=your-user
 # EXPLORER_DB_PASSWORD=your-password
 # EXPLORER_DB_NAME=your-database
+
+# For Docker: The docker-compose.dev.yml file automatically configures
+# the Data Explorer to connect to the main NEX database container.
 

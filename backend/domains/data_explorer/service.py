@@ -398,4 +398,147 @@ class DataExplorerService:
             table=table,
             column_stats=column_stats
         )
+    
+    @staticmethod
+    def profile_table(
+        schema: str,
+        table: str,
+        max_distinct: int = 50,
+        db_id: str = "default"
+    ) -> Dict[str, Any]:
+        """
+        Generate detailed profile for a table with enhanced statistics.
+        
+        Args:
+            schema: Schema name
+            table: Table name
+            max_distinct: Maximum number of distinct values to return for categorical columns
+            db_id: Database configuration ID
+            
+        Returns:
+            Dict with comprehensive per-column profile
+        """
+        with get_explorer_connection(db_id) as conn:
+            with conn.cursor() as cur:
+                # Get column info
+                cur.execute("""
+                    SELECT 
+                        column_name,
+                        data_type,
+                        is_nullable
+                    FROM information_schema.columns
+                    WHERE table_schema = %s AND table_name = %s
+                    ORDER BY ordinal_position
+                """, (schema, table))
+                columns = cur.fetchall()
+                
+                # Get total row count
+                from psycopg import sql
+                count_query = sql.SQL("SELECT COUNT(*) FROM {}.{}").format(
+                    sql.Identifier(schema),
+                    sql.Identifier(table)
+                )
+                cur.execute(count_query)
+                total_rows = cur.fetchone()[0]
+                
+                column_profiles = {}
+                
+                for col_name, data_type, is_nullable in columns:
+                    profile = {
+                        "data_type": data_type,
+                        "nullable": is_nullable == "YES"
+                    }
+                    
+                    # Get null count and null fraction
+                    try:
+                        null_query = sql.SQL("""
+                            SELECT 
+                                COUNT(*) - COUNT({col}) as null_count,
+                                CASE WHEN COUNT(*) > 0 
+                                     THEN (COUNT(*) - COUNT({col}))::float / COUNT(*) 
+                                     ELSE 0 
+                                END as null_fraction
+                            FROM {schema}.{table}
+                        """).format(
+                            col=sql.Identifier(col_name),
+                            schema=sql.Identifier(schema),
+                            table=sql.Identifier(table)
+                        )
+                        cur.execute(null_query)
+                        null_count, null_fraction = cur.fetchone()
+                        profile['null_count'] = null_count
+                        profile['null_fraction'] = round(float(null_fraction), 4) if null_fraction else 0.0
+                    except:
+                        profile['null_count'] = None
+                        profile['null_fraction'] = None
+                    
+                    # Get distinct count (approximate)
+                    try:
+                        distinct_query = sql.SQL("""
+                            SELECT COUNT(DISTINCT {col})
+                            FROM {schema}.{table}
+                        """).format(
+                            col=sql.Identifier(col_name),
+                            schema=sql.Identifier(schema),
+                            table=sql.Identifier(table)
+                        )
+                        cur.execute(distinct_query)
+                        profile['approx_distinct_count'] = cur.fetchone()[0]
+                    except:
+                        profile['approx_distinct_count'] = None
+                    
+                    # Numeric column statistics
+                    if data_type in ('integer', 'bigint', 'smallint', 'numeric', 'decimal', 'real', 'double precision', 'money'):
+                        try:
+                            stats_query = sql.SQL("""
+                                SELECT 
+                                    MIN({col}),
+                                    MAX({col}),
+                                    AVG({col})
+                                FROM {schema}.{table}
+                                WHERE {col} IS NOT NULL
+                            """).format(
+                                col=sql.Identifier(col_name),
+                                schema=sql.Identifier(schema),
+                                table=sql.Identifier(table)
+                            )
+                            cur.execute(stats_query)
+                            min_val, max_val, avg_val = cur.fetchone()
+                            profile['min'] = float(min_val) if min_val is not None else None
+                            profile['max'] = float(max_val) if max_val is not None else None
+                            profile['avg'] = float(avg_val) if avg_val is not None else None
+                        except:
+                            pass
+                    
+                    # Categorical/text column - get top values
+                    if data_type in ('character varying', 'varchar', 'char', 'character', 'text', 'bpchar'):
+                        try:
+                            # Only get top values if distinct count is reasonable
+                            if profile.get('approx_distinct_count', 0) <= max_distinct * 2:
+                                topk_query = sql.SQL("""
+                                    SELECT {col}, COUNT(*) as count
+                                    FROM {schema}.{table}
+                                    WHERE {col} IS NOT NULL
+                                    GROUP BY {col}
+                                    ORDER BY count DESC
+                                    LIMIT %s
+                                """).format(
+                                    col=sql.Identifier(col_name),
+                                    schema=sql.Identifier(schema),
+                                    table=sql.Identifier(table)
+                                )
+                                cur.execute(topk_query, (max_distinct,))
+                                top_values = [{"value": str(row[0]), "count": row[1]} for row in cur.fetchall()]
+                                profile['top_values'] = top_values
+                        except:
+                            pass
+                    
+                    column_profiles[col_name] = profile
+                
+                return {
+                    "schema": schema,
+                    "table": table,
+                    "total_rows": total_rows,
+                    "column_profiles": column_profiles
+                }
 
