@@ -750,29 +750,49 @@ export default function Chat() {
         </div>
           </>
         ) : (
-          <div className="flex-1 flex items-center justify-center" style={{ color: '#8ab3cc' }}>
-            <div className="text-center">
-              <MessageSquare size={64} className="mx-auto mb-4 opacity-50" style={{ color: '#a8d8ff' }} />
-              <h3 className="text-xl font-semibold mb-2" style={{ 
-                background: 'linear-gradient(90deg, #a8d8ff 0%, #c4b5fd 50%, #ffc4e5 100%)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-                backgroundClip: 'text'
-              }}>Chat with Your Data</h3>
-              <p className="text-sm mb-4" style={{ color: '#b3d9ff' }}>Select a conversation or create a new one to start chatting</p>
-              <button
-                onClick={() => setShowSettings(true)}
-                className="px-6 py-3 rounded-lg inline-flex items-center gap-2 transition-all duration-200"
-                style={{
-                  background: 'linear-gradient(90deg, rgba(168, 216, 255, 0.15), rgba(196, 181, 253, 0.15))',
-                  color: '#a8d8ff',
-                  border: '1px solid rgba(168, 216, 255, 0.4)'
-                }}
-              >
-                <Plus size={20} />
-                New Chat
-              </button>
-            </div>
+          <div className="flex-1 flex items-center justify-center" style={{ backgroundColor: '#0a0e1a' }}>
+            {availableDatabases.length === 0 ? (
+              // No databases available
+              <div className="text-center max-w-md p-8 rounded-xl" style={{
+                backgroundColor: '#1a1a24',
+                border: '1px solid rgba(168, 216, 255, 0.2)'
+              }}>
+                <Database size={64} className="mx-auto mb-4 opacity-50" style={{ color: '#a8d8ff' }} />
+                <h3 className="text-xl font-semibold mb-2" style={{ color: '#f0f0f5' }}>
+                  No Databases Configured
+                </h3>
+                <p className="text-sm mb-4" style={{ color: '#b3d9ff' }}>
+                  To chat with your data, you need to configure at least one database connection.
+                </p>
+                <p className="text-xs" style={{ color: '#8ab3cc' }}>
+                  Configure your database connections in <code className="px-2 py-1 rounded" style={{ backgroundColor: 'rgba(168, 216, 255, 0.1)' }}>.env</code> file or add them to the <code className="px-2 py-1 rounded" style={{ backgroundColor: 'rgba(168, 216, 255, 0.1)' }}>db_configs.py</code> file.
+                </p>
+              </div>
+            ) : (
+              // No conversation selected
+              <div className="text-center">
+                <MessageSquare size={64} className="mx-auto mb-4 opacity-50" style={{ color: '#a8d8ff' }} />
+                <h3 className="text-xl font-semibold mb-2" style={{ 
+                  background: 'linear-gradient(90deg, #a8d8ff 0%, #c4b5fd 50%, #ffc4e5 100%)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  backgroundClip: 'text'
+                }}>Chat with Your Data</h3>
+                <p className="text-sm mb-4" style={{ color: '#b3d9ff' }}>Select a conversation or create a new one to start chatting</p>
+                <button
+                  onClick={() => setShowSettings(true)}
+                  className="px-6 py-3 rounded-lg inline-flex items-center gap-2 transition-all duration-200"
+                  style={{
+                    background: 'linear-gradient(90deg, rgba(168, 216, 255, 0.15), rgba(196, 181, 253, 0.15))',
+                    color: '#a8d8ff',
+                    border: '1px solid rgba(168, 216, 255, 0.4)'
+                  }}
+                >
+                  <Plus size={20} />
+                  New Chat
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

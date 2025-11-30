@@ -353,6 +353,28 @@ export default function DataExplorer() {
         )}
       </div>
 
+      {/* Empty State - No Databases */}
+      {!loading && databases.length === 0 && (
+        <div className="flex items-center justify-center" style={{ minHeight: '500px' }}>
+          <div className="text-center max-w-md p-8 rounded-xl" style={{
+            backgroundColor: '#1a1a24',
+            border: '1px solid rgba(168, 216, 255, 0.2)'
+          }}>
+            <Database size={64} className="mx-auto mb-4 opacity-50" style={{ color: '#a8d8ff' }} />
+            <h2 className="text-2xl font-bold mb-2" style={{ color: '#f0f0f5' }}>
+              No Databases Configured
+            </h2>
+            <p className="mb-4" style={{ color: '#b0b8c0' }}>
+              To get started with the Data Explorer, you need to configure at least one database connection.
+            </p>
+            <p className="text-sm" style={{ color: '#8ab3cc' }}>
+              Configure your database connections in <code className="px-2 py-1 rounded" style={{ backgroundColor: 'rgba(168, 216, 255, 0.1)' }}>.env</code> file or add them to the <code className="px-2 py-1 rounded" style={{ backgroundColor: 'rgba(168, 216, 255, 0.1)' }}>db_configs.py</code> file.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {databases.length > 0 && (
       <div className="flex gap-6" style={{ minHeight: '600px', width: '100%', maxWidth: 'calc(100vw - 4rem)' }}>
         {/* Left Sidebar: Schema & Tables */}
         <div 
@@ -739,6 +761,7 @@ export default function DataExplorer() {
           )}
         </div>
       </div>
+      )}
     </div>
   )
 }
