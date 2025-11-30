@@ -1,2 +1,0 @@
-"""Distillation package."""
-
