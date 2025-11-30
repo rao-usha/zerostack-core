@@ -429,3 +429,107 @@ export const sendMessage = async (conversationId: string, data: {
   return response.data
 }
 
+// AI Analysis API
+export const runAIAnalysis = async (request: {
+  tables: Array<{ schema: string; table: string }>
+  analysis_types: string[]
+  provider: string
+  model: string
+  db_id?: string
+  context?: string
+}) => {
+  const response = await client.post('/api/v1/data-explorer/analyze', request)
+  return response.data
+}
+
+export const listAnalyses = async (dbId?: string, limit: number = 50) => {
+  const params = new URLSearchParams()
+  if (dbId) params.append('db_id', dbId)
+  params.append('limit', limit.toString())
+  
+  const response = await client.get(`/api/v1/data-explorer/analyses?${params}`)
+  return response.data
+}
+
+export const getAnalysis = async (analysisId: string) => {
+  const response = await client.get(`/api/v1/data-explorer/analyses/${analysisId}`)
+  return response.data
+}
+
+export const deleteAnalysis = async (analysisId: string) => {
+  const response = await client.delete(`/api/v1/data-explorer/analyses/${analysisId}`)
+  return response.data
+}
+
+export const updateAnalysis = async (
+  analysisId: string,
+  data: {
+    name?: string
+    description?: string
+    tags?: string[]
+  }
+) => {
+  const response = await client.patch(`/api/v1/data-explorer/analyses/${analysisId}`, data)
+  return response.data
+}
+
+// Data Analysis Jobs API
+export const createAnalysisJob = async (data: {
+  name: string
+  tables: Array<{ schema: string; table: string }>
+  analysis_types: string[]
+  provider: string
+  model: string
+  db_id?: string
+  context?: string
+  tags?: string[]
+}) => {
+  const response = await client.post('/api/v1/data-analysis/jobs', data)
+  return response.data
+}
+
+export const listAnalysisJobs = async (params?: {
+  db_id?: string
+  status?: string
+  limit?: number
+}) => {
+  const queryParams = new URLSearchParams()
+  if (params?.db_id) queryParams.append('db_id', params.db_id)
+  if (params?.status) queryParams.append('status', params.status)
+  if (params?.limit) queryParams.append('limit', params.limit.toString())
+  
+  const response = await client.get(`/api/v1/data-analysis/jobs?${queryParams}`)
+  return response.data
+}
+
+export const getAnalysisJob = async (jobId: string) => {
+  const response = await client.get(`/api/v1/data-analysis/jobs/${jobId}`)
+  return response.data
+}
+
+export const getJobStatus = async (jobId: string) => {
+  const response = await client.get(`/api/v1/data-analysis/jobs/${jobId}/status`)
+  return response.data
+}
+
+export const cancelAnalysisJob = async (jobId: string) => {
+  const response = await client.post(`/api/v1/data-analysis/jobs/${jobId}/cancel`)
+  return response.data
+}
+
+export const deleteAnalysisJob = async (jobId: string) => {
+  const response = await client.delete(`/api/v1/data-analysis/jobs/${jobId}`)
+  return response.data
+}
+
+// AI Models API
+export const getAvailableModels = async () => {
+  const response = await client.get('/api/v1/ai-models/available')
+  return response.data
+}
+
+export const checkApiKeys = async () => {
+  const response = await client.get('/api/v1/ai-models/check-keys')
+  return response.data
+}
+

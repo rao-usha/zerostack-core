@@ -9,6 +9,7 @@ import Models from './pages/Models'
 import SyntheticData from './pages/SyntheticData'
 import Contexts from './pages/Contexts'
 import DataExplorer from './pages/DataExplorer'
+import DataAnalysis from './pages/DataAnalysis'
 import Distillation from './pages/Distillation'
 import Chat from './pages/Chat'
 
@@ -22,6 +23,7 @@ function App() {
           <Route path="/contexts" element={<Contexts />} />
           <Route path="/distillation" element={<Distillation />} />
           <Route path="/explorer" element={<DataExplorer />} />
+          <Route path="/analysis" element={<DataAnalysis />} />
           <Route path="/chat" element={<Chat />} />
           <Route path="/insights" element={<Insights />} />
           <Route path="/quality" element={<Quality />} />

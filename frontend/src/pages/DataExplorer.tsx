@@ -21,6 +21,7 @@ import {
   executeExplorerQuery,
 } from '../api/client'
 import DataTable from '../components/DataTable'
+import AIAnalysisTab from '../components/AIAnalysisTab'
 
 interface DatabaseInfo {
   id: string
@@ -99,7 +100,7 @@ export default function DataExplorer() {
   const [queryPage, setQueryPage] = useState(1)
   
   // Active tab
-  const [activeTab, setActiveTab] = useState<'preview' | 'columns' | 'query' | 'summary'>('preview')
+  const [activeTab, setActiveTab] = useState<'preview' | 'columns' | 'query' | 'summary' | 'ai-analysis'>('preview')
   const [summary, setSummary] = useState<any>(null)
   const [loadingSummary, setLoadingSummary] = useState(false)
 
@@ -493,7 +494,7 @@ export default function DataExplorer() {
                   className="flex border-b"
                   style={{ borderColor: 'rgba(168, 216, 255, 0.15)' }}
                 >
-                  {(['preview', 'columns', 'query', 'summary'] as const).map((tab) => (
+                  {(['preview', 'columns', 'query', 'summary', 'ai-analysis'] as const).map((tab) => (
                     <button
                       key={tab}
                       onClick={() => {
@@ -700,7 +701,7 @@ export default function DataExplorer() {
                                   <span style={{ color: '#b0b8c0' }}>Type:</span>{' '}
                                   <span style={{ color: '#c4b5fd' }}>{stats.data_type}</span>
                                 </div>
-                                {stats.distinct_count !== null && stats.distinct_count !== undefined && (
+                                {stats.distinct_count && (
                                   <div>
                                     <span style={{ color: '#b0b8c0' }}>Distinct:</span>{' '}
                                     <span style={{ color: '#c4b5fd' }}>{stats.distinct_count}</span>
@@ -738,6 +739,15 @@ export default function DataExplorer() {
                         </div>
                       )}
                     </div>
+                  )}
+
+                  {/* AI Analysis Tab */}
+                  {activeTab === 'ai-analysis' && (
+                    <AIAnalysisTab
+                      selectedDbId={selectedDbId}
+                      availableTables={Object.values(tablesBySchema).flat()}
+                      selectedTableFromTree={selectedTable}
+                    />
                   )}
                 </div>
               </div>

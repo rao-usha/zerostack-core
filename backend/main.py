@@ -30,6 +30,9 @@ from domains.auth.router import router as auth_router
 from domains.jobs.router import router as jobs_router
 from domains.insights.router import router as insights_router
 from domains.data_explorer.router import router as data_explorer_router
+from domains.data_explorer.ai_router import router as data_explorer_ai_router
+from domains.data_explorer.jobs_router import router as data_analysis_router
+from domains.data_explorer.models_router import router as ai_models_router
 from domains.chat.router import router as chat_router
 
 # Core setup
@@ -63,6 +66,9 @@ app.include_router(governance_router, prefix=settings.api_prefix)
 app.include_router(jobs_router, prefix=settings.api_prefix)
 app.include_router(insights_router, prefix=settings.api_prefix)
 app.include_router(data_explorer_router, prefix=settings.api_prefix)
+app.include_router(data_explorer_ai_router, prefix=settings.api_prefix)
+app.include_router(data_analysis_router, prefix=settings.api_prefix)
+app.include_router(ai_models_router, prefix=settings.api_prefix)
 app.include_router(chat_router, prefix=settings.api_prefix)
 
 # Initialize services

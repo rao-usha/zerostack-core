@@ -72,3 +72,74 @@ class ErrorResponse(BaseModel):
     message: str
     code: Optional[str] = None
 
+
+# AI Analysis Models
+
+class TableSelection(BaseModel):
+    """Table selection for analysis."""
+    schema: str
+    table: str
+
+
+class AnalysisRequest(BaseModel):
+    """Request to analyze tables with AI."""
+    tables: List[Dict[str, str]] = Field(..., min_items=1, max_items=10)
+    analysis_types: List[str] = Field(
+        default=["eda", "anomaly"],
+        description="Types of analysis: eda, anomaly, correlation, quality"
+    )
+    provider: str = Field(
+        default="openai",
+        description="LLM provider: openai, anthropic, google, xai"
+    )
+    model: str = Field(
+        default="gpt-4-turbo-preview",
+        description="Model name"
+    )
+    db_id: str = Field(default="default")
+    context: Optional[str] = Field(
+        default=None,
+        description="Additional context about the business domain"
+    )
+    
+    @validator('analysis_types')
+    def validate_analysis_types(cls, v):
+        """Validate analysis types."""
+        valid_types = {"eda", "anomaly", "correlation", "quality", "trends", "patterns"}
+        invalid = set(v) - valid_types
+        if invalid:
+            raise ValueError(f"Invalid analysis types: {invalid}. Valid types: {valid_types}")
+        return v
+
+
+class AnalysisResult(BaseModel):
+    """Result of AI analysis."""
+    analysis_id: str
+    tables: List[Dict[str, str]]  # Changed to accept plain dicts
+    analysis_types: List[str]
+    provider: str
+    model: str
+    insights: Dict[str, Any]  # Main analysis results organized by type
+    summary: str  # Executive summary
+    recommendations: List[str]  # Actionable recommendations
+    metadata: Dict[str, Any]  # Execution metadata (time, tokens, etc.)
+    created_at: str
+
+
+class AnalysisResponse(BaseModel):
+    """Response from analysis endpoint."""
+    analysis_id: str
+    status: str  # "running", "completed", "failed"
+    message: Optional[str] = None
+    result: Optional[AnalysisResult] = None
+    error: Optional[str] = None
+
+
+class SavedAnalysis(BaseModel):
+    """Saved analysis record."""
+    id: str
+    name: str
+    description: Optional[str] = None
+    analysis_result: AnalysisResult
+    saved_at: str
+    tags: List[str] = Field(default_factory=list)

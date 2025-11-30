@@ -11,7 +11,8 @@ import {
   Database,
   Layers,
   Table,
-  FlaskConical
+  FlaskConical,
+  Brain
 } from 'lucide-react'
 
 interface LayoutProps {
@@ -27,6 +28,7 @@ export default function Layout({ children }: LayoutProps) {
     { path: '/contexts', icon: Layers, label: 'Contexts' },
     { path: '/distillation', icon: FlaskConical, label: 'Distillation' },
     { path: '/explorer', icon: Table, label: 'Data Explorer' },
+    { path: '/analysis', icon: Brain, label: 'Data Analysis' },
     { path: '/chat', icon: MessageCircle, label: 'Chat with Data' },
     { path: '/insights', icon: Sparkles, label: 'Insights' },
     { path: '/quality', icon: CheckCircle2, label: 'Data Quality' },
