@@ -24,6 +24,10 @@ class AnalysisJob(SQLModel, table=True):
     context: Optional[str] = None
     db_id: str = SQLField(default="default", max_length=100)
     
+    # Prompt recipe (optional - if specified, prompts are rendered from recipe)
+    prompt_recipe_id: Optional[int] = None
+    prompt_overrides: Optional[Dict[str, Any]] = SQLField(default=None, sa_column=Column(JSONB))
+    
     # Status
     status: str = SQLField(default="pending", max_length=50)
     progress: int = SQLField(default=0)

@@ -29,6 +29,8 @@ class JobCreate(BaseModel):
     db_id: str = "default"
     context: Optional[str] = None
     tags: List[str] = Field(default_factory=list)
+    prompt_recipe_id: Optional[int] = None
+    prompt_overrides: Optional[dict] = None
 
 
 class JobResponse(BaseModel):
@@ -75,7 +77,7 @@ async def create_analysis_job(
         202 Accepted with job details
     """
     try:
-        # Create job
+        # Create job (with optional recipe)
         job = AnalysisJobService.create_job(
             session=session,
             name=data.name,
@@ -85,7 +87,9 @@ async def create_analysis_job(
             model=data.model,
             db_id=data.db_id,
             context=data.context,
-            tags=data.tags
+            tags=data.tags,
+            prompt_recipe_id=data.prompt_recipe_id,
+            prompt_overrides=data.prompt_overrides
         )
         
         # Start background task
