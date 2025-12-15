@@ -66,7 +66,7 @@ class PromptRecipe(SQLModel, table=True):
 
 
 class DataDictionaryEntry(SQLModel, table=True):
-    """Data dictionary entry for column-level documentation."""
+    """Data dictionary entry for column-level documentation with versioning."""
     __tablename__ = "data_dictionary_entries"
     
     id: Optional[int] = SQLField(default=None, primary_key=True)
@@ -76,6 +76,11 @@ class DataDictionaryEntry(SQLModel, table=True):
     schema_name: str = SQLField(max_length=255, index=True)
     table_name: str = SQLField(max_length=255, index=True)
     column_name: str = SQLField(max_length=255, index=True)
+    
+    # Versioning
+    version_number: int = SQLField(default=1, index=True)
+    is_active: bool = SQLField(default=True, index=True)
+    version_notes: Optional[str] = None
     
     # Business documentation
     business_name: Optional[str] = SQLField(default=None, max_length=255)

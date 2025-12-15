@@ -208,3 +208,89 @@ jobs = Table(
     Column("created_at", TIMESTAMP(timezone=True), server_default=func.now()),
 )
 
+
+# ML Model Development tables
+ml_recipe = Table(
+    "ml_recipe",
+    METADATA,
+    Column("id", String(255), primary_key=True),
+    Column("name", Text, nullable=False),
+    Column("model_family", String(64), nullable=False),  # pricing|next_best_action|location_scoring|forecasting
+    Column("level", String(32), nullable=False),  # baseline|industry|client
+    Column("status", String(32), nullable=False, default="draft"),  # draft|approved|archived
+    Column("parent_id", String(255), nullable=True),  # for inheritance
+    Column("tags", JSON, nullable=False, server_default="[]"),
+    Column("created_at", TIMESTAMP(timezone=True), server_default=func.now()),
+    Column("updated_at", TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now()),
+)
+
+
+ml_recipe_version = Table(
+    "ml_recipe_version",
+    METADATA,
+    Column("version_id", String(255), primary_key=True),
+    Column("recipe_id", String(255), ForeignKey("ml_recipe.id"), nullable=False),
+    Column("version_number", String(64), nullable=False),
+    Column("manifest_json", JSON, nullable=False, server_default="{}"),
+    Column("diff_from_prev", JSON, nullable=True),
+    Column("created_by", Text, nullable=True),
+    Column("created_at", TIMESTAMP(timezone=True), server_default=func.now()),
+    Column("change_note", Text, nullable=True),
+)
+
+
+ml_model = Table(
+    "ml_model",
+    METADATA,
+    Column("id", String(255), primary_key=True),
+    Column("name", Text, nullable=False),
+    Column("model_family", String(64), nullable=False),
+    Column("recipe_id", String(255), ForeignKey("ml_recipe.id"), nullable=False),
+    Column("recipe_version_id", String(255), ForeignKey("ml_recipe_version.version_id"), nullable=False),
+    Column("status", String(32), nullable=False, default="draft"),  # draft|staging|production|retired
+    Column("owner", Text, nullable=True),
+    Column("created_at", TIMESTAMP(timezone=True), server_default=func.now()),
+    Column("updated_at", TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now()),
+)
+
+
+ml_run = Table(
+    "ml_run",
+    METADATA,
+    Column("id", String(255), primary_key=True),
+    Column("model_id", String(255), ForeignKey("ml_model.id"), nullable=True),
+    Column("recipe_id", String(255), ForeignKey("ml_recipe.id"), nullable=False),
+    Column("recipe_version_id", String(255), ForeignKey("ml_recipe_version.version_id"), nullable=False),
+    Column("run_type", String(32), nullable=False),  # train|eval|backtest
+    Column("status", String(32), nullable=False, default="queued"),  # queued|running|succeeded|failed
+    Column("started_at", TIMESTAMP(timezone=True), nullable=True),
+    Column("finished_at", TIMESTAMP(timezone=True), nullable=True),
+    Column("metrics_json", JSON, nullable=False, server_default="{}"),
+    Column("artifacts_json", JSON, nullable=False, server_default="{}"),
+    Column("logs_text", Text, nullable=True),
+)
+
+
+ml_monitor_snapshot = Table(
+    "ml_monitor_snapshot",
+    METADATA,
+    Column("id", String(255), primary_key=True),
+    Column("model_id", String(255), ForeignKey("ml_model.id"), nullable=False),
+    Column("captured_at", TIMESTAMP(timezone=True), server_default=func.now()),
+    Column("performance_metrics_json", JSON, nullable=False, server_default="{}"),
+    Column("drift_metrics_json", JSON, nullable=False, server_default="{}"),
+    Column("data_freshness_json", JSON, nullable=False, server_default="{}"),
+    Column("alerts_json", JSON, nullable=False, server_default="{}"),
+)
+
+
+ml_synthetic_example = Table(
+    "ml_synthetic_example",
+    METADATA,
+    Column("id", String(255), primary_key=True),
+    Column("recipe_id", String(255), ForeignKey("ml_recipe.id"), nullable=False),
+    Column("dataset_schema_json", JSON, nullable=False, server_default="{}"),
+    Column("sample_rows_json", JSON, nullable=False, server_default="[]"),
+    Column("example_run_json", JSON, nullable=False, server_default="{}"),
+    Column("created_at", TIMESTAMP(timezone=True), server_default=func.now()),
+)

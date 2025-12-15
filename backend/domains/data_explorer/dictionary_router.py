@@ -7,7 +7,7 @@ from sqlmodel import Session, select
 
 from db_session import get_session
 from .db_models import DataDictionaryEntry
-from .dictionary_service import get_dictionary_for_tables, format_dictionary_as_context
+from .dictionary_service import get_dictionary_for_tables, format_dictionary_as_context, get_column_versions, activate_version
 
 router = APIRouter(prefix="/data-dictionary", tags=["Data Dictionary"])
 
@@ -20,6 +20,9 @@ class DictionaryEntryResponse(BaseModel):
     schema_name: str
     table_name: str
     column_name: str
+    version_number: int
+    is_active: bool
+    version_notes: Optional[str] = None
     business_name: Optional[str] = None
     business_description: Optional[str] = None
     technical_description: Optional[str] = None
@@ -47,6 +50,7 @@ def list_dictionary_entries(
     database_name: Optional[str] = Query(None),
     schema_name: Optional[str] = Query(None),
     table_name: Optional[str] = Query(None),
+    active_only: bool = Query(True, description="Only return active versions"),
     session: Session = Depends(get_session)
 ):
     """
@@ -56,6 +60,7 @@ def list_dictionary_entries(
     - database_name: Filter by database
     - schema_name: Filter by schema
     - table_name: Filter by table
+    - active_only: Only return active versions (default: true)
     """
     statement = select(DataDictionaryEntry)
     
@@ -65,11 +70,14 @@ def list_dictionary_entries(
         statement = statement.where(DataDictionaryEntry.schema_name == schema_name)
     if table_name:
         statement = statement.where(DataDictionaryEntry.table_name == table_name)
+    if active_only:
+        statement = statement.where(DataDictionaryEntry.is_active == True)
     
     statement = statement.order_by(
         DataDictionaryEntry.schema_name,
         DataDictionaryEntry.table_name,
-        DataDictionaryEntry.column_name
+        DataDictionaryEntry.column_name,
+        DataDictionaryEntry.version_number.desc()
     )
     
     entries = session.exec(statement).all()
@@ -81,6 +89,9 @@ def list_dictionary_entries(
             schema_name=entry.schema_name,
             table_name=entry.table_name,
             column_name=entry.column_name,
+            version_number=entry.version_number,
+            is_active=entry.is_active,
+            version_notes=entry.version_notes,
             business_name=entry.business_name,
             business_description=entry.business_description,
             technical_description=entry.technical_description,
@@ -102,12 +113,13 @@ def get_table_dictionary(
     table_name: str,
     session: Session = Depends(get_session)
 ):
-    """Get all dictionary entries for a specific table."""
+    """Get all dictionary entries for a specific table (active versions only)."""
     entries = get_dictionary_for_tables(
         session=session,
         database_name=database_name,
         schema_name=schema_name,
-        table_names=[table_name]
+        table_names=[table_name],
+        active_only=True
     )
     
     return [
@@ -117,6 +129,9 @@ def get_table_dictionary(
             schema_name=entry.schema_name,
             table_name=entry.table_name,
             column_name=entry.column_name,
+            version_number=entry.version_number,
+            is_active=entry.is_active,
+            version_notes=entry.version_notes,
             business_name=entry.business_name,
             business_description=entry.business_description,
             technical_description=entry.technical_description,
@@ -147,6 +162,9 @@ def get_dictionary_entry(
         schema_name=entry.schema_name,
         table_name=entry.table_name,
         column_name=entry.column_name,
+        version_number=entry.version_number,
+        is_active=entry.is_active,
+        version_notes=entry.version_notes,
         business_name=entry.business_name,
         business_description=entry.business_description,
         technical_description=entry.technical_description,
@@ -201,6 +219,9 @@ def update_dictionary_entry(
         schema_name=entry.schema_name,
         table_name=entry.table_name,
         column_name=entry.column_name,
+        version_number=entry.version_number,
+        is_active=entry.is_active,
+        version_notes=entry.version_notes,
         business_name=entry.business_name,
         business_description=entry.business_description,
         technical_description=entry.technical_description,
@@ -238,4 +259,86 @@ def get_dictionary_context(
     context = format_dictionary_as_context(entries)
     
     return {"context": context, "entry_count": len(entries)}
+
+
+@router.get("/versions/{database_name}/{schema_name}/{table_name}/{column_name}", response_model=List[DictionaryEntryResponse])
+def get_column_version_history(
+    database_name: str,
+    schema_name: str,
+    table_name: str,
+    column_name: str,
+    session: Session = Depends(get_session)
+):
+    """
+    Get all versions of a specific column's documentation.
+    Returns versions ordered by version_number descending (newest first).
+    """
+    versions = get_column_versions(
+        session=session,
+        database_name=database_name,
+        schema_name=schema_name,
+        table_name=table_name,
+        column_name=column_name
+    )
+    
+    if not versions:
+        raise HTTPException(status_code=404, detail="No versions found for this column")
+    
+    return [
+        DictionaryEntryResponse(
+            id=entry.id,
+            database_name=entry.database_name,
+            schema_name=entry.schema_name,
+            table_name=entry.table_name,
+            column_name=entry.column_name,
+            version_number=entry.version_number,
+            is_active=entry.is_active,
+            version_notes=entry.version_notes,
+            business_name=entry.business_name,
+            business_description=entry.business_description,
+            technical_description=entry.technical_description,
+            data_type=entry.data_type,
+            examples=entry.examples or [],
+            tags=entry.tags or [],
+            source=entry.source,
+            created_at=entry.created_at.isoformat(),
+            updated_at=entry.updated_at.isoformat(),
+        )
+        for entry in versions
+    ]
+
+
+@router.post("/activate/{entry_id}", response_model=DictionaryEntryResponse)
+def activate_dictionary_version(
+    entry_id: int,
+    session: Session = Depends(get_session)
+):
+    """
+    Activate a specific version of a dictionary entry.
+    Deactivates all other versions of the same column.
+    """
+    try:
+        entry = activate_version(session=session, entry_id=entry_id)
+        
+        return DictionaryEntryResponse(
+            id=entry.id,
+            database_name=entry.database_name,
+            schema_name=entry.schema_name,
+            table_name=entry.table_name,
+            column_name=entry.column_name,
+            version_number=entry.version_number,
+            is_active=entry.is_active,
+            version_notes=entry.version_notes,
+            business_name=entry.business_name,
+            business_description=entry.business_description,
+            technical_description=entry.technical_description,
+            data_type=entry.data_type,
+            examples=entry.examples or [],
+            tags=entry.tags or [],
+            source=entry.source,
+            created_at=entry.created_at.isoformat(),
+            updated_at=entry.updated_at.isoformat(),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 

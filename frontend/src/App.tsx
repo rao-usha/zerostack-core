@@ -13,6 +13,11 @@ import DataAnalysis from './pages/DataAnalysis'
 import DataDictionary from './pages/DataDictionary'
 import Distillation from './pages/Distillation'
 import Chat from './pages/Chat'
+import ModelLibrary from './pages/ModelLibrary'
+import RecipeDetail from './pages/RecipeDetail'
+import ModelDetail from './pages/ModelDetail'
+import RunDetail from './pages/RunDetail'
+import MLChat from './pages/MLChat'
 
 function App() {
   return (
@@ -26,6 +31,11 @@ function App() {
           <Route path="/explorer" element={<DataExplorer />} />
           <Route path="/analysis" element={<DataAnalysis />} />
           <Route path="/dictionary" element={<DataDictionary />} />
+          <Route path="/model-development" element={<ModelLibrary />} />
+          <Route path="/model-development/recipes/:recipeId" element={<RecipeDetail />} />
+          <Route path="/model-development/models/:modelId" element={<ModelDetail />} />
+          <Route path="/model-development/runs/:runId" element={<RunDetail />} />
+          <Route path="/model-development/chat" element={<MLChat />} />
           <Route path="/chat" element={<Chat />} />
           <Route path="/insights" element={<Insights />} />
           <Route path="/quality" element={<Quality />} />

@@ -435,35 +435,42 @@ Return ONLY this JSON object and nothing else.""",
 
             "column_documentation": """We are generating a data dictionary for these tables:
 
-{{schema_summary}}
+{schema_summary}
 
 Here is a sample of the data:
 
-{{sample_rows}}
+{sample_rows}
 
 Using ONLY this information, generate documentation for every column. 
-Return a JSON list of entries, where each entry has this shape:
+
+IMPORTANT: Extract the actual schema name and table name from the **Table:** headers above.
+For example, if you see "**Table: public.acs5_2021_b01001**", then:
+- schema_name = "public"
+- table_name = "acs5_2021_b01001"
+
+Return a JSON array with one entry per column. Each entry must have this EXACT structure:
 
 [
   {{
-    "database_name": "<string>",
-    "schema_name": "<string>",
-    "table_name": "<string>",
-    "column_name": "<string>",
-
-    "business_name": "<short name or same as column if unknown>",
-    "business_description": "<plain language meaning>",
-    "technical_description": "<more precise meaning or null>",
-
-    "data_type": "<observed data type>",
+    "database_name": "default",
+    "schema_name": "<extract from Table: header>",
+    "table_name": "<extract from Table: header>",
+    "column_name": "<actual column name>",
+    "business_name": "<short friendly name or same as column_name>",
+    "business_description": "<plain language meaning of what this column contains>",
+    "technical_description": "<technical details if inferable, or null>",
+    "data_type": "<observed data type from schema>",
     "examples": ["value1", "value2"],
-    "tags": ["string", "string"],
-
+    "tags": ["PII", "metric", "identifier", "category", "currency", "timestamp", "enumeration", "foreign_key", "free_text"],
     "source": "llm_initial"
   }}
 ]
 
-Return ONLY this JSON array and nothing else."""
+CRITICAL: 
+- Always use database_name equal to default
+- Extract schema_name and table_name from the Table header in schema_summary
+- Return ONLY the JSON array NO markdown NO explanations
+- Ensure all JSON strings are properly terminated and escaped"""
         }
         
         return templates.get(analysis_type, "Analyze the data:\n\n{schema_summary}\n\n{sample_rows}")

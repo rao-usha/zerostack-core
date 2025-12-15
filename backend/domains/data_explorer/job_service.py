@@ -210,11 +210,14 @@ class AnalysisJobService:
                 ]
                 
                 # Collect streaming response
+                # Use higher token limit for column_documentation since it needs to return all columns
+                token_limit = 8000 if analysis_type == "column_documentation" else 4000
+                
                 full_response = ""
                 async for event in provider.stream_chat(
                     messages=messages,
                     temperature=0.3,
-                    max_tokens=4000
+                    max_tokens=token_limit
                 ):
                     if event["type"] == "delta":
                         full_response += event["content"]
@@ -233,43 +236,68 @@ class AnalysisJobService:
                     analysis_result["raw_response"] = full_response[:5000]
                 
                 # Special handling for column_documentation: ingest into data dictionary
-                if analysis_type == "column_documentation" and "parse_error" not in analysis_result:
-                    try:
-                        # The LLM should return a list of dictionary entries
-                        # Try to extract entries from the parsed result
-                        entries_to_ingest = []
-                        
-                        # Check if the result is a list (expected format)
-                        if isinstance(analysis_result, list):
-                            entries_to_ingest = analysis_result
-                        # Or if it's wrapped in a key
-                        elif isinstance(analysis_result, dict):
-                            # Try common keys
-                            for key in ["entries", "columns", "dictionary_entries"]:
-                                if key in analysis_result and isinstance(analysis_result[key], list):
-                                    entries_to_ingest = analysis_result[key]
-                                    break
-                        
-                        if entries_to_ingest:
-                            # Ingest into dictionary
-                            count = upsert_dictionary_entries(
-                                session=session,
-                                entries=entries_to_ingest,
-                                database_name=job.db_id
-                            )
-                            logger.info(f"Ingested {count} dictionary entries from job {job_id}")
+                if analysis_type == "column_documentation":
+                    logger.info(f"Processing column_documentation for job {job_id}")
+                    logger.debug(f"Analysis result type: {type(analysis_result)}")
+                    
+                    if "parse_error" in analysis_result:
+                        logger.warning(f"Parse error in column_documentation result: {analysis_result.get('parse_error')}")
+                    else:
+                        try:
+                            # The LLM should return a list of dictionary entries
+                            # Try to extract entries from the parsed result
+                            entries_to_ingest = []
                             
-                            # Add metadata about ingestion
-                            analysis_result = {
-                                "ingestion_summary": f"Successfully ingested {count} column definitions into data dictionary",
-                                "entries": entries_to_ingest
-                            }
-                        else:
-                            logger.warning(f"No dictionary entries found in column_documentation result for job {job_id}")
-                            analysis_result["warning"] = "No entries found to ingest"
-                    except Exception as ingest_error:
-                        logger.error(f"Failed to ingest dictionary entries for job {job_id}: {ingest_error}")
-                        analysis_result["ingestion_error"] = str(ingest_error)
+                            # Check if the result is a list (expected format)
+                            if isinstance(analysis_result, list):
+                                entries_to_ingest = analysis_result
+                                logger.info(f"Found {len(entries_to_ingest)} entries as direct list")
+                            # Or if it's wrapped in a key
+                            elif isinstance(analysis_result, dict):
+                                # Try common keys
+                                for key in ["entries", "columns", "dictionary_entries", "data"]:
+                                    if key in analysis_result and isinstance(analysis_result[key], list):
+                                        entries_to_ingest = analysis_result[key]
+                                        logger.info(f"Found {len(entries_to_ingest)} entries under key '{key}'")
+                                        break
+                            
+                            if entries_to_ingest:
+                                logger.info(f"Attempting to ingest {len(entries_to_ingest)} dictionary entries")
+                                logger.debug(f"First entry sample: {entries_to_ingest[0] if entries_to_ingest else 'none'}")
+                                
+                                # Ingest into dictionary
+                                count = upsert_dictionary_entries(
+                                    session=session,
+                                    entries=entries_to_ingest,
+                                    database_name=job.db_id
+                                )
+                                logger.info(f"✓ Successfully ingested {count} dictionary entries from job {job_id}")
+                                
+                                # Add metadata about ingestion
+                                analysis_result = {
+                                    "ingestion_summary": f"Successfully ingested {count} column definitions into data dictionary",
+                                    "entries": entries_to_ingest,
+                                    "table_summary": f"Documented {len(set(e.get('table_name') for e in entries_to_ingest))} table(s)"
+                                }
+                            else:
+                                logger.warning(f"No dictionary entries found in column_documentation result for job {job_id}")
+                                logger.debug(f"Result structure: {list(analysis_result.keys()) if isinstance(analysis_result, dict) else 'not a dict'}")
+                                if isinstance(analysis_result, dict):
+                                    analysis_result["warning"] = "No entries found to ingest"
+                                else:
+                                    analysis_result = {
+                                        "warning": "Unexpected result format",
+                                        "result_type": str(type(analysis_result))
+                                    }
+                        except Exception as ingest_error:
+                            logger.error(f"Failed to ingest dictionary entries for job {job_id}: {ingest_error}", exc_info=True)
+                            if isinstance(analysis_result, dict):
+                                analysis_result["ingestion_error"] = str(ingest_error)
+                            else:
+                                analysis_result = {
+                                    "ingestion_error": str(ingest_error),
+                                    "original_result": str(analysis_result)[:500]
+                                }
                 
                 combined_insights[analysis_type] = analysis_result
                 
@@ -424,16 +452,19 @@ class AnalysisJobService:
         return table_data
     
     @staticmethod
-    def _parse_insights(response: str) -> Dict[str, Any]:
-        """Parse LLM JSON response with robust error handling."""
+    def _parse_insights(response: str):
+        """Parse LLM JSON response with robust error handling.
+        
+        Returns either a dict or a list depending on the JSON structure.
+        """
         import json
         import re
         
         original_response = response
         response = response.strip()
         
-        # Try to extract JSON from markdown code blocks
-        json_block_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', response, re.DOTALL)
+        # Try to extract JSON from markdown code blocks (object or array)
+        json_block_match = re.search(r'```(?:json)?\s*(\{.*?\}|\[.*?\])\s*```', response, re.DOTALL)
         if json_block_match:
             response = json_block_match.group(1)
         else:
@@ -447,22 +478,26 @@ class AnalysisJobService:
         
         response = response.strip()
         
-        # Try to find JSON object in the response
-        if not response.startswith('{'):
-            # Look for first { and last }
-            start = response.find('{')
-            end = response.rfind('}')
-            if start != -1 and end != -1 and end > start:
-                response = response[start:end+1]
+        # Try to find JSON object or array in the response
+        if not response.startswith('{') and not response.startswith('['):
+            # Look for first { or [ and last } or ]
+            obj_start = response.find('{')
+            obj_end = response.rfind('}')
+            arr_start = response.find('[')
+            arr_end = response.rfind(']')
+            
+            # Choose whichever comes first
+            if arr_start != -1 and (obj_start == -1 or arr_start < obj_start):
+                if arr_end != -1 and arr_end > arr_start:
+                    response = response[arr_start:arr_end+1]
+            elif obj_start != -1 and obj_end != -1 and obj_end > obj_start:
+                response = response[obj_start:obj_end+1]
         
         # Attempt to parse
         try:
             parsed = json.loads(response)
             
-            # Validate it has expected structure
-            if not isinstance(parsed, dict):
-                raise ValueError("Response is not a JSON object")
-            
+            # Return as-is (can be dict or list)
             return parsed
             
         except (json.JSONDecodeError, ValueError) as e:

@@ -581,6 +581,9 @@ export interface DictionaryEntry {
   schema_name: string
   table_name: string
   column_name: string
+  version_number: number
+  is_active: boolean
+  version_notes?: string
   business_name?: string
   business_description?: string
   technical_description?: string
@@ -626,6 +629,23 @@ export const updateDictionaryEntry = async (
   }
 ): Promise<DictionaryEntry> => {
   const response = await client.patch(`/api/v1/data-dictionary/${entryId}`, update)
+  return response.data
+}
+
+export const getColumnVersions = async (
+  databaseName: string,
+  schemaName: string,
+  tableName: string,
+  columnName: string
+): Promise<DictionaryEntry[]> => {
+  const response = await client.get(
+    `/api/v1/data-dictionary/versions/${databaseName}/${schemaName}/${tableName}/${columnName}`
+  )
+  return response.data
+}
+
+export const activateDictionaryVersion = async (entryId: number): Promise<DictionaryEntry> => {
+  const response = await client.post(`/api/v1/data-dictionary/activate/${entryId}`)
   return response.data
 }
 

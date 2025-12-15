@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
 import {
   Brain,
   Play,
@@ -92,16 +93,25 @@ interface Table {
 }
 
 export default function DataAnalysis() {
+  const location = useLocation()
+  const navigationState = location.state as {
+    preselectedTables?: Array<{ schema: string; name: string }>
+    preselectedAction?: string
+    dbId?: string
+  } | null
+
   const [activeTab, setActiveTab] = useState<'jobs' | 'prompts'>('jobs')
   const [view, setView] = useState<'new' | 'list' | 'detail'>('list')
-  const [selectedDb, setSelectedDb] = useState('default')
+  const [selectedDb, setSelectedDb] = useState(navigationState?.dbId || 'default')
   const [databases, setDatabases] = useState<Database[]>([])
   const [tables, setTables] = useState<Table[]>([])
   const [selectedTables, setSelectedTables] = useState<Table[]>([])
   
   // New analysis config
   const [jobName, setJobName] = useState('')
-  const [analysisTypes, setAnalysisTypes] = useState<string[]>(['profiling', 'quality'])
+  const [analysisTypes, setAnalysisTypes] = useState<string[]>(
+    navigationState?.preselectedAction ? [navigationState.preselectedAction] : ['profiling', 'quality']
+  )
   const [provider, setProvider] = useState('openai')
   const [model, setModel] = useState('gpt-4o')
   const [context, setContext] = useState('')
@@ -155,6 +165,33 @@ export default function DataAnalysis() {
       loadTables()
     }
   }, [selectedDb])
+
+  // Handle preselected tables from navigation (e.g., from Data Dictionary)
+  useEffect(() => {
+    if (navigationState?.preselectedTables && tables.length > 0) {
+      // Switch to new analysis view
+      setView('new')
+      
+      // Match preselected tables with loaded tables
+      const matchedTables = navigationState.preselectedTables
+        .map(pt => tables.find(t => t.schema === pt.schema && t.name === pt.name))
+        .filter((t): t is Table => t !== undefined)
+      
+      if (matchedTables.length > 0) {
+        setSelectedTables(matchedTables)
+        
+        // Set a default job name
+        if (matchedTables.length === 1) {
+          setJobName(`Document ${matchedTables[0].schema}.${matchedTables[0].name}`)
+        } else {
+          setJobName(`Document ${matchedTables.length} tables`)
+        }
+      }
+      
+      // Clear the navigation state to prevent re-triggering
+      window.history.replaceState({}, document.title)
+    }
+  }, [tables, navigationState])
 
   // Load recipes when analysis types change
   useEffect(() => {
