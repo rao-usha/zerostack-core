@@ -85,15 +85,15 @@ class AnalysisRequest(BaseModel):
     """Request to analyze tables with AI."""
     tables: List[Dict[str, str]] = Field(..., min_items=1, max_items=10)
     analysis_types: List[str] = Field(
-        default=["eda", "anomaly"],
-        description="Types of analysis: eda, anomaly, correlation, quality"
+        default=["profiling", "quality"],
+        description="Types of analysis: profiling, quality, anomaly, relationships, trends, patterns, column_documentation"
     )
     provider: str = Field(
         default="openai",
         description="LLM provider: openai, anthropic, google, xai"
     )
     model: str = Field(
-        default="gpt-4-turbo-preview",
+        default="gpt-4o",
         description="Model name"
     )
     db_id: str = Field(default="default")
@@ -105,7 +105,7 @@ class AnalysisRequest(BaseModel):
     @validator('analysis_types')
     def validate_analysis_types(cls, v):
         """Validate analysis types."""
-        valid_types = {"eda", "anomaly", "correlation", "quality", "trends", "patterns"}
+        valid_types = {"profiling", "quality", "anomaly", "relationships", "trends", "patterns", "column_documentation"}
         invalid = set(v) - valid_types
         if invalid:
             raise ValueError(f"Invalid analysis types: {invalid}. Valid types: {valid_types}")

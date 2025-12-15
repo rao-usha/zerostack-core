@@ -533,3 +533,119 @@ export const checkApiKeys = async () => {
   return response.data
 }
 
+// Prompt Recipes API
+export const fetchPromptRecipes = async (actionType?: string) => {
+  const params = actionType ? `?action_type=${encodeURIComponent(actionType)}` : ''
+  const response = await client.get(`/api/v1/data-explorer/prompt-recipes${params}`)
+  return response.data
+}
+
+export const createPromptRecipe = async (recipe: {
+  name: string
+  action_type: string
+  default_provider?: string
+  default_model?: string
+  system_message: string
+  user_template: string
+  metadata?: any
+}) => {
+  const response = await client.post('/api/v1/data-explorer/prompt-recipes/', recipe)
+  return response.data
+}
+
+export const getPromptRecipe = async (recipeId: number) => {
+  const response = await client.get(`/api/v1/data-explorer/prompt-recipes/${recipeId}`)
+  return response.data
+}
+
+export const updatePromptRecipe = async (recipeId: number, updates: any) => {
+  const response = await client.patch(`/api/v1/data-explorer/prompt-recipes/${recipeId}`, updates)
+  return response.data
+}
+
+export const clonePromptRecipe = async (recipeId: number) => {
+  const response = await client.post(`/api/v1/data-explorer/prompt-recipes/${recipeId}/clone`)
+  return response.data
+}
+
+export const deletePromptRecipe = async (recipeId: number, force: boolean = false) => {
+  const params = force ? '?force=true' : ''
+  const response = await client.delete(`/api/v1/data-explorer/prompt-recipes/${recipeId}${params}`)
+  return response.data
+}
+
+// Data Dictionary API
+export interface DictionaryEntry {
+  id: number
+  database_name: string
+  schema_name: string
+  table_name: string
+  column_name: string
+  version_number: number
+  is_active: boolean
+  version_notes?: string
+  business_name?: string
+  business_description?: string
+  technical_description?: string
+  data_type?: string
+  examples?: string[]
+  tags?: string[]
+  source: string
+  created_at: string
+  updated_at: string
+}
+
+export const fetchDictionaryEntries = async (
+  databaseName?: string,
+  schemaName?: string,
+  tableName?: string
+): Promise<DictionaryEntry[]> => {
+  const params = new URLSearchParams()
+  if (databaseName) params.append('database_name', databaseName)
+  if (schemaName) params.append('schema_name', schemaName)
+  if (tableName) params.append('table_name', tableName)
+  
+  const queryString = params.toString()
+  const url = queryString 
+    ? `/api/v1/data-dictionary?${queryString}` 
+    : '/api/v1/data-dictionary'
+  
+  const response = await client.get(url)
+  return response.data
+}
+
+export const getDictionaryEntry = async (entryId: number): Promise<DictionaryEntry> => {
+  const response = await client.get(`/api/v1/data-dictionary/${entryId}`)
+  return response.data
+}
+
+export const updateDictionaryEntry = async (
+  entryId: number,
+  update: {
+    business_name?: string
+    business_description?: string
+    technical_description?: string
+    tags?: string[]
+  }
+): Promise<DictionaryEntry> => {
+  const response = await client.patch(`/api/v1/data-dictionary/${entryId}`, update)
+  return response.data
+}
+
+export const getColumnVersions = async (
+  databaseName: string,
+  schemaName: string,
+  tableName: string,
+  columnName: string
+): Promise<DictionaryEntry[]> => {
+  const response = await client.get(
+    `/api/v1/data-dictionary/versions/${databaseName}/${schemaName}/${tableName}/${columnName}`
+  )
+  return response.data
+}
+
+export const activateDictionaryVersion = async (entryId: number): Promise<DictionaryEntry> => {
+  const response = await client.post(`/api/v1/data-dictionary/activate/${entryId}`)
+  return response.data
+}
+

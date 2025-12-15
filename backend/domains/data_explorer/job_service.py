@@ -13,8 +13,10 @@ from datetime import datetime
 
 from sqlmodel import Session, select, desc
 from .job_models import AnalysisJob
-from .db_models import AIAnalysisResult
+from .db_models import AIAnalysisResult, PromptRecipe
 from .models import AnalysisRequest, AnalysisResult
+from .analysis_prompts import AnalysisPromptTemplates
+from .dictionary_service import upsert_dictionary_entries
 from ..chat.service import ChatService
 from llm.providers import get_provider
 
@@ -35,7 +37,9 @@ class AnalysisJobService:
         db_id: str = "default",
         context: Optional[str] = None,
         user_id: Optional[UUID] = None,
-        tags: Optional[List[str]] = None
+        tags: Optional[List[str]] = None,
+        prompt_recipe_id: Optional[int] = None,
+        prompt_overrides: Optional[Dict[str, Any]] = None
     ) -> AnalysisJob:
         """
         Create a new analysis job.
@@ -54,7 +58,9 @@ class AnalysisJobService:
             db_id=db_id,
             status="pending",
             progress=0,
-            tags=tags or []
+            tags=tags or [],
+            prompt_recipe_id=prompt_recipe_id,
+            prompt_overrides=prompt_overrides
         )
         
         session.add(job)
@@ -62,6 +68,44 @@ class AnalysisJobService:
         session.refresh(job)
         
         return job
+    
+    @staticmethod
+    def render_prompt_from_recipe(
+        session: Session,
+        recipe_id: int,
+        action_type: str,
+        table_data: List[Dict[str, Any]],
+        context: Optional[str] = None
+    ) -> tuple[str, str]:
+        """
+        Render system_message and user_message from a prompt recipe.
+        
+        Returns:
+            Tuple of (system_message, user_message)
+        """
+        recipe = session.get(PromptRecipe, recipe_id)
+        if not recipe:
+            raise ValueError(f"Prompt recipe {recipe_id} not found")
+        
+        if recipe.action_type != action_type:
+            logger.warning(
+                f"Recipe action_type={recipe.action_type} does not match job action_type={action_type}"
+            )
+        
+        # Build schema summary and sample rows from table_data
+        schema_summary = AnalysisPromptTemplates._build_schema_summary(table_data)
+        sample_rows = AnalysisPromptTemplates._build_sample_rows(table_data)
+        
+        # Simple template substitution (can upgrade to Jinja2 later)
+        user_message = recipe.user_template
+        user_message = user_message.replace("{schema_summary}", schema_summary)
+        user_message = user_message.replace("{sample_rows}", sample_rows)
+        
+        # Add context if provided
+        if context:
+            user_message = f"**Business Context**: {context}\n\n{user_message}"
+        
+        return recipe.system_message, user_message
     
     @staticmethod
     async def run_analysis_job(job_id: UUID, session: Session):
@@ -99,72 +143,193 @@ class AnalysisJobService:
                 db_id=job.db_id
             )
             
-            # Stage 2: Build analysis prompt
-            job.current_stage = "Building analysis prompt..."
+            # Stage 2: Run analysis for each analysis type
+            job.current_stage = "Running specialized analyses..."
             job.progress = 30
             session.add(job)
             session.commit()
             
-            prompt = AnalysisJobService._build_mcp_analysis_prompt(
-                table_data=table_data,
-                analysis_types=job.analysis_types,
-                context=job.context
-            )
-            
-            # Stage 3: Run AI analysis
-            job.current_stage = f"Analyzing with {job.provider}/{job.model}..."
-            job.progress = 40
-            session.add(job)
-            session.commit()
+            combined_insights = {}
+            all_recommendations = []
             
             provider = get_provider(job.provider, job.model)
             
-            messages = [
-                {
-                    "role": "system",
-                    "content": (
-                        "You are an expert data analyst. You MUST respond with ONLY valid JSON, no other text.\n\n"
-                        "CRITICAL: Your entire response must be a single JSON object. Do not include any "
-                        "explanatory text before or after the JSON. Do not wrap the JSON in markdown code blocks.\n\n"
-                        "Return a comprehensive analysis as a JSON object with the structure specified in the user prompt."
+            # Run each analysis type separately
+            for i, analysis_type in enumerate(job.analysis_types):
+                job.current_stage = f"Running {analysis_type} analysis..."
+                base_progress = 30 + (i * 50 // len(job.analysis_types))
+                job.progress = base_progress
+                session.add(job)
+                session.commit()
+                
+                # Build specialized prompt for this analysis type
+                # Check if we should use a prompt recipe or default prompts
+                if job.prompt_recipe_id:
+                    try:
+                        system_message, user_message = AnalysisJobService.render_prompt_from_recipe(
+                            session=session,
+                            recipe_id=job.prompt_recipe_id,
+                            action_type=analysis_type,
+                            table_data=table_data,
+                            context=job.context
+                        )
+                        logger.info(f"Using prompt recipe {job.prompt_recipe_id} for {analysis_type}")
+                    except Exception as e:
+                        logger.warning(f"Failed to use recipe {job.prompt_recipe_id}: {e}. Falling back to default prompts.")
+                        system_message, user_message = AnalysisPromptTemplates.build_analysis_prompt(
+                            analysis_type=analysis_type,
+                            table_data=table_data,
+                            context=job.context
+                        )
+                else:
+                    # Use default template-based prompts
+                    system_message, user_message = AnalysisPromptTemplates.build_analysis_prompt(
+                        analysis_type=analysis_type,
+                        table_data=table_data,
+                        context=job.context
                     )
-                },
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ]
-            
-            # Collect streaming response
-            full_response = ""
-            async for event in provider.stream_chat(
-                messages=messages,
-                temperature=0.3,
-                max_tokens=4000
-            ):
-                if event["type"] == "delta":
-                    full_response += event["content"]
-                    # Update progress during generation
-                    job.progress = min(40 + (len(full_response) // 100), 90)
+                
+                # Store prompts in job metadata for later retrieval/editing
+                if not job.job_metadata:
+                    job.job_metadata = {}
+                if f"{analysis_type}_system_message" not in job.job_metadata:
+                    job.job_metadata[f"{analysis_type}_system_message"] = system_message
+                    job.job_metadata[f"{analysis_type}_user_message"] = user_message
                     session.add(job)
                     session.commit()
-                elif event["type"] == "error":
-                    raise Exception(f"LLM error: {event['error']}")
+                
+                messages = [
+                    {
+                        "role": "system",
+                        "content": system_message
+                    },
+                    {
+                        "role": "user",
+                        "content": user_message
+                    }
+                ]
+                
+                # Collect streaming response
+                # Use higher token limit for column_documentation since it needs to return all columns
+                token_limit = 8000 if analysis_type == "column_documentation" else 4000
+                
+                full_response = ""
+                async for event in provider.stream_chat(
+                    messages=messages,
+                    temperature=0.3,
+                    max_tokens=token_limit
+                ):
+                    if event["type"] == "delta":
+                        full_response += event["content"]
+                        # Update progress during generation
+                        job.progress = min(base_progress + (len(full_response) // 200), base_progress + 40)
+                        session.add(job)
+                        session.commit()
+                    elif event["type"] == "error":
+                        raise Exception(f"LLM error: {event['error']}")
+                
+                # Parse results for this analysis type
+                analysis_result = AnalysisJobService._parse_insights(full_response)
+                
+                # If parsing failed, store raw response for debugging
+                if "parse_error" in analysis_result:
+                    analysis_result["raw_response"] = full_response[:5000]
+                
+                # Special handling for column_documentation: ingest into data dictionary
+                if analysis_type == "column_documentation":
+                    logger.info(f"Processing column_documentation for job {job_id}")
+                    logger.debug(f"Analysis result type: {type(analysis_result)}")
+                    
+                    if "parse_error" in analysis_result:
+                        logger.warning(f"Parse error in column_documentation result: {analysis_result.get('parse_error')}")
+                    else:
+                        try:
+                            # The LLM should return a list of dictionary entries
+                            # Try to extract entries from the parsed result
+                            entries_to_ingest = []
+                            
+                            # Check if the result is a list (expected format)
+                            if isinstance(analysis_result, list):
+                                entries_to_ingest = analysis_result
+                                logger.info(f"Found {len(entries_to_ingest)} entries as direct list")
+                            # Or if it's wrapped in a key
+                            elif isinstance(analysis_result, dict):
+                                # Try common keys
+                                for key in ["entries", "columns", "dictionary_entries", "data"]:
+                                    if key in analysis_result and isinstance(analysis_result[key], list):
+                                        entries_to_ingest = analysis_result[key]
+                                        logger.info(f"Found {len(entries_to_ingest)} entries under key '{key}'")
+                                        break
+                            
+                            if entries_to_ingest:
+                                logger.info(f"Attempting to ingest {len(entries_to_ingest)} dictionary entries")
+                                logger.debug(f"First entry sample: {entries_to_ingest[0] if entries_to_ingest else 'none'}")
+                                
+                                # Ingest into dictionary
+                                count = upsert_dictionary_entries(
+                                    session=session,
+                                    entries=entries_to_ingest,
+                                    database_name=job.db_id
+                                )
+                                logger.info(f"✓ Successfully ingested {count} dictionary entries from job {job_id}")
+                                
+                                # Add metadata about ingestion
+                                analysis_result = {
+                                    "ingestion_summary": f"Successfully ingested {count} column definitions into data dictionary",
+                                    "entries": entries_to_ingest,
+                                    "table_summary": f"Documented {len(set(e.get('table_name') for e in entries_to_ingest))} table(s)"
+                                }
+                            else:
+                                logger.warning(f"No dictionary entries found in column_documentation result for job {job_id}")
+                                logger.debug(f"Result structure: {list(analysis_result.keys()) if isinstance(analysis_result, dict) else 'not a dict'}")
+                                if isinstance(analysis_result, dict):
+                                    analysis_result["warning"] = "No entries found to ingest"
+                                else:
+                                    analysis_result = {
+                                        "warning": "Unexpected result format",
+                                        "result_type": str(type(analysis_result))
+                                    }
+                        except Exception as ingest_error:
+                            logger.error(f"Failed to ingest dictionary entries for job {job_id}: {ingest_error}", exc_info=True)
+                            if isinstance(analysis_result, dict):
+                                analysis_result["ingestion_error"] = str(ingest_error)
+                            else:
+                                analysis_result = {
+                                    "ingestion_error": str(ingest_error),
+                                    "original_result": str(analysis_result)[:500]
+                                }
+                
+                combined_insights[analysis_type] = analysis_result
+                
+                # Extract recommendations from this analysis
+                if "recommended_remediations" in analysis_result:
+                    all_recommendations.extend(analysis_result["recommended_remediations"])
+                if "recommended_next_analyses" in analysis_result:
+                    all_recommendations.extend(analysis_result["recommended_next_analyses"])
             
-            # Stage 4: Parse and save results
-            job.current_stage = "Parsing and saving results..."
+            # Stage 3: Generate AI-enhanced executive summary
+            job.current_stage = "Generating executive summary..."
+            job.progress = 85
+            session.add(job)
+            session.commit()
+            
+            # Generate AI summary of all findings
+            ai_summary = await AnalysisJobService._generate_ai_summary(
+                insights=combined_insights,
+                table_data=table_data,
+                analysis_types=job.analysis_types,
+                provider=provider
+            )
+            
+            # Stage 4: Combine and save results
+            job.current_stage = "Finalizing results..."
             job.progress = 95
             session.add(job)
             session.commit()
             
-            insights = AnalysisJobService._parse_insights(full_response)
-            
-            # If parsing failed, store raw response for debugging
-            if "parse_error" in insights:
-                insights["raw_response"] = full_response[:5000]  # Limit to 5KB for storage
-            
-            summary = AnalysisJobService._generate_summary(insights, table_data)
-            recommendations = AnalysisJobService._extract_recommendations(insights)
+            insights = combined_insights
+            summary = ai_summary  # Use AI-generated summary instead of basic concatenation
+            recommendations = list(dict.fromkeys(all_recommendations))[:15]  # Unique, max 15
             
             # Create analysis result record
             analysis_result = AIAnalysisResult(
@@ -287,172 +452,19 @@ class AnalysisJobService:
         return table_data
     
     @staticmethod
-    def _build_mcp_analysis_prompt(
-        table_data: List[Dict[str, Any]],
-        analysis_types: List[str],
-        context: Optional[str]
-    ) -> str:
-        """Build analysis prompt using MCP-gathered data."""
+    def _parse_insights(response: str):
+        """Parse LLM JSON response with robust error handling.
         
-        table_descriptions = []
-        for table in table_data:
-            if "error" in table:
-                table_descriptions.append(
-                    f"**{table['schema']}.{table['table']}**: Error - {table['error']}"
-                )
-                continue
-            
-            profile = table.get('profile', {})
-            total_rows = profile.get('total_rows', 'Unknown')
-            if isinstance(total_rows, (int, float)):
-                total_rows_str = f"{int(total_rows):,}"
-            else:
-                total_rows_str = str(total_rows)
-            
-            desc = f"""
-**Table: {table['schema']}.{table['table']}**
-- Total Rows: {total_rows_str}
-- Column Count: {len(profile.get('column_profiles', {}))}
-
-Column Profiles:
-"""
-            for col_name, col_profile in profile.get('column_profiles', {}).items():
-                col_info = f"  • {col_name} ({col_profile.get('data_type', 'unknown')})"
-                
-                # Null fraction
-                null_frac = col_profile.get('null_fraction', 0)
-                if null_frac > 0:
-                    try:
-                        col_info += f" - {float(null_frac)*100:.1f}% null"
-                    except (ValueError, TypeError):
-                        col_info += f" - {null_frac}% null"
-                
-                # Range
-                if 'min' in col_profile and 'max' in col_profile:
-                    col_info += f" - Range: [{col_profile['min']}, {col_profile['max']}]"
-                
-                # Average
-                if 'avg' in col_profile:
-                    try:
-                        col_info += f" - Avg: {float(col_profile['avg']):.2f}"
-                    except (ValueError, TypeError):
-                        col_info += f" - Avg: {col_profile['avg']}"
-                
-                # Distinct count
-                distinct_count = col_profile.get('approx_distinct_count')
-                if distinct_count:
-                    if isinstance(distinct_count, (int, float)):
-                        col_info += f" - Distinct: {int(distinct_count):,}"
-                    else:
-                        col_info += f" - Distinct: {distinct_count}"
-                
-                desc += col_info + "\n"
-            
-            # Add sample data
-            if table.get('samples'):
-                desc += f"\nSample Data (first 10 rows): {len(table['samples'])} rows sampled\n"
-            
-            table_descriptions.append(desc)
-        
-        context_section = f"\n\n**Business Context**: {context}" if context else ""
-        
-        analysis_instructions = {
-            "eda": "Comprehensive EDA: distributions, outliers, quality issues",
-            "anomaly": "Anomaly detection: unusual patterns, data errors",
-            "correlation": "Correlation analysis: relationships within/across tables",
-            "quality": "Data quality: completeness, consistency, accuracy",
-            "trends": "Trend analysis: temporal patterns, seasonality",
-            "patterns": "Pattern discovery: clusters, segments, hidden insights"
-        }
-        
-        requested = "\n".join([
-            f"- **{t.upper()}**: {analysis_instructions.get(t, t)}"
-            for t in analysis_types
-        ])
-        
-        return f"""
-Analyze these database tables using the profiling data gathered via MCP tools:
-{context_section}
-
-# Tables
-{''.join(table_descriptions)}
-
-# Analysis Types Requested
-{requested}
-
-# CRITICAL OUTPUT REQUIREMENTS
-
-Your response MUST be a single valid JSON object with NO additional text.
-Do NOT wrap in markdown code blocks (```json).
-Do NOT add any explanatory text before or after the JSON.
-Start your response with {{ and end with }}.
-
-# Required JSON Structure
-
-{{
-  "eda": {{
-    "overview": "Brief overview of data characteristics",
-    "key_statistics": {{"table.column": {{"metric": "value"}}}},
-    "distributions": [{{"column": "name", "type": "normal/skewed/uniform", "notes": "..."}}],
-    "outliers": [{{"column": "name", "count": 0, "examples": [...]}}],
-    "data_quality_issues": [{{"issue": "...", "severity": "high/medium/low", "affected_columns": [...]}}]
-  }},
-  "anomaly_detection": {{
-    "anomalies": [{{
-      "table": "schema.table",
-      "column": "column_name",
-      "description": "What makes this anomalous",
-      "severity": "high",
-      "recommendation": "How to fix or investigate"
-    }}],
-    "patterns": ["Unusual pattern 1", "Unusual pattern 2"]
-  }},
-  "correlations": {{
-    "significant_correlations": [{{
-      "columns": ["col1", "col2"],
-      "coefficient": 0.85,
-      "interpretation": "Strong positive relationship"
-    }}],
-    "cross_table_relationships": ["Description of relationships between tables"]
-  }},
-  "quality_assessment": {{
-    "overall_score": 85,
-    "completeness": {{"score": 90, "notes": "..."}},
-    "consistency": {{"score": 80, "notes": "..."}},
-    "accuracy": {{"score": 85, "notes": "..."}},
-    "issues": [{{
-      "table": "schema.table",
-      "issue": "Specific issue description",
-      "severity": "high",
-      "recommendation": "How to fix"
-    }}]
-  }},
-  "key_insights": [
-    "Most important finding 1",
-    "Most important finding 2",
-    "Most important finding 3"
-  ],
-  "recommendations": [
-    "Specific actionable recommendation 1",
-    "Specific actionable recommendation 2",
-    "Specific actionable recommendation 3"
-  ]
-}}
-
-REMEMBER: Return ONLY the JSON object above. No markdown, no explanations, just pure JSON.
-"""
-    
-    @staticmethod
-    def _parse_insights(response: str) -> Dict[str, Any]:
-        """Parse LLM JSON response with robust error handling."""
+        Returns either a dict or a list depending on the JSON structure.
+        """
         import json
         import re
         
         original_response = response
         response = response.strip()
         
-        # Try to extract JSON from markdown code blocks
-        json_block_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', response, re.DOTALL)
+        # Try to extract JSON from markdown code blocks (object or array)
+        json_block_match = re.search(r'```(?:json)?\s*(\{.*?\}|\[.*?\])\s*```', response, re.DOTALL)
         if json_block_match:
             response = json_block_match.group(1)
         else:
@@ -466,22 +478,26 @@ REMEMBER: Return ONLY the JSON object above. No markdown, no explanations, just 
         
         response = response.strip()
         
-        # Try to find JSON object in the response
-        if not response.startswith('{'):
-            # Look for first { and last }
-            start = response.find('{')
-            end = response.rfind('}')
-            if start != -1 and end != -1 and end > start:
-                response = response[start:end+1]
+        # Try to find JSON object or array in the response
+        if not response.startswith('{') and not response.startswith('['):
+            # Look for first { or [ and last } or ]
+            obj_start = response.find('{')
+            obj_end = response.rfind('}')
+            arr_start = response.find('[')
+            arr_end = response.rfind(']')
+            
+            # Choose whichever comes first
+            if arr_start != -1 and (obj_start == -1 or arr_start < obj_start):
+                if arr_end != -1 and arr_end > arr_start:
+                    response = response[arr_start:arr_end+1]
+            elif obj_start != -1 and obj_end != -1 and obj_end > obj_start:
+                response = response[obj_start:obj_end+1]
         
         # Attempt to parse
         try:
             parsed = json.loads(response)
             
-            # Validate it has expected structure
-            if not isinstance(parsed, dict):
-                raise ValueError("Response is not a JSON object")
-            
+            # Return as-is (can be dict or list)
             return parsed
             
         except (json.JSONDecodeError, ValueError) as e:
@@ -504,42 +520,138 @@ REMEMBER: Return ONLY the JSON object above. No markdown, no explanations, just 
             }
     
     @staticmethod
-    def _generate_summary(insights: Dict[str, Any], table_data: List[Dict[str, Any]]) -> str:
-        """Generate executive summary."""
+    async def _generate_ai_summary(
+        insights: Dict[str, Any],
+        table_data: List[Dict[str, Any]],
+        analysis_types: List[str],
+        provider: Any
+    ) -> str:
+        """
+        Generate an AI-enhanced executive summary of all analysis findings.
+        
+        This creates a cohesive, business-friendly summary that synthesizes
+        findings from all analysis types into a clear narrative.
+        """
         tables = [f"{t.get('schema')}.{t.get('table')}" for t in table_data if 'error' not in t]
         
-        parts = [f"Analysis of {len(tables)} table(s): {', '.join(tables)}"]
+        # Build a structured representation of findings for the LLM
+        findings_text = f"# Analysis Results\n\n"
+        findings_text += f"**Tables Analyzed**: {', '.join(tables)}\n"
+        findings_text += f"**Analysis Types**: {', '.join(analysis_types)}\n\n"
         
-        if "key_insights" in insights:
-            parts.append("\nKey Findings:")
-            for insight in insights["key_insights"][:5]:
-                parts.append(f"• {insight}")
+        # Include executive summaries from each analysis
+        for analysis_type, result in insights.items():
+            findings_text += f"## {analysis_type.replace('_', ' ').title()}\n"
+            if isinstance(result, dict):
+                if "executive_summary" in result:
+                    findings_text += f"{result['executive_summary']}\n\n"
+                
+                # Add key metrics/counts
+                if "issues" in result and isinstance(result["issues"], list):
+                    findings_text += f"- Found {len(result['issues'])} quality issues\n"
+                if "anomalies" in result and isinstance(result["anomalies"], list):
+                    findings_text += f"- Detected {len(result['anomalies'])} anomalies\n"
+                if "relationships" in result and isinstance(result["relationships"], list):
+                    findings_text += f"- Identified {len(result['relationships'])} relationships\n"
+                if "trends" in result and isinstance(result["trends"], list):
+                    findings_text += f"- Found {len(result['trends'])} trends\n"
+                if "entries" in result and isinstance(result["entries"], list):
+                    findings_text += f"- Documented {len(result['entries'])} columns\n"
+                    
+                findings_text += "\n"
+            else:
+                findings_text += f"(Structured data)\n\n"
         
-        if "quality_assessment" in insights and "overall_score" in insights["quality_assessment"]:
-            parts.append(f"\nData Quality Score: {insights['quality_assessment']['overall_score']}/100")
+        # Create summarization prompt
+        system_message = """You are a senior data analyst creating executive summaries.
+
+Your job is to synthesize multiple analysis results into a clear, actionable executive summary.
+
+The summary should:
+- Be 3-5 sentences maximum
+- Highlight the most important findings
+- Use business-friendly language (avoid jargon)
+- Focus on actionable insights and priorities
+- Be written for stakeholders who need the bottom line
+
+Do NOT:
+- Repeat the table names or analysis types (already shown in UI)
+- Use technical jargon or field names
+- Include markdown formatting
+- List every finding - only the most critical ones"""
+
+        user_message = f"""Based on these analysis results, write a concise executive summary:
+
+{findings_text}
+
+Return ONLY the executive summary text - no markdown, no headers, just 3-5 clear sentences."""
+
+        messages = [
+            {"role": "system", "content": system_message},
+            {"role": "user", "content": user_message}
+        ]
         
-        if "anomaly_detection" in insights:
-            anomalies = insights["anomaly_detection"].get("anomalies", [])
-            if anomalies:
-                high = len([a for a in anomalies if a.get("severity") == "high"])
-                parts.append(f"\nAnomalies: {len(anomalies)} ({high} high severity)")
+        try:
+            # Generate summary with low temperature for consistency
+            full_response = ""
+            async for event in provider.stream_chat(
+                messages=messages,
+                temperature=0.2,
+                max_tokens=500
+            ):
+                if event["type"] == "delta":
+                    full_response += event["content"]
+                elif event["type"] == "error":
+                    logger.error(f"Error generating summary: {event['error']}")
+                    return AnalysisJobService._generate_fallback_summary(insights, tables, analysis_types)
+            
+            # Clean up the response
+            summary = full_response.strip()
+            
+            # Fallback if summary is too short or empty
+            if len(summary) < 20:
+                return AnalysisJobService._generate_fallback_summary(insights, tables, analysis_types)
+            
+            return summary
+            
+        except Exception as e:
+            logger.error(f"Failed to generate AI summary: {e}")
+            return AnalysisJobService._generate_fallback_summary(insights, tables, analysis_types)
+    
+    @staticmethod
+    def _generate_fallback_summary(insights: Dict[str, Any], tables: List[str], analysis_types: List[str]) -> str:
+        """Generate a basic fallback summary if AI generation fails."""
+        parts = [f"Analyzed {len(tables)} table(s) using {len(analysis_types)} analysis type(s)."]
         
-        return "\n".join(parts)
+        # Extract key counts
+        issue_count = 0
+        anomaly_count = 0
+        relationship_count = 0
+        
+        for result in insights.values():
+            if isinstance(result, dict):
+                if "issues" in result and isinstance(result["issues"], list):
+                    issue_count += len(result["issues"])
+                if "anomalies" in result and isinstance(result["anomalies"], list):
+                    anomaly_count += len(result["anomalies"])
+                if "relationships" in result and isinstance(result["relationships"], list):
+                    relationship_count += len(result["relationships"])
+        
+        if issue_count > 0:
+            parts.append(f"Found {issue_count} quality issues.")
+        if anomaly_count > 0:
+            parts.append(f"Detected {anomaly_count} anomalies.")
+        if relationship_count > 0:
+            parts.append(f"Identified {relationship_count} relationships between columns.")
+        
+        return " ".join(parts)
     
     @staticmethod
     def _extract_recommendations(insights: Dict[str, Any]) -> List[str]:
-        """Extract recommendations."""
-        recs = []
-        
-        if "recommendations" in insights:
-            recs.extend(insights["recommendations"])
-        
-        if "quality_assessment" in insights:
-            for issue in insights["quality_assessment"].get("issues", []):
-                if "recommendation" in issue:
-                    recs.append(issue["recommendation"])
-        
-        return list(dict.fromkeys(recs))[:10]
+        """Extract recommendations from combined analysis results."""
+        # This is now handled during the analysis loop
+        # This method is kept for compatibility but does minimal work
+        return []
     
     @staticmethod
     def get_job(session: Session, job_id: UUID) -> Optional[AnalysisJob]:

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
 import {
   Brain,
   Play,
@@ -16,7 +17,9 @@ import {
   TrendingUp,
   AlertTriangle,
   BarChart3,
-  Shield
+  Shield,
+  Book,
+  Sparkles
 } from 'lucide-react'
 import {
   getExplorerDatabases,
@@ -29,8 +32,12 @@ import {
   deleteAnalysisJob,
   getJobStatus,
   getAvailableModels,
-  checkApiKeys
+  checkApiKeys,
+  fetchPromptRecipes,
+  createPromptRecipe,
+  clonePromptRecipe
 } from '../api/client'
+import PromptLibrary from '../components/PromptLibrary'
 
 interface Job {
   id: string
@@ -51,6 +58,7 @@ interface Job {
   result_id?: string
   error_message?: string
   tags: string[]
+  job_metadata?: any
 }
 
 interface JobWithResult {
@@ -85,20 +93,35 @@ interface Table {
 }
 
 export default function DataAnalysis() {
+  const location = useLocation()
+  const navigationState = location.state as {
+    preselectedTables?: Array<{ schema: string; name: string }>
+    preselectedAction?: string
+    dbId?: string
+  } | null
+
+  const [activeTab, setActiveTab] = useState<'jobs' | 'prompts'>('jobs')
   const [view, setView] = useState<'new' | 'list' | 'detail'>('list')
-  const [selectedDb, setSelectedDb] = useState('default')
+  const [selectedDb, setSelectedDb] = useState(navigationState?.dbId || 'default')
   const [databases, setDatabases] = useState<Database[]>([])
   const [tables, setTables] = useState<Table[]>([])
   const [selectedTables, setSelectedTables] = useState<Table[]>([])
   
   // New analysis config
   const [jobName, setJobName] = useState('')
-  const [analysisTypes, setAnalysisTypes] = useState<string[]>(['eda', 'anomaly'])
+  const [analysisTypes, setAnalysisTypes] = useState<string[]>(
+    navigationState?.preselectedAction ? [navigationState.preselectedAction] : ['profiling', 'quality']
+  )
   const [provider, setProvider] = useState('openai')
   const [model, setModel] = useState('gpt-4o')
   const [context, setContext] = useState('')
   const [tags, setTags] = useState<string[]>([])
   const [submitting, setSubmitting] = useState(false)
+  
+  // Prompt recipes
+  const [recipes, setRecipes] = useState<any[]>([])
+  const [selectedRecipeId, setSelectedRecipeId] = useState<number | undefined>(undefined)
+  const [loadingRecipes, setLoadingRecipes] = useState(false)
   
   // Jobs list
   const [jobs, setJobs] = useState<Job[]>([])
@@ -119,6 +142,13 @@ export default function DataAnalysis() {
   // Auto-refresh running jobs
   const [autoRefresh, setAutoRefresh] = useState(true)
   
+  // Re-run with edited prompt
+  const [showPromptEditor, setShowPromptEditor] = useState(false)
+  const [editedSystemMessage, setEditedSystemMessage] = useState('')
+  const [editedUserMessage, setEditedUserMessage] = useState('')
+  const [saveAsNewRecipe, setSaveAsNewRecipe] = useState(false)
+  const [newRecipeName, setNewRecipeName] = useState('')
+  
   // Available models from providers
   const [availableModels, setAvailableModels] = useState<Record<string, string[]>>({})
   const [apiKeys, setApiKeys] = useState<Record<string, boolean>>({})
@@ -135,6 +165,41 @@ export default function DataAnalysis() {
       loadTables()
     }
   }, [selectedDb])
+
+  // Handle preselected tables from navigation (e.g., from Data Dictionary)
+  useEffect(() => {
+    if (navigationState?.preselectedTables && tables.length > 0) {
+      // Switch to new analysis view
+      setView('new')
+      
+      // Match preselected tables with loaded tables
+      const matchedTables = navigationState.preselectedTables
+        .map(pt => tables.find(t => t.schema === pt.schema && t.name === pt.name))
+        .filter((t): t is Table => t !== undefined)
+      
+      if (matchedTables.length > 0) {
+        setSelectedTables(matchedTables)
+        
+        // Set a default job name
+        if (matchedTables.length === 1) {
+          setJobName(`Document ${matchedTables[0].schema}.${matchedTables[0].name}`)
+        } else {
+          setJobName(`Document ${matchedTables.length} tables`)
+        }
+      }
+      
+      // Clear the navigation state to prevent re-triggering
+      window.history.replaceState({}, document.title)
+    }
+  }, [tables, navigationState])
+
+  // Load recipes when analysis types change
+  useEffect(() => {
+    if (analysisTypes.length > 0) {
+      // Load recipes for the first selected analysis type (as a starting point)
+      loadRecipes(analysisTypes[0])
+    }
+  }, [analysisTypes])
 
   useEffect(() => {
     filterAndSortJobs()
@@ -213,6 +278,19 @@ export default function DataAnalysis() {
       setTables(allTables)
     } catch (error) {
       console.error('Failed to load tables:', error)
+    }
+  }
+
+  const loadRecipes = async (actionType?: string) => {
+    setLoadingRecipes(true)
+    try {
+      const recipesList = await fetchPromptRecipes(actionType)
+      setRecipes(recipesList)
+    } catch (error) {
+      console.error('Failed to load recipes:', error)
+      setRecipes([])
+    } finally {
+      setLoadingRecipes(false)
     }
   }
 
@@ -319,7 +397,8 @@ export default function DataAnalysis() {
         model,
         db_id: selectedDb,
         context: context || undefined,
-        tags
+        tags,
+        prompt_recipe_id: selectedRecipeId || undefined
       })
 
       // Reset form and switch to list view
@@ -382,15 +461,67 @@ export default function DataAnalysis() {
     }
   }
 
+  const handleRerunWithEditedPrompt = async () => {
+    if (!selectedJob) return
+    
+    setSubmitting(true)
+    try {
+      let recipeIdToUse: number | undefined = undefined
+      
+      // If user wants to save as new recipe, create it first
+      if (saveAsNewRecipe && newRecipeName) {
+        const newRecipe = await createPromptRecipe({
+          name: newRecipeName,
+          action_type: selectedJob.job.analysis_types[0],
+          default_provider: selectedJob.job.provider,
+          default_model: selectedJob.job.model,
+          system_message: editedSystemMessage,
+          user_template: editedUserMessage,
+          recipe_metadata: {
+            version: '1.0',
+            created_from_job: selectedJob.job.id,
+            created_at: new Date().toISOString()
+          }
+        })
+        recipeIdToUse = newRecipe.id
+      }
+      
+      // Create new job with edited prompts
+      await createAnalysisJob({
+        name: `${selectedJob.job.name} (re-run)`,
+        tables: selectedJob.job.tables,
+        analysis_types: selectedJob.job.analysis_types,
+        provider: selectedJob.job.provider,
+        model: selectedJob.job.model,
+        db_id: selectedJob.job.db_id,
+        context: undefined,
+        tags: [...selectedJob.job.tags, 're-run'],
+        prompt_recipe_id: recipeIdToUse
+      })
+      
+      // Close modal and refresh jobs list
+      setShowPromptEditor(false)
+      setSaveAsNewRecipe(false)
+      await loadJobs()
+      setView('list')
+    } catch (error) {
+      console.error('Failed to re-run job:', error)
+      alert('Failed to re-run job: ' + (error as any).message)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   // Model options are now loaded dynamically from availableModels state
 
   const analysisTypeOptions = [
-    { value: 'eda', label: 'Exploratory Data Analysis', icon: BarChart3 },
-    { value: 'anomaly', label: 'Anomaly Detection', icon: AlertTriangle },
-    { value: 'correlation', label: 'Correlation Analysis', icon: TrendingUp },
-    { value: 'quality', label: 'Data Quality Assessment', icon: Shield },
-    { value: 'trends', label: 'Trend Analysis', icon: TrendingUp },
-    { value: 'patterns', label: 'Pattern Discovery', icon: Brain }
+    { value: 'profiling', label: 'Data Profiling', icon: BarChart3, description: 'Structural and statistical properties of data' },
+    { value: 'quality', label: 'Data Quality Checks', icon: Shield, description: 'Missing data, duplicates, invalid values, violations' },
+    { value: 'anomaly', label: 'Outlier & Anomaly Detection', icon: AlertTriangle, description: 'Unusual values, distribution shifts, temporal anomalies' },
+    { value: 'relationships', label: 'Relationship Analysis', icon: TrendingUp, description: 'Correlations and associations between columns' },
+    { value: 'trends', label: 'Trend & Time-Series Analysis', icon: TrendingUp, description: 'Temporal behavior, trends, seasonality, cycles' },
+    { value: 'patterns', label: 'Pattern Discovery', icon: Brain, description: 'Higher-order patterns, clusters, segments, groups' },
+    { value: 'column_documentation', label: 'Column Documentation', icon: Book, description: 'Generate data dictionary with business descriptions' }
   ]
 
   const getStatusIcon = (status: string) => {
@@ -438,46 +569,77 @@ export default function DataAnalysis() {
           </p>
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex items-center gap-4 mb-6">
+        {/* Tab Switcher */}
+        <div className="flex items-center gap-2 mb-6 border-b" style={{ borderColor: 'rgba(168, 216, 255, 0.2)' }}>
           <button
-            onClick={() => setView('new')}
-            className={`px-6 py-3 rounded-lg font-medium transition-colors ${
-              view === 'new' ? 'text-white' : ''
+            onClick={() => setActiveTab('jobs')}
+            className={`px-6 py-3 font-medium transition-colors border-b-2 ${
+              activeTab === 'jobs' ? '' : 'border-transparent'
             }`}
             style={{
-              backgroundColor: view === 'new' ? '#0066cc' : 'rgba(168, 216, 255, 0.1)',
-              color: view === 'new' ? 'white' : '#a8d8ff',
-              border: '1px solid rgba(168, 216, 255, 0.3)'
+              color: activeTab === 'jobs' ? '#a8d8ff' : '#7a8a99',
+              borderColor: activeTab === 'jobs' ? '#a8d8ff' : 'transparent'
             }}
           >
-            <Play className="h-4 w-4 inline mr-2" />
-            New Analysis
+            Analysis Jobs
           </button>
           <button
-            onClick={() => { setView('list'); loadJobs(); }}
-            className={`px-6 py-3 rounded-lg font-medium transition-colors ${
-              view === 'list' ? 'text-white' : ''
+            onClick={() => setActiveTab('prompts')}
+            className={`px-6 py-3 font-medium transition-colors border-b-2 ${
+              activeTab === 'prompts' ? '' : 'border-transparent'
             }`}
             style={{
-              backgroundColor: view === 'list' ? '#0066cc' : 'rgba(168, 216, 255, 0.1)',
-              color: view === 'list' ? 'white' : '#a8d8ff',
-              border: '1px solid rgba(168, 216, 255, 0.3)'
+              color: activeTab === 'prompts' ? '#a8d8ff' : '#7a8a99',
+              borderColor: activeTab === 'prompts' ? '#a8d8ff' : 'transparent'
             }}
           >
-            Analysis Jobs ({jobs.length})
+            Prompt Library
           </button>
-          <div className="flex-1" />
-          <label className="flex items-center gap-2" style={{ color: '#b0b8c0' }}>
-            <input
-              type="checkbox"
-              checked={autoRefresh}
-              onChange={(e) => setAutoRefresh(e.target.checked)}
-              className="rounded"
-            />
-            Auto-refresh
-          </label>
         </div>
+
+        {/* Jobs Tab Content */}
+        {activeTab === 'jobs' && (
+          <>
+            {/* Action Buttons */}
+            <div className="flex items-center gap-4 mb-6">
+              <button
+                onClick={() => setView('new')}
+                className={`px-6 py-3 rounded-lg font-medium transition-colors ${
+                  view === 'new' ? 'text-white' : ''
+                }`}
+                style={{
+                  backgroundColor: view === 'new' ? '#0066cc' : 'rgba(168, 216, 255, 0.1)',
+                  color: view === 'new' ? 'white' : '#a8d8ff',
+                  border: '1px solid rgba(168, 216, 255, 0.3)'
+                }}
+              >
+                <Play className="h-4 w-4 inline mr-2" />
+                New Analysis
+              </button>
+              <button
+                onClick={() => { setView('list'); loadJobs(); }}
+                className={`px-6 py-3 rounded-lg font-medium transition-colors ${
+                  view === 'list' ? 'text-white' : ''
+                }`}
+                style={{
+                  backgroundColor: view === 'list' ? '#0066cc' : 'rgba(168, 216, 255, 0.1)',
+                  color: view === 'list' ? 'white' : '#a8d8ff',
+                  border: '1px solid rgba(168, 216, 255, 0.3)'
+                }}
+              >
+                Analysis Jobs ({jobs.length})
+              </button>
+              <div className="flex-1" />
+              <label className="flex items-center gap-2" style={{ color: '#b0b8c0' }}>
+                <input
+                  type="checkbox"
+                  checked={autoRefresh}
+                  onChange={(e) => setAutoRefresh(e.target.checked)}
+                  className="rounded"
+                />
+                Auto-refresh
+              </label>
+            </div>
 
         {/* New Analysis View */}
         {view === 'new' && (
@@ -598,6 +760,44 @@ export default function DataAnalysis() {
                       <span className="text-sm font-medium">{label}</span>
                     </label>
                   ))}
+                </div>
+              </div>
+
+              {/* Prompt Recipe (Optional) */}
+              <div className="mb-6">
+                <label className="block text-sm font-medium mb-2" style={{ color: '#a8d8ff' }}>
+                  Prompt Recipe (Optional) {loadingRecipes && '(Loading...)'}
+                </label>
+                <select
+                  value={selectedRecipeId ?? ''}
+                  onChange={(e) => setSelectedRecipeId(e.target.value ? Number(e.target.value) : undefined)}
+                  className="w-full p-3 rounded-lg"
+                  style={{
+                    backgroundColor: '#0f0f17',
+                    border: '1px solid rgba(168, 216, 255, 0.3)',
+                    color: '#f0f0f5'
+                  }}
+                  disabled={loadingRecipes}
+                >
+                  <option value="">Use default prompt templates</option>
+                  {recipes.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.name}
+                    </option>
+                  ))}
+                </select>
+                <div className="flex items-center justify-between mt-1">
+                  <p className="text-xs" style={{ color: '#7a8a99' }}>
+                    Select a custom prompt recipe to override the default analysis prompts
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('prompts')}
+                    className="text-xs underline hover:no-underline transition-colors"
+                    style={{ color: '#a8d8ff' }}
+                  >
+                    Manage Recipes →
+                  </button>
                 </div>
               </div>
 
@@ -968,6 +1168,36 @@ export default function DataAnalysis() {
                     {selectedJob.job.status}
                   </span>
                 </div>
+                
+                {/* Re-run with different prompt button */}
+                {(selectedJob.job.status === 'completed' || selectedJob.job.status === 'failed') && (
+                  <button
+                    onClick={async () => {
+                      // Fetch full job details to get metadata with prompts
+                      const fullJob = await getAnalysisJob(selectedJob.job.id)
+                      const metadata = fullJob.job_metadata || {}
+                      const analysisType = selectedJob.job.analysis_types[0]
+                      
+                      // Get prompts from metadata (stored per analysis type)
+                      const systemMsg = metadata[`${analysisType}_system_message`] || 'System message not found'
+                      const userMsg = metadata[`${analysisType}_user_message`] || 'User message not found'
+                      
+                      setEditedSystemMessage(systemMsg)
+                      setEditedUserMessage(userMsg)
+                      setNewRecipeName(`${analysisType} - Custom from ${selectedJob.job.name}`)
+                      setShowPromptEditor(true)
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg transition-colors"
+                    style={{
+                      backgroundColor: 'rgba(168, 216, 255, 0.15)',
+                      border: '1px solid rgba(168, 216, 255, 0.3)',
+                      color: '#a8d8ff'
+                    }}
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                    Re-run with Different Prompt
+                  </button>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-4 text-sm" style={{ color: '#b0b8c0' }}>
@@ -997,14 +1227,61 @@ export default function DataAnalysis() {
             {/* Results */}
             {selectedJob.result && (
               <div className="space-y-6">
-                {/* Summary */}
-                <div className="p-6 rounded-xl" style={{ backgroundColor: '#1a1a24', border: '1px solid rgba(168, 216, 255, 0.15)' }}>
-                  <h3 className="text-lg font-semibold mb-3" style={{ color: '#a8d8ff' }}>
-                    Executive Summary
-                  </h3>
-                  <p className="whitespace-pre-wrap" style={{ color: '#f0f0f5' }}>
-                    {selectedJob.result.summary}
-                  </p>
+                {/* AI-Enhanced Executive Summary - Prominent Display */}
+                <div 
+                  className="p-8 rounded-xl relative overflow-hidden" 
+                  style={{ 
+                    background: 'linear-gradient(135deg, rgba(168, 216, 255, 0.15) 0%, rgba(168, 216, 255, 0.05) 100%)',
+                    border: '2px solid rgba(168, 216, 255, 0.3)',
+                    boxShadow: '0 4px 20px rgba(168, 216, 255, 0.1)'
+                  }}
+                >
+                  {/* Decorative corner accent */}
+                  <div 
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      right: 0,
+                      width: '150px',
+                      height: '150px',
+                      background: 'radial-gradient(circle at top right, rgba(168, 216, 255, 0.2), transparent 70%)',
+                      pointerEvents: 'none'
+                    }}
+                  />
+                  
+                  <div style={{ position: 'relative', zIndex: 1 }}>
+                    <div className="flex items-center gap-3 mb-4">
+                      <div 
+                        className="flex items-center justify-center rounded-lg"
+                        style={{
+                          width: '48px',
+                          height: '48px',
+                          background: 'rgba(168, 216, 255, 0.2)',
+                          border: '1px solid rgba(168, 216, 255, 0.3)'
+                        }}
+                      >
+                        <Sparkles className="h-6 w-6" style={{ color: '#a8d8ff' }} />
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-bold" style={{ color: '#a8d8ff' }}>
+                          AI-Enhanced Executive Summary
+                        </h3>
+                        <p className="text-sm" style={{ color: '#9ca3af' }}>
+                          Key findings synthesized by AI
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <p 
+                      className="text-lg leading-relaxed" 
+                      style={{ 
+                        color: '#f0f0f5',
+                        lineHeight: '1.8'
+                      }}
+                    >
+                      {selectedJob.result.summary}
+                    </p>
+                  </div>
                 </div>
 
                 {/* Recommendations */}
@@ -1095,10 +1372,16 @@ export default function DataAnalysis() {
                 <p style={{ color: '#f0f0f5' }}>{selectedJob.job.error_message}</p>
               </div>
             )}
-          </div>
+        </div>
+      )}
+          </>
         )}
-      </div>
-      
+
+        {/* Prompts Tab Content */}
+        {activeTab === 'prompts' && (
+          <PromptLibrary />
+        )}
+
       {/* Delete Confirmation Modal */}
       {deleteConfirmJob && (
         <div 
@@ -1147,6 +1430,154 @@ export default function DataAnalysis() {
           </div>
         </div>
       )}
+
+      {/* Prompt Editor Modal */}
+      {showPromptEditor && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          onClick={() => setShowPromptEditor(false)}
+        >
+          <div 
+            className="p-6 rounded-xl max-w-4xl w-full max-h-[90vh] overflow-auto"
+            style={{ backgroundColor: '#1a1a24', border: '1px solid rgba(168, 216, 255, 0.3)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <Brain className="h-6 w-6" style={{ color: '#a8d8ff' }} />
+                <h3 className="text-xl font-semibold" style={{ color: '#f0f0f5' }}>
+                  Edit Prompt & Re-run Analysis
+                </h3>
+              </div>
+              <button onClick={() => setShowPromptEditor(false)}>
+                <X className="h-5 w-5" style={{ color: '#b0b8c0' }} />
+              </button>
+            </div>
+            
+            <p className="mb-6 text-sm" style={{ color: '#b0b8c0' }}>
+              Edit the system and user prompts below, then re-run the analysis with the new configuration.
+            </p>
+
+            {/* System Message */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium mb-2" style={{ color: '#a8d8ff' }}>
+                System Message
+              </label>
+              <textarea
+                value={editedSystemMessage}
+                onChange={(e) => setEditedSystemMessage(e.target.value)}
+                rows={8}
+                className="w-full p-3 rounded-lg font-mono text-sm"
+                style={{
+                  backgroundColor: '#0f0f17',
+                  border: '1px solid rgba(168, 216, 255, 0.3)',
+                  color: '#f0f0f5'
+                }}
+                placeholder="System message defines the AI's role and constraints..."
+              />
+            </div>
+
+            {/* User Template */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium mb-2" style={{ color: '#a8d8ff' }}>
+                User Message Template
+              </label>
+              <textarea
+                value={editedUserMessage}
+                onChange={(e) => setEditedUserMessage(e.target.value)}
+                rows={12}
+                className="w-full p-3 rounded-lg font-mono text-sm"
+                style={{
+                  backgroundColor: '#0f0f17',
+                  border: '1px solid rgba(168, 216, 255, 0.3)',
+                  color: '#f0f0f5'
+                }}
+                placeholder="User message template (use {{schema_summary}} and {{sample_rows}} placeholders)..."
+              />
+              <p className="text-xs mt-1" style={{ color: '#7a8a99' }}>
+                Use <code className="px-1 py-0.5 rounded" style={{ backgroundColor: 'rgba(168, 216, 255, 0.1)' }}>
+                  {'{'}{'{'} schema_summary {'}'}{'}'}
+                </code> and <code className="px-1 py-0.5 rounded" style={{ backgroundColor: 'rgba(168, 216, 255, 0.1)' }}>
+                  {'{'}{'{'} sample_rows {'}'}{'}'}
+                </code> as placeholders
+              </p>
+            </div>
+
+            {/* Save as New Recipe Option */}
+            <div className="mb-6 p-4 rounded-lg" style={{ backgroundColor: 'rgba(168, 216, 255, 0.05)', border: '1px solid rgba(168, 216, 255, 0.2)' }}>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={saveAsNewRecipe}
+                  onChange={(e) => setSaveAsNewRecipe(e.target.checked)}
+                  className="rounded"
+                />
+                <span className="font-medium" style={{ color: '#a8d8ff' }}>
+                  Save as new prompt recipe
+                </span>
+              </label>
+              
+              {saveAsNewRecipe && (
+                <div className="mt-3">
+                  <label className="block text-sm font-medium mb-2" style={{ color: '#a8d8ff' }}>
+                    Recipe Name
+                  </label>
+                  <input
+                    type="text"
+                    value={newRecipeName}
+                    onChange={(e) => setNewRecipeName(e.target.value)}
+                    className="w-full p-3 rounded-lg"
+                    style={{
+                      backgroundColor: '#0f0f17',
+                      border: '1px solid rgba(168, 216, 255, 0.3)',
+                      color: '#f0f0f5'
+                    }}
+                    placeholder="e.g., Custom Data Profiling v2"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setShowPromptEditor(false)}
+                className="px-4 py-2 rounded-lg font-medium transition-colors"
+                style={{
+                  backgroundColor: 'rgba(168, 216, 255, 0.1)',
+                  color: '#a8d8ff',
+                  border: '1px solid rgba(168, 216, 255, 0.3)'
+                }}
+                disabled={submitting}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleRerunWithEditedPrompt}
+                disabled={submitting || !editedSystemMessage || !editedUserMessage || (saveAsNewRecipe && !newRecipeName)}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{
+                  backgroundColor: '#a8d8ff',
+                  color: '#0a0a0f'
+                }}
+              >
+                {submitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  <>
+                    <Play className="h-4 w-4" />
+                    Re-run Analysis
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      </div>
     </div>
   )
 }
