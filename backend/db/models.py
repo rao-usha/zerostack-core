@@ -294,3 +294,67 @@ ml_synthetic_example = Table(
     Column("example_run_json", JSON, nullable=False, server_default="{}"),
     Column("created_at", TIMESTAMP(timezone=True), server_default=func.now()),
 )
+
+
+# ML Evaluation Packs
+evaluation_pack = Table(
+    "evaluation_pack",
+    METADATA,
+    Column("id", String(255), primary_key=True),
+    Column("name", Text, nullable=False),
+    Column("model_family", String(64), nullable=False),  # pricing|next_best_action|location_scoring|forecasting
+    Column("status", String(32), nullable=False, default="draft"),  # draft|approved|archived
+    Column("tags", JSON, nullable=False, server_default="[]"),
+    Column("created_at", TIMESTAMP(timezone=True), server_default=func.now()),
+    Column("updated_at", TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now()),
+)
+
+
+evaluation_pack_version = Table(
+    "evaluation_pack_version",
+    METADATA,
+    Column("version_id", String(255), primary_key=True),
+    Column("pack_id", String(255), ForeignKey("evaluation_pack.id"), nullable=False),
+    Column("version_number", String(64), nullable=False),
+    Column("pack_json", JSON, nullable=False, server_default="{}"),
+    Column("diff_from_prev", JSON, nullable=True),
+    Column("created_by", String(255), nullable=True),
+    Column("created_at", TIMESTAMP(timezone=True), server_default=func.now()),
+    Column("change_note", Text, nullable=True),
+)
+
+
+recipe_evaluation_pack = Table(
+    "recipe_evaluation_pack",
+    METADATA,
+    Column("recipe_id", String(255), ForeignKey("ml_recipe.id"), nullable=False),
+    Column("pack_id", String(255), ForeignKey("evaluation_pack.id"), nullable=False),
+    Column("created_at", TIMESTAMP(timezone=True), server_default=func.now()),
+)
+
+
+evaluation_result = Table(
+    "evaluation_result",
+    METADATA,
+    Column("id", String(255), primary_key=True),
+    Column("run_id", String(255), ForeignKey("ml_run.id"), nullable=False),
+    Column("pack_id", String(255), ForeignKey("evaluation_pack.id"), nullable=False),
+    Column("pack_version_id", String(255), ForeignKey("evaluation_pack_version.version_id"), nullable=False),
+    Column("executed_at", TIMESTAMP(timezone=True), server_default=func.now()),
+    Column("status", String(32), nullable=False),  # pass|warn|fail
+    Column("results_json", JSON, nullable=False, server_default="{}"),
+    Column("summary_text", Text, nullable=True),
+)
+
+
+monitor_evaluation_snapshot = Table(
+    "monitor_evaluation_snapshot",
+    METADATA,
+    Column("id", String(255), primary_key=True),
+    Column("model_id", String(255), ForeignKey("ml_model.id"), nullable=False),
+    Column("captured_at", TIMESTAMP(timezone=True), server_default=func.now()),
+    Column("pack_id", String(255), ForeignKey("evaluation_pack.id"), nullable=False),
+    Column("pack_version_id", String(255), ForeignKey("evaluation_pack_version.version_id"), nullable=False),
+    Column("status", String(32), nullable=False),  # pass|warn|fail
+    Column("results_json", JSON, nullable=False, server_default="{}"),
+)

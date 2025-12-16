@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Activity, Search, Filter, Plus, BookOpen, Box, PlayCircle, BarChart3 } from 'lucide-react'
+import { Activity, Search, Filter, Plus, BookOpen, Box, PlayCircle, BarChart3, CheckCircle2 } from 'lucide-react'
 
 interface Recipe {
   id: string
@@ -31,7 +31,17 @@ interface Run {
   model_id?: string
 }
 
-type TabType = 'recipes' | 'models' | 'runs' | 'monitoring'
+interface EvaluationPack {
+  id: string
+  name: string
+  model_family: string
+  status: string
+  tags: string[]
+  created_at: string
+  updated_at: string
+}
+
+type TabType = 'recipes' | 'models' | 'runs' | 'evaluation-packs' | 'monitoring'
 
 export default function ModelLibrary() {
   const navigate = useNavigate()
@@ -40,6 +50,7 @@ export default function ModelLibrary() {
   const [recipes, setRecipes] = useState<Recipe[]>([])
   const [models, setModels] = useState<Model[]>([])
   const [runs, setRuns] = useState<Run[]>([])
+  const [evaluationPacks, setEvaluationPacks] = useState<EvaluationPack[]>([])
   const [loading, setLoading] = useState(false)
   
   // Filters
@@ -80,6 +91,14 @@ export default function ModelLibrary() {
         const response = await fetch(`${apiPrefix}/ml-development/runs?${params}`)
         const data = await response.json()
         setRuns(data.runs || [])
+      } else if (activeTab === 'evaluation-packs') {
+        const params = new URLSearchParams()
+        if (familyFilter !== 'all') params.append('model_family', familyFilter)
+        if (statusFilter !== 'all') params.append('status', statusFilter)
+        
+        const response = await fetch(`${apiPrefix}/evaluation-packs?${params}`)
+        const data = await response.json()
+        setEvaluationPacks(data.packs || [])
       }
     } catch (error) {
       console.error('Error loading data:', error)
@@ -101,6 +120,11 @@ export default function ModelLibrary() {
   const filteredRuns = runs.filter(r =>
     r.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
     r.run_type.toLowerCase().includes(searchTerm.toLowerCase())
+  )
+
+  const filteredEvaluationPacks = evaluationPacks.filter(p =>
+    p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    p.model_family.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
   const getFamilyLabel = (family: string) => {
@@ -179,6 +203,7 @@ export default function ModelLibrary() {
             { id: 'recipes', label: 'Recipes', icon: BookOpen },
             { id: 'models', label: 'Models', icon: Box },
             { id: 'runs', label: 'Runs', icon: PlayCircle },
+            { id: 'evaluation-packs', label: 'Evaluation Packs', icon: CheckCircle2 },
             { id: 'monitoring', label: 'Monitoring', icon: BarChart3 }
           ].map(tab => {
             const Icon = tab.icon
@@ -562,6 +587,92 @@ export default function ModelLibrary() {
                 {filteredRuns.length === 0 && (
                   <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '3rem', color: '#b3b3c4' }}>
                     No runs found. Create a run from a recipe or model!
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Evaluation Packs Tab */}
+            {activeTab === 'evaluation-packs' && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '1.5rem' }}>
+                {filteredEvaluationPacks.map(pack => (
+                  <div
+                    key={pack.id}
+                    onClick={() => navigate(`/model-development/evaluation-packs/${pack.id}`)}
+                    style={{
+                      padding: '1.5rem',
+                      backgroundColor: '#1a1a24',
+                      border: '1px solid rgba(168, 216, 255, 0.2)',
+                      borderRadius: '0.75rem',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = 'rgba(168, 216, 255, 0.5)'
+                      e.currentTarget.style.transform = 'translateY(-2px)'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = 'rgba(168, 216, 255, 0.2)'
+                      e.currentTarget.style.transform = 'translateY(0)'
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '1rem' }}>
+                      <h3 style={{ fontSize: '1.125rem', fontWeight: '600', color: '#f0f0f5' }}>
+                        {pack.name}
+                      </h3>
+                      <span
+                        style={{
+                          padding: '0.25rem 0.75rem',
+                          backgroundColor: `${getStatusColor(pack.status)}20`,
+                          color: getStatusColor(pack.status),
+                          borderRadius: '9999px',
+                          fontSize: '0.75rem',
+                          fontWeight: '600'
+                        }}
+                      >
+                        {pack.status}
+                      </span>
+                    </div>
+                    
+                    <div style={{ marginBottom: '0.75rem' }}>
+                      <span
+                        style={{
+                          padding: '0.25rem 0.75rem',
+                          backgroundColor: 'rgba(168, 216, 255, 0.15)',
+                          color: '#a8d8ff',
+                          borderRadius: '0.375rem',
+                          fontSize: '0.875rem'
+                        }}
+                      >
+                        {getFamilyLabel(pack.model_family)}
+                      </span>
+                    </div>
+
+                    {pack.tags && pack.tags.length > 0 && (
+                      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.75rem' }}>
+                        {pack.tags.slice(0, 3).map((tag, idx) => (
+                          <span
+                            key={idx}
+                            style={{
+                              padding: '0.25rem 0.5rem',
+                              backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                              border: '1px solid rgba(139, 92, 246, 0.3)',
+                              borderRadius: '0.25rem',
+                              fontSize: '0.75rem',
+                              color: '#b3b3c4'
+                            }}
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+                
+                {filteredEvaluationPacks.length === 0 && (
+                  <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '3rem', color: '#b3b3c4' }}>
+                    No evaluation packs found. Create a standard evaluation pack!
                   </div>
                 )}
               </div>

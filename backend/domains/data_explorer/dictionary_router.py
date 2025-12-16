@@ -43,6 +43,8 @@ class DictionaryEntryUpdate(BaseModel):
     business_description: Optional[str] = None
     technical_description: Optional[str] = None
     tags: Optional[List[str]] = None
+    create_new_version: bool = False
+    version_notes: Optional[str] = None
 
 
 @router.get("/", response_model=List[DictionaryEntryResponse])
@@ -187,31 +189,60 @@ def update_dictionary_entry(
     Update a dictionary entry.
     
     Allows editing business_name, business_description, technical_description, and tags.
+    If create_new_version=True, deactivates current version and creates a new one.
+    Otherwise, updates the entry in place.
     Marks source as 'human_edited' after first human edit.
     """
     entry = session.get(DataDictionaryEntry, entry_id)
     if not entry:
         raise HTTPException(status_code=404, detail="Dictionary entry not found")
     
-    # Update fields
-    if update.business_name is not None:
-        entry.business_name = update.business_name
-    if update.business_description is not None:
-        entry.business_description = update.business_description
-    if update.technical_description is not None:
-        entry.technical_description = update.technical_description
-    if update.tags is not None:
-        entry.tags = update.tags
-    
-    # Mark as human-edited
-    if entry.source.startswith("llm"):
-        entry.source = "human_edited"
-    
-    entry.updated_at = datetime.utcnow()
-    
-    session.add(entry)
-    session.commit()
-    session.refresh(entry)
+    if update.create_new_version:
+        # Create new version, deactivate current
+        entry.is_active = False
+        session.add(entry)
+        
+        # Create new version with updated fields
+        new_entry = DataDictionaryEntry(
+            database_name=entry.database_name,
+            schema_name=entry.schema_name,
+            table_name=entry.table_name,
+            column_name=entry.column_name,
+            version_number=entry.version_number + 1,
+            is_active=True,
+            version_notes=update.version_notes or "Manual edit - new version",
+            business_name=update.business_name if update.business_name is not None else entry.business_name,
+            business_description=update.business_description if update.business_description is not None else entry.business_description,
+            technical_description=update.technical_description if update.technical_description is not None else entry.technical_description,
+            data_type=entry.data_type,
+            examples=entry.examples,
+            tags=update.tags if update.tags is not None else entry.tags,
+            source="human_edited"
+        )
+        session.add(new_entry)
+        session.commit()
+        session.refresh(new_entry)
+        entry = new_entry
+    else:
+        # Update in place
+        if update.business_name is not None:
+            entry.business_name = update.business_name
+        if update.business_description is not None:
+            entry.business_description = update.business_description
+        if update.technical_description is not None:
+            entry.technical_description = update.technical_description
+        if update.tags is not None:
+            entry.tags = update.tags
+        
+        # Mark as human-edited
+        if entry.source.startswith("llm"):
+            entry.source = "human_edited"
+        
+        entry.updated_at = datetime.utcnow()
+        
+        session.add(entry)
+        session.commit()
+        session.refresh(entry)
     
     return DictionaryEntryResponse(
         id=entry.id,

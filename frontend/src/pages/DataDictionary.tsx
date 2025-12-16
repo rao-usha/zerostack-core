@@ -74,6 +74,7 @@ export default function DataDictionary() {
     technical_description?: string
     tags?: string[]
   }>({})
+  const [versionNotes, setVersionNotes] = useState<string>('')
   const [saving, setSaving] = useState(false)
   
   // Versioning state
@@ -201,17 +202,24 @@ export default function DataDictionary() {
   const cancelEditing = () => {
     setEditingEntry(null)
     setEditForm({})
+    setVersionNotes('')
   }
 
-  const saveEntry = async (entryId: number) => {
+  const saveEntry = async (entryId: number, createNewVersion: boolean = false) => {
     try {
       setSaving(true)
-      const updated = await updateDictionaryEntry(entryId, editForm)
+      const updated = await updateDictionaryEntry(entryId, {
+        ...editForm,
+        create_new_version: createNewVersion,
+        version_notes: createNewVersion ? versionNotes || 'Manual edit - new version' : undefined
+      })
       
-      // Update local state
-      setEntries(entries.map(e => e.id === entryId ? updated : e))
+      // Reload entries to get updated version numbers
+      await loadEntries()
+      
       setEditingEntry(null)
       setEditForm({})
+      setVersionNotes('')
     } catch (err: any) {
       console.error('Failed to update entry:', err)
       alert('Failed to update entry: ' + (err.response?.data?.detail || err.message))
@@ -662,7 +670,7 @@ export default function DataDictionary() {
                               ) : (
                                 <>
                                   <button
-                                    onClick={() => saveEntry(column.id)}
+                                    onClick={() => saveEntry(column.id, false)}
                                     disabled={saving}
                                     style={{
                                       display: 'flex',
@@ -680,6 +688,27 @@ export default function DataDictionary() {
                                   >
                                     <Save className="h-3 w-3" />
                                     {saving ? 'Saving...' : 'Save'}
+                                  </button>
+                                  <button
+                                    onClick={() => saveEntry(column.id, true)}
+                                    disabled={saving}
+                                    style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '0.25rem',
+                                      padding: '0.25rem 0.5rem',
+                                      backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                                      border: '1px solid rgba(139, 92, 246, 0.3)',
+                                      borderRadius: '0.375rem',
+                                      color: '#a78bfa',
+                                      fontSize: '0.75rem',
+                                      cursor: saving ? 'wait' : 'pointer',
+                                      opacity: saving ? 0.5 : 1
+                                    }}
+                                    title="Save as new version (preserves current version)"
+                                  >
+                                    <History className="h-3 w-3" />
+                                    {saving ? 'Saving...' : 'New Version'}
                                   </button>
                                   <button
                                     onClick={cancelEditing}
@@ -708,6 +737,36 @@ export default function DataDictionary() {
                           {isEditing ? (
                             /* Edit Form */
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '0.75rem' }}>
+                              {/* Version Notes */}
+                              <div style={{ 
+                                padding: '0.75rem',
+                                backgroundColor: 'rgba(139, 92, 246, 0.05)',
+                                border: '1px solid rgba(139, 92, 246, 0.2)',
+                                borderRadius: '0.375rem'
+                              }}>
+                                <label style={{ display: 'block', fontSize: '0.75rem', color: '#a78bfa', marginBottom: '0.25rem', fontWeight: '500' }}>
+                                  Version Notes (optional)
+                                </label>
+                                <input
+                                  type="text"
+                                  value={versionNotes}
+                                  onChange={(e) => setVersionNotes(e.target.value)}
+                                  style={{
+                                    width: '100%',
+                                    padding: '0.5rem',
+                                    backgroundColor: '#0a0a0f',
+                                    border: '1px solid rgba(139, 92, 246, 0.3)',
+                                    borderRadius: '0.375rem',
+                                    color: '#f0f0f5',
+                                    fontSize: '0.875rem'
+                                  }}
+                                  placeholder="What changed? (used when saving as new version)"
+                                />
+                                <p style={{ fontSize: '0.6875rem', color: '#9ca3af', marginTop: '0.375rem', lineHeight: '1.3' }}>
+                                  💡 Click "New Version" to preserve current version and create a new one
+                                </p>
+                              </div>
+
                               {/* Business Name */}
                               <div>
                                 <label style={{ display: 'block', fontSize: '0.75rem', color: '#9ca3af', marginBottom: '0.25rem' }}>

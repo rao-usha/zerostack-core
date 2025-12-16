@@ -121,7 +121,45 @@ def seed_recipes():
                 "mape_exceeded": {"condition": "MAPE > 0.30", "severity": "critical"},
                 "data_stale": {"condition": "freshness > 48h", "severity": "warning"}
             }
-        }
+        },
+        "reference_repos": [
+            {
+                "name": "facebook/prophet",
+                "url": "https://github.com/facebook/prophet",
+                "description": "Facebook's production-ready forecasting framework with automatic seasonality detection",
+                "language": "Python",
+                "framework": "Prophet",
+                "stars": "18.2k",
+                "tags": ["time-series", "forecasting", "seasonality", "production"]
+            },
+            {
+                "name": "sktime/sktime",
+                "url": "https://github.com/sktime/sktime",
+                "description": "Unified framework for time series machine learning with scikit-learn compatible API",
+                "language": "Python",
+                "framework": "scikit-learn",
+                "stars": "7.8k",
+                "tags": ["time-series", "sklearn", "forecasting", "ml"]
+            },
+            {
+                "name": "Nixtla/statsforecast",
+                "url": "https://github.com/Nixtla/statsforecast",
+                "description": "Lightning fast statistical forecasting with GPU support and AutoML",
+                "language": "Python",
+                "framework": "NumPy",
+                "stars": "3.9k",
+                "tags": ["forecasting", "automl", "gpu", "fast"]
+            },
+            {
+                "name": "awslabs/gluonts",
+                "url": "https://github.com/awslabs/gluonts",
+                "description": "AWS deep learning toolkit for probabilistic time series forecasting",
+                "language": "Python",
+                "framework": "PyTorch",
+                "stars": "4.5k",
+                "tags": ["deep-learning", "probabilistic", "time-series", "aws"]
+            }
+        ]
     }
     
     forecasting_version = {
@@ -265,7 +303,45 @@ def seed_recipes():
                 "negative_lift": {"condition": "revenue_lift < 0", "severity": "critical"},
                 "elasticity_drift": {"condition": "drift_score > 0.1", "severity": "warning"}
             }
-        }
+        },
+        "reference_repos": [
+            {
+                "name": "uber/orbit",
+                "url": "https://github.com/uber/orbit",
+                "description": "Uber's Bayesian forecasting framework for time series and causal inference",
+                "language": "Python",
+                "framework": "PyTorch",
+                "stars": "1.9k",
+                "tags": ["bayesian", "causal-inference", "pricing", "elasticity"]
+            },
+            {
+                "name": "microsoft/EconML",
+                "url": "https://github.com/microsoft/EconML",
+                "description": "Python package for estimating heterogeneous treatment effects from observational data",
+                "language": "Python",
+                "framework": "scikit-learn",
+                "stars": "3.2k",
+                "tags": ["causal-inference", "treatment-effects", "pricing", "economics"]
+            },
+            {
+                "name": "py-why/dowhy",
+                "url": "https://github.com/py-why/dowhy",
+                "description": "Python library for causal inference that supports explicit modeling and testing of assumptions",
+                "language": "Python",
+                "framework": "NumPy",
+                "stars": "7.1k",
+                "tags": ["causal-inference", "elasticity", "optimization"]
+            },
+            {
+                "name": "facebookresearch/Ax",
+                "url": "https://github.com/facebookresearch/Ax",
+                "description": "Adaptive experimentation platform for Bayesian optimization and A/B testing",
+                "language": "Python",
+                "framework": "PyTorch",
+                "stars": "2.4k",
+                "tags": ["optimization", "bayesian", "experimentation", "pricing"]
+            }
+        ]
     }
     
     pricing_version = {
@@ -409,7 +485,45 @@ def seed_recipes():
                 "uplift_degradation": {"condition": "uplift < 0.05", "severity": "critical"},
                 "feature_drift": {"condition": "PSI > 0.2", "severity": "warning"}
             }
-        }
+        },
+        "reference_repos": [
+            {
+                "name": "uber/causalml",
+                "url": "https://github.com/uber/causalml",
+                "description": "Uber's Python package for uplift modeling and causal inference with ML",
+                "language": "Python",
+                "framework": "scikit-learn",
+                "stars": "5.1k",
+                "tags": ["uplift-modeling", "causal-inference", "ml", "treatment-effects"]
+            },
+            {
+                "name": "spotify/confidence",
+                "url": "https://github.com/spotify/confidence",
+                "description": "Spotify's library for reliable A/B testing and personalization experimentation",
+                "language": "Python",
+                "framework": "Pandas",
+                "stars": "800",
+                "tags": ["ab-testing", "experimentation", "personalization"]
+            },
+            {
+                "name": "microsoft/recommenders",
+                "url": "https://github.com/microsoft/recommenders",
+                "description": "Best practices for building recommendation systems by Microsoft",
+                "language": "Python",
+                "framework": "TensorFlow",
+                "stars": "19.2k",
+                "tags": ["recommendation", "deep-learning", "personalization", "nba"]
+            },
+            {
+                "name": "criteo/deepr",
+                "url": "https://github.com/criteo/deepr",
+                "description": "Criteo's framework for deep learning on Hadoop/Spark for recommender systems",
+                "language": "Python",
+                "framework": "TensorFlow",
+                "stars": "280",
+                "tags": ["deep-learning", "recommendation", "big-data", "spark"]
+            }
+        ]
     }
     
     nba_version = {
@@ -550,7 +664,54 @@ def seed_recipes():
                 "calibration_degradation": {"condition": "calibration < 0.80", "severity": "warning"},
                 "data_outdated": {"condition": "freshness > 12 months", "severity": "warning"}
             }
-        }
+        },
+        "reference_repos": [
+            {
+                "name": "gboeing/osmnx",
+                "url": "https://github.com/gboeing/osmnx",
+                "description": "Download, analyze, and visualize street networks and geospatial data from OpenStreetMap",
+                "language": "Python",
+                "framework": "NetworkX",
+                "stars": "4.8k",
+                "tags": ["geospatial", "openstreetmap", "network-analysis", "gis"]
+            },
+            {
+                "name": "ResidentMario/geoplot",
+                "url": "https://github.com/ResidentMario/geoplot",
+                "description": "High-level Python geospatial plotting library built on top of matplotlib",
+                "language": "Python",
+                "framework": "Matplotlib",
+                "stars": "1.1k",
+                "tags": ["geospatial", "visualization", "mapping"]
+            },
+            {
+                "name": "spatial-data-discovery/retail-analytics",
+                "url": "https://github.com/microsoft/MLOps",
+                "description": "Best practices for MLOps including geospatial model deployment patterns",
+                "language": "Python",
+                "framework": "Azure ML",
+                "stars": "3.6k",
+                "tags": ["mlops", "geospatial", "deployment", "site-selection"]
+            },
+            {
+                "name": "geopy/geopy",
+                "url": "https://github.com/geopy/geopy",
+                "description": "Geocoding library for Python with support for multiple geocoding services",
+                "language": "Python",
+                "framework": "Requests",
+                "stars": "4.4k",
+                "tags": ["geocoding", "geospatial", "location", "mapping"]
+            },
+            {
+                "name": "pysal/pysal",
+                "url": "https://github.com/pysal/pysal",
+                "description": "Python Spatial Analysis Library for spatial econometrics and statistics",
+                "language": "Python",
+                "framework": "NumPy",
+                "stars": "1.4k",
+                "tags": ["spatial-analysis", "econometrics", "gis", "statistics"]
+            }
+        ]
     }
     
     location_version = {

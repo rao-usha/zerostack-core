@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { BookOpen, ArrowLeft, Save, Copy, CheckCircle, Edit, FileText, GitBranch, Beaker } from 'lucide-react'
+import { BookOpen, ArrowLeft, Save, Copy, CheckCircle, Edit, FileText, GitBranch, Beaker, Github, ExternalLink, Star } from 'lucide-react'
 
 interface Recipe {
   id: string
@@ -24,7 +24,7 @@ interface RecipeVersion {
   change_note?: string
 }
 
-type TabType = 'overview' | 'manifest' | 'versions' | 'synthetic'
+type TabType = 'overview' | 'manifest' | 'versions' | 'synthetic' | 'reference'
 
 export default function RecipeDetail() {
   const { recipeId } = useParams<{ recipeId: string }>()
@@ -265,6 +265,7 @@ export default function RecipeDetail() {
             { id: 'overview', label: 'Overview', icon: FileText },
             { id: 'manifest', label: 'Manifest Editor', icon: Edit },
             { id: 'versions', label: 'Versions', icon: GitBranch },
+            { id: 'reference', label: 'Reference Repos', icon: Github },
             { id: 'synthetic', label: 'Synthetic Example', icon: Beaker }
           ].map(tab => {
             const Icon = tab.icon
@@ -493,6 +494,124 @@ export default function RecipeDetail() {
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'reference' && selectedVersion && (
+          <div>
+            <h3 style={{ fontSize: '1.25rem', fontWeight: '600', marginBottom: '1.5rem', color: '#f0f0f5' }}>
+              Reference Implementations
+            </h3>
+            <p style={{ color: '#b3b3c4', marginBottom: '2rem', fontSize: '0.95rem' }}>
+              Example repositories and implementations for {recipe?.model_family} models
+            </p>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '1.5rem' }}>
+              {selectedVersion.manifest_json.reference_repos?.map((repo: any, idx: number) => (
+                <div
+                  key={idx}
+                  style={{
+                    padding: '1.5rem',
+                    backgroundColor: '#1a1a24',
+                    border: '1px solid rgba(168, 216, 255, 0.2)',
+                    borderRadius: '0.75rem',
+                    transition: 'all 0.2s',
+                    cursor: 'pointer'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = 'rgba(168, 216, 255, 0.4)'
+                    e.currentTarget.style.transform = 'translateY(-2px)'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = 'rgba(168, 216, 255, 0.2)'
+                    e.currentTarget.style.transform = 'translateY(0)'
+                  }}
+                  onClick={() => window.open(repo.url, '_blank')}
+                >
+                  <div style={{ display: 'flex', alignItems: 'start', justifyContent: 'space-between', marginBottom: '1rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                      <Github className="h-5 w-5" style={{ color: '#a8d8ff' }} />
+                      <h4 style={{ fontSize: '1.125rem', fontWeight: '600', color: '#f0f0f5', margin: 0 }}>
+                        {repo.name}
+                      </h4>
+                    </div>
+                    <ExternalLink className="h-4 w-4" style={{ color: '#b3b3c4' }} />
+                  </div>
+                  
+                  <p style={{ color: '#b3b3c4', fontSize: '0.875rem', marginBottom: '1rem', lineHeight: '1.5' }}>
+                    {repo.description}
+                  </p>
+                  
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                    {repo.stars && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#fbbf24' }}>
+                        <Star className="h-4 w-4" />
+                        <span style={{ fontSize: '0.875rem', fontWeight: '600' }}>{repo.stars}</span>
+                      </div>
+                    )}
+                    {repo.language && (
+                      <span style={{
+                        padding: '0.25rem 0.75rem',
+                        background: 'rgba(168, 216, 255, 0.1)',
+                        borderRadius: '0.375rem',
+                        fontSize: '0.75rem',
+                        color: '#a8d8ff',
+                        fontWeight: '600'
+                      }}>
+                        {repo.language}
+                      </span>
+                    )}
+                    {repo.framework && (
+                      <span style={{
+                        padding: '0.25rem 0.75rem',
+                        background: 'rgba(139, 92, 246, 0.1)',
+                        borderRadius: '0.375rem',
+                        fontSize: '0.75rem',
+                        color: '#a78bfa',
+                        fontWeight: '600'
+                      }}>
+                        {repo.framework}
+                      </span>
+                    )}
+                  </div>
+                  
+                  {repo.tags && repo.tags.length > 0 && (
+                    <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem', flexWrap: 'wrap' }}>
+                      {repo.tags.map((tag: string, tagIdx: number) => (
+                        <span
+                          key={tagIdx}
+                          style={{
+                            padding: '0.25rem 0.5rem',
+                            background: 'rgba(139, 92, 246, 0.05)',
+                            border: '1px solid rgba(139, 92, 246, 0.2)',
+                            borderRadius: '0.25rem',
+                            fontSize: '0.75rem',
+                            color: '#9ca3af'
+                          }}
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+              
+              {(!selectedVersion.manifest_json.reference_repos || selectedVersion.manifest_json.reference_repos.length === 0) && (
+                <div style={{ 
+                  gridColumn: '1 / -1',
+                  textAlign: 'center', 
+                  padding: '3rem', 
+                  color: '#b3b3c4',
+                  backgroundColor: '#1a1a24',
+                  border: '1px solid rgba(168, 216, 255, 0.1)',
+                  borderRadius: '0.75rem'
+                }}>
+                  <Github className="h-16 w-16" style={{ margin: '0 auto 1rem', color: '#a8d8ff', opacity: 0.5 }} />
+                  <p>No reference repositories configured for this recipe yet</p>
+                </div>
+              )}
             </div>
           </div>
         )}

@@ -626,6 +626,8 @@ export const updateDictionaryEntry = async (
     business_description?: string
     technical_description?: string
     tags?: string[]
+    create_new_version?: boolean
+    version_notes?: string
   }
 ): Promise<DictionaryEntry> => {
   const response = await client.patch(`/api/v1/data-dictionary/${entryId}`, update)

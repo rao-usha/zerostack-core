@@ -72,6 +72,24 @@ def get_explorer_connection(db_id: str = "default"):
             conn.close()
 
 
+def get_db_connection(db_id: str = "default"):
+    """
+    Get a database connection (non-context-manager version).
+    
+    Args:
+        db_id: Database configuration ID (default: "default")
+    
+    Returns:
+        psycopg.Connection: Database connection
+    
+    Note: Caller is responsible for closing the connection.
+    """
+    db_config = get_database_config_by_id(db_id)
+    conn_string = f"host={db_config.host} port={db_config.port} user={db_config.user} password={db_config.password} dbname={db_config.database}"
+    conn = psycopg.connect(conn_string)
+    return conn
+
+
 def test_connection(db_id: str = "default") -> dict:
     """
     Test the database connection.
