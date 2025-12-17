@@ -1,7 +1,7 @@
 """add evaluation packs
 
 Revision ID: 010_add_evaluation_packs
-Revises: 009_add_ml_model_development
+Revises: 297d473edc6b
 Create Date: 2025-12-16
 
 """
@@ -11,7 +11,7 @@ from sqlalchemy.dialects.postgresql import JSON, UUID
 
 # revision identifiers, used by Alembic.
 revision = '010_add_evaluation_packs'
-down_revision = '009_add_ml_model_development'
+down_revision = '297d473edc6b'
 branch_labels = None
 depends_on = None
 
