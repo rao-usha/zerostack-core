@@ -17,6 +17,7 @@ import ModelLibrary from './pages/ModelLibrary'
 import RecipeDetail from './pages/RecipeDetail'
 import ModelDetail from './pages/ModelDetail'
 import RunDetail from './pages/RunDetail'
+import EvaluationPackDetail from './pages/EvaluationPackDetail'
 import MLChat from './pages/MLChat'
 
 function App() {
@@ -35,6 +36,7 @@ function App() {
           <Route path="/model-development/recipes/:recipeId" element={<RecipeDetail />} />
           <Route path="/model-development/models/:modelId" element={<ModelDetail />} />
           <Route path="/model-development/runs/:runId" element={<RunDetail />} />
+          <Route path="/model-development/evaluation-packs/:packId" element={<EvaluationPackDetail />} />
           <Route path="/model-development/chat" element={<MLChat />} />
           <Route path="/chat" element={<Chat />} />
           <Route path="/insights" element={<Insights />} />

@@ -180,6 +180,34 @@ def activate_version(session: Session, entry_id: int) -> DataDictionaryEntry:
     return entry
 
 
+def get_documented_columns(
+    session: Session, 
+    database_name: str, 
+    schema_name: str, 
+    table_name: str
+) -> set[str]:
+    """
+    Get set of column names that already have active documentation.
+    
+    Args:
+        session: Database session
+        database_name: Database name
+        schema_name: Schema name
+        table_name: Table name
+    
+    Returns:
+        Set of column names that have active documentation
+    """
+    statement = select(DataDictionaryEntry.column_name).where(
+        DataDictionaryEntry.database_name == database_name,
+        DataDictionaryEntry.schema_name == schema_name,
+        DataDictionaryEntry.table_name == table_name,
+        DataDictionaryEntry.is_active == True
+    )
+    
+    return set(session.exec(statement).all())
+
+
 def format_dictionary_as_context(entries: List[DataDictionaryEntry]) -> str:
     """
     Format dictionary entries as natural language context for LLM prompts.

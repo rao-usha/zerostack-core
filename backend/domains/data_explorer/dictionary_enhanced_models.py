@@ -142,40 +142,10 @@ class DictionaryField(SQLModel, table=True):
     updated_at: datetime = SQLField(default_factory=datetime.utcnow)
 
 
-class DictionaryRelationship(SQLModel, table=True):
-    """Explicit representation of table joins/relationships."""
-    __tablename__ = "dictionary_relationships"
-    
-    # Primary key
-    id: Optional[UUID] = SQLField(
-        default_factory=uuid4,
-        sa_column=Column(PG_UUID(as_uuid=True), primary_key=True)
-    )
-    
-    # Connection context
-    connection_id: str = SQLField(max_length=100, index=True)
-    
-    # Source (FK side typically)
-    source_schema: str = SQLField(max_length=255, index=True)
-    source_table: str = SQLField(max_length=255, index=True)
-    source_column: str = SQLField(max_length=255)
-    
-    # Target (PK side typically)
-    target_schema: str = SQLField(max_length=255, index=True)
-    target_table: str = SQLField(max_length=255, index=True)
-    target_column: str = SQLField(max_length=255)
-    
-    # Relationship metadata
-    cardinality: str = SQLField(default="unknown", max_length=50)
-    confidence: str = SQLField(default="assumed", max_length=50)
-    notes: Optional[str] = None
-    
-    # Usage
-    join_count_30d: int = SQLField(default=0)
-    
-    # Timestamps
-    created_at: datetime = SQLField(default_factory=datetime.utcnow)
-    updated_at: datetime = SQLField(default_factory=datetime.utcnow)
+# NOTE: DictionaryRelationship has been moved to dictionary_semantics_models.py
+# to support the full requirements (relationship_kind, status, semantic types, etc.)
+# Import from there if needed:
+# from .dictionary_semantics_models import DictionaryRelationship
 
 
 class DictionaryProfile(SQLModel, table=True):

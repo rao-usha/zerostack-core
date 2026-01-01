@@ -441,12 +441,16 @@ Here is a sample of the data:
 
 {sample_rows}
 
-Using ONLY this information, generate documentation for every column. 
+Using ONLY this information, generate documentation for EVERY SINGLE COLUMN listed above. 
 
-IMPORTANT: Extract the actual schema name and table name from the **Table:** headers above.
-For example, if you see "**Table: public.acs5_2021_b01001**", then:
-- schema_name = "public"
-- table_name = "acs5_2021_b01001"
+⚠️ CRITICAL REQUIREMENTS:
+1. Document ALL columns - do not skip any columns
+2. If a table has 332 columns, your response must have 332 entries
+3. Do not sample or summarize - document each column individually
+4. Extract the actual schema name and table name from the **Table:** headers above
+   For example, if you see "**Table: public.acs5_2021_b01001**", then:
+   - schema_name = "public"
+   - table_name = "acs5_2021_b01001"
 
 Return a JSON array with one entry per column. Each entry must have this EXACT structure:
 

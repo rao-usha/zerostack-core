@@ -25,3 +25,5 @@ echo "✅ Setup complete! You can now use Nex."
 
 
 
+
+

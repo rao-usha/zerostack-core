@@ -1,0 +1,42 @@
+name: Check Duplicate Tables
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'backend/**/*.py'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'backend/**/*.py'
+
+jobs:
+  check-duplicates:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Check for duplicate table definitions
+      run: |
+        cd backend
+        python scripts/check_duplicate_tables.py
+      
+    - name: Comment on PR (if failed)
+      if: failure() && github.event_name == 'pull_request'
+      uses: actions/github-script@v6
+      with:
+        script: |
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: '❌ **Duplicate Table Definitions Detected**\n\nPlease run `python backend/scripts/check_duplicate_tables.py` locally to see details and fix the duplicates before merging.'
+          })
+

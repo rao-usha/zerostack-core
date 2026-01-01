@@ -1,6 +1,8 @@
 import axios from 'axios'
 
-const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8000'
+// In development, use relative URLs so Vite proxy handles routing to backend:8000
+// In production, VITE_API_URL can be set to the actual backend URL
+const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || ''
 
 const client = axios.create({
   baseURL: API_BASE_URL,
@@ -648,6 +650,232 @@ export const getColumnVersions = async (
 
 export const activateDictionaryVersion = async (entryId: number): Promise<DictionaryEntry> => {
   const response = await client.post(`/api/v1/data-dictionary/activate/${entryId}`)
+  return response.data
+}
+
+// ==================== Dictionary Semantics API ====================
+
+export interface DecisionContext {
+  primary_decisions?: string[]
+  secondary_decisions?: string[]
+  consumers?: Array<{ role: string; team?: string; system?: string }>
+  decision_frequency?: string
+  downside_if_wrong?: string
+  notes?: string
+}
+
+export interface SemanticGuarantees {
+  invariants?: string[]
+  temporal_behavior?: {
+    freshness?: string
+    backfill_expected?: boolean
+    late_arriving_data?: boolean
+  }
+  aggregation_rules?: {
+    allowed?: string[]
+    forbidden?: string[]
+  }
+  known_failure_modes?: string[]
+  pii?: {
+    contains_pii?: boolean
+    pii_types?: string[]
+  }
+  notes?: string
+}
+
+export interface ValidationState {
+  confidence_score?: number
+  confidence_sources?: string[]
+  last_validated_at?: string
+  validated_by?: string[]
+  upstream_sources?: string[]
+  downstream_usage?: string[]
+  notes?: string
+}
+
+export interface DictionarySemantics {
+  entry_id: string
+  decision_context: DecisionContext
+  semantic_guarantees: SemanticGuarantees
+  validation_state: ValidationState
+  updated_at: string
+}
+
+export interface DictionaryGrain {
+  id: string
+  entry_id: string
+  entity: string
+  primary_key?: string[]
+  time_grain?: string
+  natural_key?: string[]
+  notes?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface DictionaryRelationship {
+  id: string
+  relationship_kind: string
+  status: string
+  left_entry_id: string
+  right_entry_id: string
+  left_ref?: any
+  right_ref?: any
+  relationship_type: string
+  cardinality?: string
+  match_rate_sample?: number
+  left_null_rate?: number
+  right_unique?: boolean
+  suggested_join_sql?: string
+  grain_compatibility?: any
+  semantic_definition?: any
+  confidence_score?: number
+  created_by?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface InferenceJob {
+  id: string
+  connection_id: string
+  schema_name?: string
+  status: string
+  progress: number
+  current_stage?: string
+  relationships_found: number
+  tables_scanned: number
+  error_message?: string
+  result_summary?: any
+  created_at: string
+  started_at?: string
+  completed_at?: string
+}
+
+// Semantics
+export const getSemantics = async (entryId: string): Promise<DictionarySemantics> => {
+  const response = await client.get(`/api/v1/data-dictionary/entries/${entryId}/semantics`)
+  return response.data
+}
+
+export const updateSemantics = async (
+  entryId: string,
+  data: {
+    decision_context?: DecisionContext
+    semantic_guarantees?: SemanticGuarantees
+    validation_state?: ValidationState
+    create_version?: boolean
+  }
+): Promise<DictionarySemantics> => {
+  const response = await client.put(`/api/v1/data-dictionary/entries/${entryId}/semantics`, data)
+  return response.data
+}
+
+// Grain
+export const getGrain = async (entryId: string): Promise<DictionaryGrain | null> => {
+  const response = await client.get(`/api/v1/data-dictionary/entries/${entryId}/grain`)
+  return response.data
+}
+
+export const updateGrain = async (
+  entryId: string,
+  data: {
+    entity: string
+    primary_key?: string[]
+    time_grain?: string
+    natural_key?: string[]
+    notes?: string
+  }
+): Promise<DictionaryGrain> => {
+  const response = await client.put(`/api/v1/data-dictionary/entries/${entryId}/grain`, data)
+  return response.data
+}
+
+// Relationships
+export const listRelationships = async (params: {
+  entry_id?: string
+  database?: string
+  schema?: string
+  table?: string
+  status?: string
+  relationship_kind?: string
+  limit?: number
+  offset?: number
+}): Promise<{ results: DictionaryRelationship[]; total: number; limit: number; offset: number }> => {
+  const response = await client.get('/api/v1/data-dictionary/relationships', { params })
+  return response.data
+}
+
+export const createRelationship = async (data: {
+  relationship_kind: string
+  left_entry_id: string
+  right_entry_id: string
+  relationship_type: string
+  status?: string
+  cardinality?: string
+  left_ref?: any
+  right_ref?: any
+  grain_compatibility?: any
+  semantic_definition?: any
+  confidence_score?: number
+  created_by?: string
+}): Promise<DictionaryRelationship> => {
+  const response = await client.post('/api/v1/data-dictionary/relationships', data)
+  return response.data
+}
+
+export const updateRelationship = async (
+  relationshipId: string,
+  data: {
+    cardinality?: string
+    grain_compatibility?: any
+    semantic_definition?: any
+    confidence_score?: number
+    suggested_join_sql?: string
+    relationship_type?: string
+  }
+): Promise<DictionaryRelationship> => {
+  const response = await client.patch(`/api/v1/data-dictionary/relationships/${relationshipId}`, data)
+  return response.data
+}
+
+export const updateRelationshipStatus = async (
+  relationshipId: string,
+  status: string
+): Promise<DictionaryRelationship> => {
+  const response = await client.patch(`/api/v1/data-dictionary/relationships/${relationshipId}/status`, { status })
+  return response.data
+}
+
+export const deleteRelationship = async (relationshipId: string, force: boolean = false): Promise<void> => {
+  await client.delete(`/api/v1/data-dictionary/relationships/${relationshipId}`, { params: { force } })
+}
+
+// Inference
+export const startInferenceJob = async (data: {
+  connection_id?: string
+  schema?: string
+  include_tables?: string[]
+  exclude_tables?: string[]
+  max_samples?: number
+}): Promise<InferenceJob> => {
+  const response = await client.post('/api/v1/data-dictionary/relationships/infer', data)
+  return response.data
+}
+
+export const getInferenceJob = async (jobId: string): Promise<InferenceJob> => {
+  const response = await client.get(`/api/v1/data-dictionary/relationships/infer/${jobId}`)
+  return response.data
+}
+
+// Context Blob
+export const getContextBlob = async (
+  entryId: string,
+  includeRelationships: boolean = true,
+  maxRelationships: number = 10
+): Promise<any> => {
+  const response = await client.get(`/api/v1/data-dictionary/entries/${entryId}/context-blob`, {
+    params: { include_relationships: includeRelationships, max_relationships: maxRelationships }
+  })
   return response.data
 }
 
