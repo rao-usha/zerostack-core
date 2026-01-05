@@ -2,14 +2,13 @@
 
 ## Overview
 
-NEX.AI includes comprehensive testing suites for backend, frontend, and distillation pipeline components. Testing ensures code quality, prevents regressions, and validates functionality.
+NEX.AI includes comprehensive testing suites for backend and frontend components. Testing ensures code quality, prevents regressions, and validates functionality.
 
 ## Test Categories
 
 ### Unit Tests
 - **Backend**: Individual function and class testing
 - **Frontend**: Component and utility function testing
-- **Distillation**: Algorithm and pipeline component testing
 
 ### Integration Tests
 - **API Endpoints**: Full request/response cycles
@@ -19,7 +18,6 @@ NEX.AI includes comprehensive testing suites for backend, frontend, and distilla
 ### End-to-End Tests
 - **User Workflows**: Complete feature validation
 - **Data Pipelines**: Upload → Process → Analyze cycles
-- **Distillation Flows**: Context → Examples → Datasets
 
 ## Backend Testing
 
@@ -123,33 +121,6 @@ describe('Button', () => {
 })
 ```
 
-## Distillation Testing
-
-### Pipeline Tests
-
-```bash
-cd nex-collector
-
-# Run all tests
-python -m pytest tests/ -v
-
-# Run specific distillation tests
-python -m pytest tests/test_deduplication_drift.py -v
-
-# Run with verbose output
-python -m pytest tests/ -v -s
-```
-
-### Test Categories
-
-- **Deduplication**: Test data deduplication algorithms
-- **Drift Detection**: Test data drift detection
-- **Retrieval**: Test MMR and retrieval algorithms
-- **Quality Signals**: Test quality assessment
-- **Rationales**: Test critique generation
-- **Soft Labels**: Test label generation
-- **Teacher Ensembles**: Test ensemble methods
-
 ## Integration Testing
 
 ### API Integration Tests
@@ -159,11 +130,10 @@ python -m pytest tests/ -v -s
 cd backend
 python test_summarization_full.py
 
-# Test distillation API
-cd nex-collector
+# Test API health
 python -c "
 import requests
-response = requests.get('http://localhost:8080/healthz')
+response = requests.get('http://localhost:8000/healthz')
 print(f'Health check: {response.status_code}')
 "
 ```

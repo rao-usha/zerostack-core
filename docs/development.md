@@ -25,9 +25,6 @@ cd Nex
 # Start all services
 docker-compose -f docker-compose.dev.yml up -d
 
-# Seed sample data (optional)
-docker exec nex-collector-api-1 python scripts/seed_demo.py
-
 # Access application
 open http://localhost:3000
 ```
@@ -99,18 +96,6 @@ npm install
 npm run dev
 ```
 
-#### 5. NEX-Collector Setup (Optional)
-
-```bash
-cd nex-collector
-
-# Install dependencies (if not using Docker)
-pip install -r requirements.txt
-
-# Run collector service
-python -m uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
-```
-
 ## Project Structure
 
 ```
@@ -138,15 +123,6 @@ Nex/
 │   │   └── App.tsx           # Main application component
 │   ├── package.json
 │   └── vite.config.ts        # Build configuration
-│
-├── nex-collector/             # Data distillation pipeline
-│   ├── app/
-│   │   ├── routes/           # API endpoints
-│   │   ├── distill/          # Distillation algorithms
-│   │   ├── ingest/           # Data ingestion pipeline
-│   │   └── providers/        # LLM providers (OpenAI, etc.)
-│   ├── scripts/              # Utility scripts
-│   └── data/packs/           # Pre-built distillation datasets
 │
 └── docs/                     # Documentation
     ├── api.md               # API reference
@@ -176,11 +152,6 @@ cd frontend
 ```bash
 # Backend database changes
 cd backend
-alembic revision --autogenerate -m "description"
-alembic upgrade head
-
-# NEX-Collector database changes
-cd nex-collector
 alembic revision --autogenerate -m "description"
 alembic upgrade head
 ```

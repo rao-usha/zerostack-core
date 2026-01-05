@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { BookOpen, ArrowLeft, Save, Copy, CheckCircle, Edit, FileText, GitBranch, Beaker, Github, ExternalLink, Star } from 'lucide-react'
+import { BookOpen, ArrowLeft, Save, Copy, CheckCircle, Edit, FileText, GitBranch, Beaker, Github, ExternalLink, Star, Database, ArrowRight } from 'lucide-react'
 
 interface Recipe {
   id: string
@@ -25,6 +25,53 @@ interface RecipeVersion {
 }
 
 type TabType = 'overview' | 'manifest' | 'versions' | 'synthetic' | 'reference'
+
+// Helper function to get M5 data source info
+const getM5DataSource = (modelFamily: string) => {
+  if (modelFamily === 'forecasting') {
+    return {
+      name: 'M5 Forecasting - Walmart Retail Sales',
+      description: 'Daily sales data with prices, events, and calendar features',
+      tables: ['m5_sales', 'm5_calendar', 'm5_items', 'm5_prices'],
+      grain: 'item_store_day',
+      target: 'sales',
+      dateRange: '2011-01-29 to 2016-06-19 (1,969 days)',
+      rows: '60M+',
+      features: ['historical_sales', 'price', 'day_of_week', 'is_weekend', 'is_event_day', 'is_snap_day'],
+      queryExample: `SELECT 
+  c.date, s.sales, p.sell_price,
+  c.weekday, c.event_name_1
+FROM m5_sales s
+JOIN m5_calendar c ON s.d = c.d
+LEFT JOIN m5_prices p ON s.item_id = p.item_id 
+  AND s.store_id = p.store_id 
+  AND c.wm_yr_wk = p.wm_yr_wk
+WHERE s.item_store_id = 'FOODS_1_001_CA_1'
+ORDER BY c.date`
+    }
+  } else if (modelFamily === 'pricing') {
+    return {
+      name: 'M5 Price Elasticity Data',
+      description: 'Price-demand relationships for elasticity modeling',
+      tables: ['m5_prices', 'm5_sales', 'm5_calendar'],
+      grain: 'item_store_week',
+      target: 'demand_response',
+      dateRange: '2011-01-29 to 2016-06-19',
+      rows: '60M+',
+      features: ['price', 'price_change', 'demand', 'events', 'seasonality'],
+      queryExample: `SELECT 
+  p.wm_yr_wk, p.item_id, p.sell_price,
+  AVG(s.sales) as avg_daily_sales
+FROM m5_prices p
+JOIN m5_sales s ON p.item_id = s.item_id 
+  AND p.store_id = s.store_id
+JOIN m5_calendar c ON s.d = c.d 
+  AND c.wm_yr_wk = p.wm_yr_wk
+GROUP BY p.wm_yr_wk, p.item_id, p.sell_price`
+    }
+  }
+  return null
+}
 
 export default function RecipeDetail() {
   const { recipeId } = useParams<{ recipeId: string }>()
@@ -332,7 +379,8 @@ export default function RecipeDetail() {
                 padding: '1.5rem', 
                 backgroundColor: '#1a1a24', 
                 border: '1px solid rgba(168, 216, 255, 0.2)',
-                borderRadius: '0.75rem'
+                borderRadius: '0.75rem',
+                marginBottom: '1.5rem'
               }}>
                 <h3 style={{ fontSize: '1.125rem', fontWeight: '600', marginBottom: '1rem', color: '#a8d8ff' }}>
                   Manifest Summary
@@ -342,6 +390,177 @@ export default function RecipeDetail() {
                 </p>
               </div>
             )}
+
+            {/* Data Source Section */}
+            {(() => {
+              const dataSource = getM5DataSource(recipe.model_family)
+              if (!dataSource) return null
+
+              return (
+                <div style={{ 
+                  padding: '1.5rem', 
+                  backgroundColor: '#1a1a24', 
+                  border: '1px solid rgba(168, 216, 255, 0.2)',
+                  borderRadius: '0.75rem'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+                    <Database className="h-5 w-5" style={{ color: '#a8d8ff' }} />
+                    <h3 style={{ fontSize: '1.125rem', fontWeight: '600', color: '#a8d8ff' }}>
+                      Data Source
+                    </h3>
+                  </div>
+
+                  {/* Dataset Name */}
+                  <div style={{ marginBottom: '1.5rem' }}>
+                    <p style={{ fontSize: '1rem', fontWeight: '600', color: '#f0f0f5', marginBottom: '0.5rem' }}>
+                      {dataSource.name}
+                    </p>
+                    <p style={{ color: '#b3b3c4', fontSize: '0.875rem' }}>
+                      {dataSource.description}
+                    </p>
+                  </div>
+
+                  {/* Tables */}
+                  <div style={{ marginBottom: '1rem' }}>
+                    <p style={{ color: '#b3b3c4', fontSize: '0.875rem', marginBottom: '0.5rem' }}>
+                      <strong>Tables:</strong>
+                    </p>
+                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      {dataSource.tables.map(table => (
+                        <span key={table} style={{
+                          padding: '0.25rem 0.75rem',
+                          backgroundColor: 'rgba(168, 216, 255, 0.15)',
+                          color: '#a8d8ff',
+                          borderRadius: '0.375rem',
+                          fontSize: '0.875rem',
+                          fontFamily: 'monospace'
+                        }}>
+                          {table}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Data Specs */}
+                  <div style={{ 
+                    display: 'grid', 
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', 
+                    gap: '1rem',
+                    marginBottom: '1.5rem',
+                    padding: '1rem',
+                    backgroundColor: 'rgba(168, 216, 255, 0.05)',
+                    borderRadius: '0.5rem'
+                  }}>
+                    <div>
+                      <p style={{ color: '#b3b3c4', fontSize: '0.75rem', marginBottom: '0.25rem' }}>GRAIN</p>
+                      <p style={{ color: '#f0f0f5', fontSize: '0.875rem', fontWeight: '600' }}>{dataSource.grain}</p>
+                    </div>
+                    <div>
+                      <p style={{ color: '#b3b3c4', fontSize: '0.75rem', marginBottom: '0.25rem' }}>TARGET</p>
+                      <p style={{ color: '#f0f0f5', fontSize: '0.875rem', fontWeight: '600' }}>{dataSource.target}</p>
+                    </div>
+                    <div>
+                      <p style={{ color: '#b3b3c4', fontSize: '0.75rem', marginBottom: '0.25rem' }}>DATE RANGE</p>
+                      <p style={{ color: '#f0f0f5', fontSize: '0.875rem', fontWeight: '600' }}>{dataSource.dateRange}</p>
+                    </div>
+                    <div>
+                      <p style={{ color: '#b3b3c4', fontSize: '0.75rem', marginBottom: '0.25rem' }}>VOLUME</p>
+                      <p style={{ color: '#f0f0f5', fontSize: '0.875rem', fontWeight: '600' }}>{dataSource.rows} rows</p>
+                    </div>
+                  </div>
+
+                  {/* Key Features */}
+                  <div style={{ marginBottom: '1.5rem' }}>
+                    <p style={{ color: '#b3b3c4', fontSize: '0.875rem', marginBottom: '0.5rem' }}>
+                      <strong>Key Features:</strong>
+                    </p>
+                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      {dataSource.features.map(feature => (
+                        <span key={feature} style={{
+                          padding: '0.25rem 0.5rem',
+                          backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                          border: '1px solid rgba(139, 92, 246, 0.3)',
+                          borderRadius: '0.25rem',
+                          fontSize: '0.75rem',
+                          color: '#b3b3c4'
+                        }}>
+                          {feature}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                    <button
+                      onClick={() => navigate('/data-explorer', { 
+                        state: { 
+                          prefilledQuery: dataSource.queryExample,
+                          datasetName: 'M5 Forecasting'
+                        }
+                      })}
+                      style={{
+                        padding: '0.5rem 1rem',
+                        backgroundColor: '#a8d8ff',
+                        color: '#0a0a0f',
+                        border: 'none',
+                        borderRadius: '0.375rem',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                        fontSize: '0.875rem'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = '#8ec5ff'
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = '#a8d8ff'
+                      }}
+                    >
+                      <Database className="h-4 w-4" />
+                      Explore M5 Data
+                      <ArrowRight className="h-4 w-4" />
+                    </button>
+
+                    <button
+                      onClick={() => window.open('https://www.kaggle.com/competitions/m5-forecasting-accuracy', '_blank')}
+                      style={{
+                        padding: '0.5rem 1rem',
+                        backgroundColor: 'rgba(168, 216, 255, 0.1)',
+                        color: '#a8d8ff',
+                        border: '1px solid rgba(168, 216, 255, 0.3)',
+                        borderRadius: '0.375rem',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                        fontSize: '0.875rem'
+                      }}
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                      M5 Competition
+                    </button>
+                  </div>
+
+                  {/* Info Note */}
+                  <div style={{
+                    marginTop: '1rem',
+                    padding: '0.75rem',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    border: '1px solid rgba(59, 130, 246, 0.2)',
+                    borderRadius: '0.375rem'
+                  }}>
+                    <p style={{ color: '#b3b3c4', fontSize: '0.75rem', lineHeight: '1.4' }}>
+                      💡 <strong>M5 Dataset:</strong> This recipe is designed to work with the M5 Forecasting dataset 
+                      from Kaggle. Click "Explore M5 Data" to query the full dataset or view the schema.
+                    </p>
+                  </div>
+                </div>
+              )
+            })()}
           </div>
         )}
 

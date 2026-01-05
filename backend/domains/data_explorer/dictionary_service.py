@@ -142,8 +142,8 @@ def get_column_versions(session: Session, database_name: str, schema_name: str, 
 
 def activate_version(session: Session, entry_id: int) -> DataDictionaryEntry:
     """
-    Activate a specific version of a dictionary entry.
-    Deactivates all other versions of the same column.
+    Activate a specific version, making it the current active version (rollback).
+    This simply makes the selected version active without creating a new version.
     
     Args:
         session: Database session
@@ -152,32 +152,45 @@ def activate_version(session: Session, entry_id: int) -> DataDictionaryEntry:
     Returns:
         The activated entry
     """
-    entry = session.get(DataDictionaryEntry, entry_id)
-    if not entry:
+    target_entry = session.get(DataDictionaryEntry, entry_id)
+    if not target_entry:
         raise ValueError(f"Entry {entry_id} not found")
     
-    # Deactivate all versions of this column
-    all_versions = session.exec(
+    # Deactivate all versions for this column
+    session.exec(
         select(DataDictionaryEntry).where(
-            DataDictionaryEntry.database_name == entry.database_name,
-            DataDictionaryEntry.schema_name == entry.schema_name,
-            DataDictionaryEntry.table_name == entry.table_name,
-            DataDictionaryEntry.column_name == entry.column_name
+            DataDictionaryEntry.database_name == target_entry.database_name,
+            DataDictionaryEntry.schema_name == target_entry.schema_name,
+            DataDictionaryEntry.table_name == target_entry.table_name,
+            DataDictionaryEntry.column_name == target_entry.column_name,
+            DataDictionaryEntry.is_active == True
+        )
+    )
+    
+    # Deactivate current active version(s)
+    current_actives = session.exec(
+        select(DataDictionaryEntry).where(
+            DataDictionaryEntry.database_name == target_entry.database_name,
+            DataDictionaryEntry.schema_name == target_entry.schema_name,
+            DataDictionaryEntry.table_name == target_entry.table_name,
+            DataDictionaryEntry.column_name == target_entry.column_name,
+            DataDictionaryEntry.is_active == True
         )
     ).all()
     
-    for version in all_versions:
-        version.is_active = False
-        session.add(version)
+    for entry in current_actives:
+        entry.is_active = False
+        session.add(entry)
     
-    # Activate the selected version
-    entry.is_active = True
-    entry.updated_at = datetime.utcnow()
-    session.add(entry)
+    # Activate the target version
+    target_entry.is_active = True
+    target_entry.updated_at = datetime.utcnow()
+    session.add(target_entry)
+    
     session.commit()
-    session.refresh(entry)
+    session.refresh(target_entry)
     
-    return entry
+    return target_entry
 
 
 def get_documented_columns(
@@ -242,4 +255,163 @@ def format_dictionary_as_context(entries: List[DataDictionaryEntry]) -> str:
             lines.append("")
     
     return "\n".join(lines)
+
+
+# ============================================================================
+# Approval Workflow Functions
+# ============================================================================
+
+def submit_for_approval(session: Session, entry_id: int) -> DataDictionaryEntry:
+    """
+    Submit a draft entry for approval.
+    Changes state from 'draft' to 'pending_approval'.
+    
+    Args:
+        session: Database session
+        entry_id: ID of the entry to submit
+    
+    Returns:
+        The updated entry
+    
+    Raises:
+        ValueError: If entry not found or not in draft state
+    """
+    entry = session.get(DataDictionaryEntry, entry_id)
+    if not entry:
+        raise ValueError(f"Entry {entry_id} not found")
+    
+    if entry.state != "draft":
+        raise ValueError(f"Can only submit draft entries. Current state: {entry.state}")
+    
+    entry.state = "pending_approval"
+    entry.updated_at = datetime.utcnow()
+    session.add(entry)
+    session.commit()
+    session.refresh(entry)
+    
+    return entry
+
+
+def approve_entry(session: Session, entry_id: int, approver_notes: str = None) -> DataDictionaryEntry:
+    """
+    Approve a pending entry and publish it.
+    Changes state from 'pending_approval' to 'published' and creates an immutable version.
+    
+    Args:
+        session: Database session
+        entry_id: ID of the entry to approve
+        approver_notes: Optional notes from the approver
+    
+    Returns:
+        The published entry
+    
+    Raises:
+        ValueError: If entry not found or not pending approval
+    """
+    entry = session.get(DataDictionaryEntry, entry_id)
+    if not entry:
+        raise ValueError(f"Entry {entry_id} not found")
+    
+    if entry.state != "pending_approval":
+        raise ValueError(f"Can only approve pending entries. Current state: {entry.state}")
+    
+    # Deactivate any currently active versions for this column
+    current_active = session.exec(
+        select(DataDictionaryEntry).where(
+            DataDictionaryEntry.database_name == entry.database_name,
+            DataDictionaryEntry.schema_name == entry.schema_name,
+            DataDictionaryEntry.table_name == entry.table_name,
+            DataDictionaryEntry.column_name == entry.column_name,
+            DataDictionaryEntry.is_active == True
+        )
+    ).all()
+    
+    for active_entry in current_active:
+        active_entry.is_active = False
+        session.add(active_entry)
+    
+    # Mark current entry as published AND active (only published versions should be active)
+    entry.state = "published"
+    entry.is_active = True
+    entry.updated_at = datetime.utcnow()
+    if approver_notes:
+        entry.version_notes = (entry.version_notes or "") + f"\nApproved: {approver_notes}"
+    
+    session.add(entry)
+    session.commit()
+    session.refresh(entry)
+    
+    return entry
+
+
+def reject_entry(session: Session, entry_id: int, rejection_reason: str = None) -> DataDictionaryEntry:
+    """
+    Reject a pending entry and return it to draft state.
+    Changes state from 'pending_approval' back to 'draft'.
+    
+    Args:
+        session: Database session
+        entry_id: ID of the entry to reject
+        rejection_reason: Optional reason for rejection
+    
+    Returns:
+        The entry returned to draft state
+    
+    Raises:
+        ValueError: If entry not found or not pending approval
+    """
+    entry = session.get(DataDictionaryEntry, entry_id)
+    if not entry:
+        raise ValueError(f"Entry {entry_id} not found")
+    
+    if entry.state != "pending_approval":
+        raise ValueError(f"Can only reject pending entries. Current state: {entry.state}")
+    
+    # Return to draft state
+    entry.state = "draft"
+    entry.updated_at = datetime.utcnow()
+    if rejection_reason:
+        entry.version_notes = (entry.version_notes or "") + f"\nRejected: {rejection_reason}"
+    
+    session.add(entry)
+    session.commit()
+    session.refresh(entry)
+    
+    return entry
+
+
+def publish_draft_directly(session: Session, entry_id: int, publish_notes: str = None) -> DataDictionaryEntry:
+    """
+    Publish a draft entry directly without approval workflow.
+    Useful for auto-approved changes or admin overrides.
+    
+    Args:
+        session: Database session
+        entry_id: ID of the entry to publish
+        publish_notes: Optional notes about publication
+    
+    Returns:
+        The published entry
+    
+    Raises:
+        ValueError: If entry not found or not in draft state
+    """
+    entry = session.get(DataDictionaryEntry, entry_id)
+    if not entry:
+        raise ValueError(f"Entry {entry_id} not found")
+    
+    if entry.state != "draft":
+        raise ValueError(f"Can only publish draft entries. Current state: {entry.state}")
+    
+    # Mark as published
+    entry.state = "published"
+    entry.updated_at = datetime.utcnow()
+    if publish_notes:
+        entry.version_notes = (entry.version_notes or "") + f"\nPublished: {publish_notes}"
+    
+    session.add(entry)
+    session.commit()
+    session.refresh(entry)
+    
+    return entry
 

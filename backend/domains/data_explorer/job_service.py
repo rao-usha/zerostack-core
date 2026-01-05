@@ -140,7 +140,8 @@ class AnalysisJobService:
             
             table_data = await AnalysisJobService._gather_data_with_mcp(
                 tables=job.tables,
-                db_id=job.db_id
+                db_id=job.db_id,
+                session=session
             )
             
             # Stage 2: Run analysis for each analysis type
@@ -466,7 +467,8 @@ class AnalysisJobService:
     @staticmethod
     async def _gather_data_with_mcp(
         tables: List[Dict[str, str]],
-        db_id: str
+        db_id: str,
+        session: Session
     ) -> List[Dict[str, Any]]:
         """
         Gather data using MCP tools (same as Chat uses).
@@ -490,7 +492,8 @@ class AnalysisJobService:
                         'schema': schema,
                         'table': table_name,
                         'connection_id': db_id
-                    }
+                    },
+                    session=session
                 )
                 
                 # Use MCP sample_rows tool
@@ -501,7 +504,8 @@ class AnalysisJobService:
                         'table': table_name,
                         'limit': 100,
                         'connection_id': db_id
-                    }
+                    },
+                    session=session
                 )
                 
                 # Extract data from MCP response

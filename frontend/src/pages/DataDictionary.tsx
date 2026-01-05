@@ -25,9 +25,13 @@ import {
   getExplorerTables,
   updateDictionaryEntry,
   getColumnVersions,
-  activateDictionaryVersion
+  activateDictionaryVersion,
+  submitForApproval,
+  approveEntry,
+  rejectEntry
 } from '../api/client'
 import { useNavigate } from 'react-router-dom'
+import Toast from '../components/Toast'
 
 interface DatabaseInfo {
   id: string
@@ -81,6 +85,21 @@ export default function DataDictionary() {
   const [viewingVersions, setViewingVersions] = useState<DictionaryEntry | null>(null)
   const [versions, setVersions] = useState<DictionaryEntry[]>([])
   const [loadingVersions, setLoadingVersions] = useState(false)
+  
+  // Toast notification state
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'warning' | 'info' } | null>(null)
+
+  const showToast = (message: string, type: 'success' | 'error' | 'warning' | 'info' = 'info') => {
+    setToast({ message, type })
+  }
+
+  // Approval modal state
+  const [approvalModal, setApprovalModal] = useState<{ 
+    isOpen: boolean; 
+    entryId: number | null; 
+    action: 'approve' | 'reject' | null 
+  }>({ isOpen: false, entryId: null, action: null })
+  const [approvalNotes, setApprovalNotes] = useState<string>('')
 
   useEffect(() => {
     loadDatabases()
@@ -140,10 +159,19 @@ export default function DataDictionary() {
       setLoading(true)
       setError(null)
       const data = await fetchDictionaryEntries(selectedDbId)
+      
+      // Validate data before setting
+      if (!Array.isArray(data)) {
+        throw new Error('Invalid response format: expected array')
+      }
+      
       setEntries(data)
+      console.log(`Loaded ${data.length} dictionary entries`)
     } catch (err: any) {
       console.error('Failed to load dictionary:', err)
-      setError(err.response?.data?.detail || err.message || 'Failed to load data dictionary')
+      const errorMessage = err.response?.data?.detail || err.message || 'Failed to load data dictionary'
+      setError(errorMessage)
+      // Don't throw - just set error state
     } finally {
       setLoading(false)
     }
@@ -205,24 +233,42 @@ export default function DataDictionary() {
     setVersionNotes('')
   }
 
-  const saveEntry = async (entryId: number, createNewVersion: boolean = false) => {
+  const saveEntry = async (entryId: number) => {
     try {
       setSaving(true)
-      const updated = await updateDictionaryEntry(entryId, {
+      
+      // Find the entry being edited to check its state
+      const entryBeingEdited = entries.find(e => e.id === entryId)
+      const isPublished = entryBeingEdited?.state === 'published'
+      
+      // If editing a published entry, always create a new version (as a draft)
+      // If editing a draft, update in place
+      await updateDictionaryEntry(entryId, {
         ...editForm,
-        create_new_version: createNewVersion,
-        version_notes: createNewVersion ? versionNotes || 'Manual edit - new version' : undefined
+        create_new_version: isPublished,
+        version_notes: isPublished 
+          ? (versionNotes || 'Edited published entry - new draft created')
+          : undefined
       })
       
-      // Reload entries to get updated version numbers
-      await loadEntries()
+      // Save succeeded! Show success message immediately
+      showToast('Changes saved successfully!', 'success')
       
+      // Clear editing state
       setEditingEntry(null)
       setEditForm({})
       setVersionNotes('')
+      
+      // Reload entries in the background (don't block on this)
+      loadDictionary().catch(reloadErr => {
+        console.warn('Failed to reload dictionary after save, but save succeeded:', reloadErr)
+        // Silently retry after a delay
+        setTimeout(() => loadDictionary().catch(() => {}), 2000)
+      })
     } catch (err: any) {
-      console.error('Failed to update entry:', err)
-      alert('Failed to update entry: ' + (err.response?.data?.detail || err.message))
+      console.error('Failed to save entry:', err)
+      const errorMsg = err.response?.data?.detail || err.message || 'Unknown error'
+      showToast('Failed to save changes: ' + errorMsg, 'error')
     } finally {
       setSaving(false)
     }
@@ -241,7 +287,7 @@ export default function DataDictionary() {
       setVersions(versionList)
     } catch (err: any) {
       console.error('Failed to load versions:', err)
-      alert('Failed to load versions: ' + (err.response?.data?.detail || err.message))
+      showToast('Failed to load version history: ' + (err.response?.data?.detail || err.message), 'error')
     } finally {
       setLoadingVersions(false)
     }
@@ -250,17 +296,21 @@ export default function DataDictionary() {
   const activateVersion = async (versionId: number) => {
     try {
       setSaving(true)
-      await activateDictionaryVersion(versionId)
+      const activatedEntry = await activateDictionaryVersion(versionId)
       
-      // Reload entries
-      await loadEntries()
-      
-      // Close modal
+      // Activation succeeded! Show success and close modal
+      showToast(`Version ${activatedEntry.version_number} is now active`, 'success')
       setViewingVersions(null)
       setVersions([])
+      
+      // Reload entries in background
+      loadDictionary().catch(err => {
+        console.warn('Failed to reload after activation, but activation succeeded:', err)
+        setTimeout(() => loadDictionary().catch(() => {}), 2000)
+      })
     } catch (err: any) {
       console.error('Failed to activate version:', err)
-      alert('Failed to activate version: ' + (err.response?.data?.detail || err.message))
+      showToast('Failed to activate version: ' + (err.response?.data?.detail || err.message), 'error')
     } finally {
       setSaving(false)
     }
@@ -275,6 +325,88 @@ export default function DataDictionary() {
   const removeTag = (tagToRemove: string) => {
     setEditForm({ ...editForm, tags: editForm.tags?.filter(t => t !== tagToRemove) })
   }
+
+  // Workflow actions
+  const handleSubmitForApproval = async (entryId: number) => {
+    try {
+      setSaving(true)
+      await submitForApproval(entryId)
+      
+      // Submit succeeded! Show success message
+      showToast('Entry submitted for approval successfully', 'success')
+      
+      // Reload in background
+      loadDictionary().catch(err => {
+        console.warn('Failed to reload after submit, but submit succeeded:', err)
+        setTimeout(() => loadDictionary().catch(() => {}), 2000)
+      })
+    } catch (err: any) {
+      console.error('Failed to submit for approval:', err)
+      showToast('Failed to submit: ' + (err.response?.data?.detail || err.message), 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleApprove = async (entryId: number) => {
+    setApprovalModal({ isOpen: true, entryId, action: 'approve' })
+  }
+
+  const handleReject = async (entryId: number) => {
+    setApprovalModal({ isOpen: true, entryId, action: 'reject' })
+  }
+
+  const submitApprovalAction = async () => {
+    if (!approvalModal.entryId) return
+    
+    try {
+      setSaving(true)
+      
+      if (approvalModal.action === 'approve') {
+        await approveEntry(approvalModal.entryId, approvalNotes || undefined)
+        showToast('Entry approved and published successfully', 'success')
+      } else if (approvalModal.action === 'reject') {
+        await rejectEntry(approvalModal.entryId, approvalNotes || undefined)
+        showToast('Entry rejected and returned to draft', 'warning')
+      }
+      
+      // Close modal and reset
+      setApprovalModal({ isOpen: false, entryId: null, action: null })
+      setApprovalNotes('')
+      
+      // Reload in background
+      loadDictionary().catch(err => {
+        console.warn('Failed to reload after approval action, but action succeeded:', err)
+        setTimeout(() => loadDictionary().catch(() => {}), 2000)
+      })
+    } catch (err: any) {
+      console.error(`Failed to ${approvalModal.action} entry:`, err)
+      showToast(`Failed to ${approvalModal.action}: ` + (err.response?.data?.detail || err.message), 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const cancelApprovalAction = () => {
+    setApprovalModal({ isOpen: false, entryId: null, action: null })
+    setApprovalNotes('')
+  }
+
+  // Direct publish function (for future admin override feature)
+  // const handlePublish = async (entryId: number) => {
+  //   if (!confirm('Publish this entry directly without approval?')) return
+  //   try {
+  //     setSaving(true)
+  //     await publishEntry(entryId, 'Direct publish')
+  //     await loadDictionary()
+  //     alert('Entry published')
+  //   } catch (err: any) {
+  //     console.error('Failed to publish entry:', err)
+  //     alert('Failed to publish entry: ' + (err.response?.data?.detail || err.message))
+  //   } finally {
+  //     setSaving(false)
+  //   }
+  // }
 
   // Filter entries for selected table
   const displayedEntries = selectedTable
@@ -302,6 +434,31 @@ export default function DataDictionary() {
       .map(e => `${e.schema_name}.${e.table_name}`)
   )
   const totalTables = Object.values(tablesBySchema).reduce((sum, tables) => sum + tables.length, 0)
+
+  // Helper to render state badge
+  const renderStateBadge = (state: string) => {
+    const colors = {
+      draft: { bg: 'rgba(168, 216, 255, 0.1)', text: '#a8d8ff', border: 'rgba(168, 216, 255, 0.3)' },
+      pending_approval: { bg: 'rgba(251, 191, 36, 0.1)', text: '#fbbf24', border: 'rgba(251, 191, 36, 0.3)' },
+      published: { bg: 'rgba(34, 197, 94, 0.1)', text: '#22c55e', border: 'rgba(34, 197, 94, 0.3)' }
+    }
+    const color = colors[state as keyof typeof colors] || colors.draft
+    return (
+      <span style={{
+        padding: '2px 8px',
+        borderRadius: '12px',
+        fontSize: '0.75rem',
+        fontWeight: '500',
+        backgroundColor: color.bg,
+        color: color.text,
+        border: `1px solid ${color.border}`,
+        display: 'inline-block',
+        textTransform: 'capitalize'
+      }}>
+        {state.replace('_', ' ')}
+      </span>
+    )
+  }
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#0a0a0f', color: '#f0f0f5', display: 'flex', flexDirection: 'column' }}>
@@ -624,8 +781,9 @@ export default function DataDictionary() {
                             }}>
                               {column.source}
                             </span>
+                            {renderStateBadge(column.state)}
                             
-                            {/* Edit/Save/Cancel/Version Buttons */}
+                            {/* Edit/Save/Cancel/Version/Workflow Buttons */}
                             <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.5rem' }}>
                               {!isEditing ? (
                                 <>
@@ -643,34 +801,106 @@ export default function DataDictionary() {
                                       fontSize: '0.75rem',
                                       cursor: 'pointer'
                                     }}
-                                    title="View version history"
+                                    title={column.is_active ? "View version history (This is the active/published version)" : "View version history (Draft - not yet published)"}
                                   >
                                     <History className="h-3 w-3" />
-                                    v{column.version_number}
+                                    v{column.version_number} {column.is_active ? '(Active)' : column.state === 'draft' ? '(Draft)' : ''}
                                   </button>
-                                  <button
-                                    onClick={() => startEditing(column)}
-                                    style={{
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      gap: '0.25rem',
-                                      padding: '0.25rem 0.5rem',
-                                      backgroundColor: 'rgba(168, 216, 255, 0.1)',
-                                      border: '1px solid rgba(168, 216, 255, 0.3)',
-                                      borderRadius: '0.375rem',
-                                      color: '#a8d8ff',
-                                      fontSize: '0.75rem',
-                                      cursor: 'pointer'
-                                    }}
-                                  >
-                                    <Edit2 className="h-3 w-3" />
-                                    Edit
-                                  </button>
+                                  {(column.state === 'draft' || column.state === 'published') && (
+                                    <button
+                                      onClick={() => startEditing(column)}
+                                      style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '0.25rem',
+                                        padding: '0.25rem 0.5rem',
+                                        backgroundColor: 'rgba(168, 216, 255, 0.1)',
+                                        border: '1px solid rgba(168, 216, 255, 0.3)',
+                                        borderRadius: '0.375rem',
+                                        color: '#a8d8ff',
+                                        fontSize: '0.75rem',
+                                        cursor: 'pointer'
+                                      }}
+                                      title={column.state === 'published' ? 'Edit (creates new draft version)' : 'Edit entry'}
+                                    >
+                                      <Edit2 className="h-3 w-3" />
+                                      Edit
+                                    </button>
+                                  )}
+                                  {column.state === 'draft' && (
+                                    <button
+                                      onClick={() => handleSubmitForApproval(column.id)}
+                                      disabled={saving}
+                                      style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '0.25rem',
+                                        padding: '0.25rem 0.5rem',
+                                        backgroundColor: 'rgba(251, 191, 36, 0.1)',
+                                        border: '1px solid rgba(251, 191, 36, 0.3)',
+                                        borderRadius: '0.375rem',
+                                        color: '#fbbf24',
+                                        fontSize: '0.75rem',
+                                        cursor: saving ? 'wait' : 'pointer',
+                                        opacity: saving ? 0.5 : 1
+                                      }}
+                                      title="Submit for approval"
+                                    >
+                                      <Play className="h-3 w-3" />
+                                      Submit
+                                    </button>
+                                  )}
+                                  {column.state === 'pending_approval' && (
+                                    <>
+                                      <button
+                                        onClick={() => handleApprove(column.id)}
+                                        disabled={saving}
+                                        style={{
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          gap: '0.25rem',
+                                          padding: '0.25rem 0.5rem',
+                                          backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                                          border: '1px solid rgba(34, 197, 94, 0.3)',
+                                          borderRadius: '0.375rem',
+                                          color: '#22c55e',
+                                          fontSize: '0.75rem',
+                                          cursor: saving ? 'wait' : 'pointer',
+                                          opacity: saving ? 0.5 : 1
+                                        }}
+                                        title="Approve and publish"
+                                      >
+                                        <Check className="h-3 w-3" />
+                                        Approve
+                                      </button>
+                                      <button
+                                        onClick={() => handleReject(column.id)}
+                                        disabled={saving}
+                                        style={{
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          gap: '0.25rem',
+                                          padding: '0.25rem 0.5rem',
+                                          backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                                          border: '1px solid rgba(239, 68, 68, 0.3)',
+                                          borderRadius: '0.375rem',
+                                          color: '#ef4444',
+                                          fontSize: '0.75rem',
+                                          cursor: saving ? 'wait' : 'pointer',
+                                          opacity: saving ? 0.5 : 1
+                                        }}
+                                        title="Reject and return to draft"
+                                      >
+                                        <XIcon className="h-3 w-3" />
+                                        Reject
+                                      </button>
+                                    </>
+                                  )}
                                 </>
                               ) : (
                                 <>
                                   <button
-                                    onClick={() => saveEntry(column.id, false)}
+                                    onClick={() => saveEntry(column.id)}
                                     disabled={saving}
                                     style={{
                                       display: 'flex',
@@ -685,30 +915,10 @@ export default function DataDictionary() {
                                       cursor: saving ? 'wait' : 'pointer',
                                       opacity: saving ? 0.5 : 1
                                     }}
+                                    title={column.state === 'published' ? 'Save (creates new draft version)' : 'Save changes'}
                                   >
                                     <Save className="h-3 w-3" />
                                     {saving ? 'Saving...' : 'Save'}
-                                  </button>
-                                  <button
-                                    onClick={() => saveEntry(column.id, true)}
-                                    disabled={saving}
-                                    style={{
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      gap: '0.25rem',
-                                      padding: '0.25rem 0.5rem',
-                                      backgroundColor: 'rgba(139, 92, 246, 0.1)',
-                                      border: '1px solid rgba(139, 92, 246, 0.3)',
-                                      borderRadius: '0.375rem',
-                                      color: '#a78bfa',
-                                      fontSize: '0.75rem',
-                                      cursor: saving ? 'wait' : 'pointer',
-                                      opacity: saving ? 0.5 : 1
-                                    }}
-                                    title="Save as new version (preserves current version)"
-                                  >
-                                    <History className="h-3 w-3" />
-                                    {saving ? 'Saving...' : 'New Version'}
                                   </button>
                                   <button
                                     onClick={cancelEditing}
@@ -1080,6 +1290,7 @@ export default function DataDictionary() {
                         }}>
                           Version {version.version_number}
                         </span>
+                        {renderStateBadge(version.state)}
                         {version.is_active && (
                           <span style={{
                             display: 'inline-flex',
@@ -1105,27 +1316,33 @@ export default function DataDictionary() {
                           {version.source}
                         </span>
                       </div>
-                      {!version.is_active && (
-                        <button
-                          onClick={() => activateVersion(version.id)}
-                          disabled={saving}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.25rem',
-                            padding: '0.375rem 0.75rem',
-                            backgroundColor: 'rgba(168, 216, 255, 0.1)',
-                            border: '1px solid rgba(168, 216, 255, 0.3)',
-                            borderRadius: '0.375rem',
-                            color: '#a8d8ff',
-                            fontSize: '0.75rem',
-                            cursor: saving ? 'wait' : 'pointer',
-                            opacity: saving ? 0.5 : 1
-                          }}
-                        >
-                          <Check className="h-3 w-3" />
-                          {saving ? 'Activating...' : 'Activate'}
-                        </button>
+                      {!version.is_active && version.state === 'published' && (
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.25rem' }}>
+                          <button
+                            onClick={() => activateVersion(version.id)}
+                            disabled={saving}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.25rem',
+                              padding: '0.375rem 0.75rem',
+                              backgroundColor: 'rgba(168, 216, 255, 0.1)',
+                              border: '1px solid rgba(168, 216, 255, 0.3)',
+                              borderRadius: '0.375rem',
+                              color: '#a8d8ff',
+                              fontSize: '0.75rem',
+                              cursor: saving ? 'wait' : 'pointer',
+                              opacity: saving ? 0.5 : 1
+                            }}
+                            title="Create a new draft version with this content"
+                          >
+                            <History className="h-3 w-3" />
+                            {saving ? 'Creating...' : 'Rollback to This Version'}
+                          </button>
+                          <span style={{ fontSize: '0.7rem', color: '#6b7280', fontStyle: 'italic' }}>
+                            Creates new draft for approval
+                          </span>
+                        </div>
                       )}
                     </div>
 
@@ -1181,6 +1398,145 @@ export default function DataDictionary() {
                 ))}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Toast Notification */}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
+
+      {/* Approval/Rejection Modal */}
+      {approvalModal.isOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.75)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000
+          }}
+          onClick={cancelApprovalAction}
+        >
+          <div
+            style={{
+              backgroundColor: '#1a1d2e',
+              border: '1px solid rgba(168, 216, 255, 0.3)',
+              borderRadius: '0.75rem',
+              padding: '2rem',
+              maxWidth: '500px',
+              width: '90%',
+              maxHeight: '80vh',
+              overflow: 'auto'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 style={{ 
+              fontSize: '1.5rem', 
+              fontWeight: '600', 
+              marginBottom: '1.5rem',
+              color: '#f0f0f5'
+            }}>
+              {approvalModal.action === 'approve' ? 'Approve Entry' : 'Reject Entry'}
+            </h2>
+
+            <div style={{ marginBottom: '1.5rem' }}>
+              <label
+                htmlFor="approval-notes"
+                style={{
+                  display: 'block',
+                  fontSize: '0.875rem',
+                  fontWeight: '500',
+                  marginBottom: '0.5rem',
+                  color: '#a8d8ff'
+                }}
+              >
+                {approvalModal.action === 'approve' ? 'Approval notes (optional)' : 'Rejection reason (optional)'}
+              </label>
+              <textarea
+                id="approval-notes"
+                value={approvalNotes}
+                onChange={(e) => setApprovalNotes(e.target.value)}
+                placeholder={
+                  approvalModal.action === 'approve' 
+                    ? 'Add any notes about this approval...' 
+                    : 'Explain why this entry is being rejected...'
+                }
+                rows={4}
+                style={{
+                  width: '100%',
+                  padding: '0.75rem',
+                  backgroundColor: '#0a0e1a',
+                  border: '1px solid rgba(168, 216, 255, 0.3)',
+                  borderRadius: '0.5rem',
+                  color: '#f0f0f5',
+                  fontSize: '0.875rem',
+                  fontFamily: 'inherit',
+                  resize: 'vertical'
+                }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+              <button
+                onClick={cancelApprovalAction}
+                disabled={saving}
+                style={{
+                  padding: '0.5rem 1rem',
+                  backgroundColor: 'rgba(168, 216, 255, 0.1)',
+                  border: '1px solid rgba(168, 216, 255, 0.3)',
+                  borderRadius: '0.5rem',
+                  color: '#a8d8ff',
+                  fontSize: '0.875rem',
+                  cursor: saving ? 'not-allowed' : 'pointer',
+                  opacity: saving ? 0.5 : 1
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitApprovalAction}
+                disabled={saving}
+                style={{
+                  padding: '0.5rem 1rem',
+                  background: approvalModal.action === 'approve'
+                    ? 'linear-gradient(90deg, rgba(34, 197, 94, 0.2), rgba(22, 163, 74, 0.2))'
+                    : 'linear-gradient(90deg, rgba(239, 68, 68, 0.2), rgba(220, 38, 38, 0.2))',
+                  border: approvalModal.action === 'approve'
+                    ? '1px solid rgba(34, 197, 94, 0.4)'
+                    : '1px solid rgba(239, 68, 68, 0.4)',
+                  borderRadius: '0.5rem',
+                  color: approvalModal.action === 'approve' ? '#22c55e' : '#ef4444',
+                  fontSize: '0.875rem',
+                  cursor: saving ? 'not-allowed' : 'pointer',
+                  opacity: saving ? 0.5 : 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem'
+                }}
+              >
+                {saving ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    {approvalModal.action === 'approve' ? 'Approving...' : 'Rejecting...'}
+                  </>
+                ) : (
+                  <>
+                    {approvalModal.action === 'approve' ? 'Approve' : 'Reject'}
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

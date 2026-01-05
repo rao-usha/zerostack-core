@@ -42,6 +42,8 @@ from domains.data_explorer.mcp_dictionary_router import router as mcp_dictionary
 from domains.chat.router import router as chat_router
 from domains.ml_development.router import router as ml_development_router
 from domains.evaluation_packs.router import router as evaluation_packs_router
+from domains.distillation.router import router as distillation_router
+# from domains.files.router import router as files_router  # Temporarily disabled - missing dependencies
 
 # Core setup
 from core.config import settings
@@ -86,6 +88,8 @@ app.include_router(mcp_dictionary_router, prefix=settings.api_prefix)
 app.include_router(chat_router, prefix=settings.api_prefix)
 app.include_router(ml_development_router, prefix=settings.api_prefix)
 app.include_router(evaluation_packs_router, prefix=settings.api_prefix)
+app.include_router(distillation_router, prefix=settings.api_prefix)
+# app.include_router(files_router)  # Temporarily disabled - missing dependencies
 
 # Initialize services
 db = Database()

@@ -577,7 +577,6 @@ async for event in provider.stream_chat(messages, tools):
 | `Dashboard.tsx` | `/` | Main dashboard with overview metrics |
 | `DataUpload.tsx` | `/upload` | CSV file upload interface |
 | `Contexts.tsx` | `/contexts` | Context management |
-| `Distillation.tsx` | `/distillation` | Data distillation explorer |
 | `DataExplorer.tsx` | `/explorer` | Database schema browser |
 | `DataAnalysis.tsx` | `/analysis` | AI-powered data analysis |
 | `DataDictionary.tsx` | `/dictionary` | Data dictionary management |

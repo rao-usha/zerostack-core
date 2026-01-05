@@ -355,7 +355,7 @@ DATA_DICTIONARY_TOOLS = [
         "type": "function",
         "function": {
             "name": "preview_dictionary_update",
-            "description": "Preview proposed changes to a data dictionary entry BEFORE saving. Shows current vs proposed values. The user must confirm before changes are saved.",
+            "description": "Preview proposed changes to a data dictionary entry BEFORE saving. Shows current vs proposed values. The user must confirm before changes are saved. Creates a DRAFT that needs to be published.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -376,7 +376,7 @@ DATA_DICTIONARY_TOOLS = [
         "type": "function",
         "function": {
             "name": "save_dictionary_update",
-            "description": "Save a previously previewed dictionary update. Only call this AFTER the user has confirmed they want to save the changes shown in preview_dictionary_update.",
+            "description": "Save a dictionary update as a DRAFT. After confirming, use publish_dictionary_entry to make it active, or submit_for_approval if approval workflow is required.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -388,7 +388,8 @@ DATA_DICTIONARY_TOOLS = [
                     "technical_description": {"type": "string", "description": "New technical description"},
                     "examples": {"type": "array", "items": {"type": "string"}, "description": "Example values"},
                     "tags": {"type": "array", "items": {"type": "string"}, "description": "Tags"},
-                    "version_notes": {"type": "string", "description": "Notes explaining why this update was made"}
+                    "version_notes": {"type": "string", "description": "Notes explaining why this update was made"},
+                    "auto_publish": {"type": "boolean", "description": "If true, automatically publish the draft (skip approval workflow)", "default": True}
                 },
                 "required": ["schema", "table", "column"]
             }
@@ -397,8 +398,82 @@ DATA_DICTIONARY_TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "publish_dictionary_entry",
+            "description": "Publish a draft dictionary entry directly, making it the active version. Use after save_dictionary_update if auto_publish was false.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "entry_id": {"type": "integer", "description": "The ID of the draft entry to publish"},
+                    "notes": {"type": "string", "description": "Optional notes about the publication"}
+                },
+                "required": ["entry_id"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "submit_for_approval",
+            "description": "Submit a draft dictionary entry for approval. Changes state from 'draft' to 'pending_approval'. Use when approval workflow is required.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "entry_id": {"type": "integer", "description": "The ID of the draft entry to submit for approval"}
+                },
+                "required": ["entry_id"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_pending_approvals",
+            "description": "List all dictionary entries pending approval. Shows entries waiting for review.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "schema": {"type": "string", "description": "Optional: filter by schema"},
+                    "table": {"type": "string", "description": "Optional: filter by table"}
+                },
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "approve_dictionary_entry",
+            "description": "Approve a pending dictionary entry and publish it. Changes state from 'pending_approval' to 'published'.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "entry_id": {"type": "integer", "description": "The ID of the pending entry to approve"},
+                    "notes": {"type": "string", "description": "Optional approver notes"}
+                },
+                "required": ["entry_id"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "reject_dictionary_entry",
+            "description": "Reject a pending dictionary entry and return it to draft state. Changes state from 'pending_approval' back to 'draft'.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "entry_id": {"type": "integer", "description": "The ID of the pending entry to reject"},
+                    "reason": {"type": "string", "description": "Reason for rejection"}
+                },
+                "required": ["entry_id"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "get_column_history",
-            "description": "Get the version history of a column's documentation. Shows all previous versions with who made changes and when.",
+            "description": "Get the version history of a column's documentation. Shows all versions with state, source, and timestamps.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -426,8 +501,204 @@ DATA_DICTIONARY_TOOLS = [
     }
 ]
 
+# ML Development tools for the chat assistant
+ML_DEVELOPMENT_TOOLS = [
+    # RECIPE DISCOVERY
+    {
+        "type": "function",
+        "function": {
+            "name": "list_ml_recipes",
+            "description": "List ML recipes with optional filters. Recipes define reusable ML model patterns.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "model_family": {
+                        "type": "string",
+                        "enum": ["pricing", "next_best_action", "location_scoring", "forecasting"],
+                        "description": "Filter by model family"
+                    },
+                    "level": {
+                        "type": "string",
+                        "enum": ["baseline", "industry", "client"],
+                        "description": "Filter by recipe level"
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": ["draft", "approved", "archived"],
+                        "description": "Filter by status"
+                    },
+                    "limit": {"type": "integer", "default": 25}
+                },
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_ml_recipe",
+            "description": "Get details about a specific ML recipe including its configuration and versions.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "recipe_id": {"type": "string", "description": "The recipe ID"}
+                },
+                "required": ["recipe_id"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_recipe_versions",
+            "description": "List all versions of an ML recipe. Shows the evolution of the recipe manifest.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "recipe_id": {"type": "string", "description": "The recipe ID"}
+                },
+                "required": ["recipe_id"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_recipe_version",
+            "description": "Get a specific version of an ML recipe including the full manifest.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "recipe_id": {"type": "string", "description": "The recipe ID"},
+                    "version_id": {"type": "string", "description": "The version ID"}
+                },
+                "required": ["recipe_id", "version_id"]
+            }
+        }
+    },
+    # MODEL MANAGEMENT
+    {
+        "type": "function",
+        "function": {
+            "name": "list_ml_models",
+            "description": "List registered ML models with optional filters. Models are trained instances of recipes.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "model_family": {
+                        "type": "string",
+                        "enum": ["pricing", "next_best_action", "location_scoring", "forecasting"],
+                        "description": "Filter by model family"
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": ["draft", "staging", "production", "retired"],
+                        "description": "Filter by status"
+                    },
+                    "limit": {"type": "integer", "default": 25}
+                },
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_ml_model",
+            "description": "Get details about a specific ML model including its recipe, status, and owner.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "model_id": {"type": "string", "description": "The model ID"}
+                },
+                "required": ["model_id"]
+            }
+        }
+    },
+    # RUN MANAGEMENT
+    {
+        "type": "function",
+        "function": {
+            "name": "list_ml_runs",
+            "description": "List ML runs (training, evaluation, or backtest). Shows execution history.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "model_id": {"type": "string", "description": "Filter by model ID"},
+                    "recipe_id": {"type": "string", "description": "Filter by recipe ID"},
+                    "status": {
+                        "type": "string",
+                        "enum": ["queued", "running", "succeeded", "failed"],
+                        "description": "Filter by status"
+                    },
+                    "limit": {"type": "integer", "default": 25}
+                },
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_ml_run",
+            "description": "Get details about a specific ML run including metrics, artifacts, and logs.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "run_id": {"type": "string", "description": "The run ID"}
+                },
+                "required": ["run_id"]
+            }
+        }
+    },
+    # MONITORING
+    {
+        "type": "function",
+        "function": {
+            "name": "get_model_monitoring",
+            "description": "Get monitoring snapshots for a model. Shows performance, drift, and alerts.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "model_id": {"type": "string", "description": "The model ID"},
+                    "limit": {"type": "integer", "default": 10, "description": "Number of snapshots to return"}
+                },
+                "required": ["model_id"]
+            }
+        }
+    },
+    # SYNTHETIC EXAMPLES
+    {
+        "type": "function",
+        "function": {
+            "name": "get_synthetic_example",
+            "description": "Get synthetic example data for a recipe. Useful for testing and understanding the expected data format.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "recipe_id": {"type": "string", "description": "The recipe ID"}
+                },
+                "required": ["recipe_id"]
+            }
+        }
+    },
+    # SUMMARY/OVERVIEW
+    {
+        "type": "function",
+        "function": {
+            "name": "get_ml_summary",
+            "description": "Get a summary of ML development status including recipe counts, model counts, recent runs, and production models.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        }
+    }
+]
+
 # Combine all tools
-ALL_CHAT_TOOLS = DATA_EXPLORER_TOOLS + DATA_DICTIONARY_TOOLS
+ALL_CHAT_TOOLS = DATA_EXPLORER_TOOLS + DATA_DICTIONARY_TOOLS + ML_DEVELOPMENT_TOOLS
 
 
 class ChatService:
@@ -760,12 +1031,64 @@ class ChatService:
             elif tool_name == "save_dictionary_update":
                 return ChatService._execute_save_dictionary_update(session, tool_input)
             
+            elif tool_name == "publish_dictionary_entry":
+                return ChatService._execute_publish_dictionary_entry(session, tool_input)
+            
+            elif tool_name == "submit_for_approval":
+                return ChatService._execute_submit_for_approval(session, tool_input)
+            
+            elif tool_name == "list_pending_approvals":
+                return ChatService._execute_list_pending_approvals(session, tool_input)
+            
+            elif tool_name == "approve_dictionary_entry":
+                return ChatService._execute_approve_dictionary_entry(session, tool_input)
+            
+            elif tool_name == "reject_dictionary_entry":
+                return ChatService._execute_reject_dictionary_entry(session, tool_input)
+
             elif tool_name == "get_column_history":
                 return ChatService._execute_get_column_history(session, tool_input)
-            
+
             elif tool_name == "rollback_column_version":
                 return ChatService._execute_rollback_column_version(session, tool_input)
+
+            # =================================================================
+            # ML DEVELOPMENT TOOLS
+            # =================================================================
             
+            elif tool_name == "list_ml_recipes":
+                return ChatService._execute_list_ml_recipes(tool_input)
+            
+            elif tool_name == "get_ml_recipe":
+                return ChatService._execute_get_ml_recipe(tool_input)
+            
+            elif tool_name == "list_recipe_versions":
+                return ChatService._execute_list_recipe_versions(tool_input)
+            
+            elif tool_name == "get_recipe_version":
+                return ChatService._execute_get_recipe_version(tool_input)
+            
+            elif tool_name == "list_ml_models":
+                return ChatService._execute_list_ml_models(tool_input)
+            
+            elif tool_name == "get_ml_model":
+                return ChatService._execute_get_ml_model(tool_input)
+            
+            elif tool_name == "list_ml_runs":
+                return ChatService._execute_list_ml_runs(tool_input)
+            
+            elif tool_name == "get_ml_run":
+                return ChatService._execute_get_ml_run(tool_input)
+            
+            elif tool_name == "get_model_monitoring":
+                return ChatService._execute_get_model_monitoring(tool_input)
+            
+            elif tool_name == "get_synthetic_example":
+                return ChatService._execute_get_synthetic_example(tool_input)
+            
+            elif tool_name == "get_ml_summary":
+                return ChatService._execute_get_ml_summary(tool_input)
+
             else:
                 return {"success": False, "error": f"Unknown tool: {tool_name}"}
         
@@ -2021,12 +2344,16 @@ LEFT JOIN {right_schema}.{right_table} r
             table = tool_input["table"]
             column = tool_input["column"]
             
-            # Get current entry
+            # Get current published/active entry OR any existing draft
             current_entry = None
-            for db_name in ["default", "nexdata"]:
+            draft_entry = None
+            db_name = "default"
+            
+            for try_db_name in ["default", "nexdata"]:
+                # Check for active/published entry
                 entry = session.exec(
                     select(DataDictionaryEntry).where(
-                        DataDictionaryEntry.database_name == db_name,
+                        DataDictionaryEntry.database_name == try_db_name,
                         DataDictionaryEntry.schema_name == schema,
                         DataDictionaryEntry.table_name == table,
                         DataDictionaryEntry.column_name == column,
@@ -2035,22 +2362,41 @@ LEFT JOIN {right_schema}.{right_table} r
                 ).first()
                 if entry:
                     current_entry = entry
+                    db_name = try_db_name
+                
+                # Check for existing draft
+                draft = session.exec(
+                    select(DataDictionaryEntry).where(
+                        DataDictionaryEntry.database_name == try_db_name,
+                        DataDictionaryEntry.schema_name == schema,
+                        DataDictionaryEntry.table_name == table,
+                        DataDictionaryEntry.column_name == column,
+                        DataDictionaryEntry.state == "draft"
+                    )
+                ).first()
+                if draft:
+                    draft_entry = draft
+                    db_name = try_db_name
+                
+                if current_entry or draft_entry:
                     break
+            
+            # Use draft if exists, otherwise current
+            base_entry = draft_entry or current_entry
             
             # Build the preview
             current_values = {}
-            proposed_values = {}
-            changes = []
-            
-            if current_entry:
+            if base_entry:
                 current_values = {
-                    "business_name": current_entry.business_name,
-                    "business_description": current_entry.business_description,
-                    "technical_description": current_entry.technical_description,
-                    "examples": current_entry.examples or [],
-                    "tags": current_entry.tags or [],
-                    "version": current_entry.version_number,
-                    "source": current_entry.source
+                    "business_name": base_entry.business_name,
+                    "business_description": base_entry.business_description,
+                    "technical_description": base_entry.technical_description,
+                    "examples": base_entry.examples or [],
+                    "tags": base_entry.tags or [],
+                    "version": base_entry.version_number,
+                    "state": base_entry.state,
+                    "source": base_entry.source,
+                    "entry_id": base_entry.id
                 }
             else:
                 current_values = {
@@ -2060,10 +2406,14 @@ LEFT JOIN {right_schema}.{right_table} r
                     "examples": [],
                     "tags": [],
                     "version": 0,
-                    "source": None
+                    "state": None,
+                    "source": None,
+                    "entry_id": None
                 }
             
             # Build proposed values and track changes
+            proposed_values = {}
+            changes = []
             fields_to_update = ["business_name", "business_description", "technical_description", "examples", "tags"]
             
             for field in fields_to_update:
@@ -2084,21 +2434,28 @@ LEFT JOIN {right_schema}.{right_table} r
                     "data": {
                         "message": "No changes detected. The proposed values are the same as the current values.",
                         "column": f"{schema}.{table}.{column}",
+                        "current_state": current_values.get("state"),
                         "current": current_values
                     }
                 }
             
+            workflow_info = "Changes will create a draft. Use auto_publish=true to publish immediately, or submit_for_approval for review workflow."
+            if draft_entry:
+                workflow_info = f"An existing draft (v{draft_entry.version_number}) will be updated."
+            
             return {
                 "success": True,
                 "data": {
-                    "message": "Please review the proposed changes below. Say 'confirm' or 'save' to apply them, or 'cancel' to discard.",
+                    "message": "Please review the proposed changes below. Say 'confirm' or 'save' to apply them.",
                     "column": f"{schema}.{table}.{column}",
-                    "is_new_entry": current_entry is None,
+                    "is_new_entry": base_entry is None,
+                    "has_existing_draft": draft_entry is not None,
                     "current_version": current_values.get("version", 0),
-                    "will_create_version": (current_values.get("version", 0) or 0) + 1,
+                    "current_state": current_values.get("state"),
                     "changes": changes,
                     "current": current_values,
                     "proposed": proposed_values,
+                    "workflow": workflow_info,
                     "action_required": "User must confirm to save these changes"
                 }
             }
@@ -2108,17 +2465,21 @@ LEFT JOIN {right_schema}.{right_table} r
     
     @staticmethod
     def _execute_save_dictionary_update(session: Session, tool_input: Dict[str, Any]) -> Dict[str, Any]:
-        """Save a dictionary update after user confirmation."""
+        """Save a dictionary update - creates/updates a draft, optionally auto-publishes."""
         try:
             schema = tool_input["schema"]
             table = tool_input["table"]
             column = tool_input["column"]
             version_notes = tool_input.get("version_notes", "Updated via chat")
+            auto_publish = tool_input.get("auto_publish", True)  # Default to auto-publish for simplicity
             
-            # Find current entry to get database_name
+            # Find current entry and any existing draft
             current_entry = None
+            draft_entry = None
             db_name = "default"
+            
             for try_db_name in ["default", "nexdata"]:
+                # Check for active/published entry
                 entry = session.exec(
                     select(DataDictionaryEntry).where(
                         DataDictionaryEntry.database_name == try_db_name,
@@ -2131,81 +2492,138 @@ LEFT JOIN {right_schema}.{right_table} r
                 if entry:
                     current_entry = entry
                     db_name = try_db_name
+                
+                # Check for existing draft
+                draft = session.exec(
+                    select(DataDictionaryEntry).where(
+                        DataDictionaryEntry.database_name == try_db_name,
+                        DataDictionaryEntry.schema_name == schema,
+                        DataDictionaryEntry.table_name == table,
+                        DataDictionaryEntry.column_name == column,
+                        DataDictionaryEntry.state == "draft"
+                    )
+                ).first()
+                if draft:
+                    draft_entry = draft
+                    db_name = try_db_name
+                
+                if current_entry or draft_entry:
                     break
             
-            # Build the entry data
-            entry_data = {
-                "database_name": db_name,
-                "schema_name": schema,
-                "table_name": table,
-                "column_name": column,
-                "source": "human_edited",  # Mark as human-edited for versioning
-                "version_notes": version_notes
-            }
+            # Determine base entry for values
+            base_entry = draft_entry or current_entry
             
-            # Add optional fields if provided
-            if "business_name" in tool_input:
-                entry_data["business_name"] = tool_input["business_name"]
+            if draft_entry:
+                # Update existing draft
+                if "business_name" in tool_input:
+                    draft_entry.business_name = tool_input["business_name"]
+                if "business_description" in tool_input:
+                    draft_entry.business_description = tool_input["business_description"]
+                if "technical_description" in tool_input:
+                    draft_entry.technical_description = tool_input["technical_description"]
+                if "examples" in tool_input:
+                    draft_entry.examples = tool_input["examples"]
+                if "tags" in tool_input:
+                    draft_entry.tags = tool_input["tags"]
+                
+                draft_entry.source = "human_edited"
+                draft_entry.version_notes = version_notes
+                draft_entry.updated_at = datetime.utcnow()
+                session.add(draft_entry)
+                session.commit()
+                session.refresh(draft_entry)
+                
+                result_entry = draft_entry
+                
             elif current_entry:
-                entry_data["business_name"] = current_entry.business_name
-            
-            if "business_description" in tool_input:
-                entry_data["business_description"] = tool_input["business_description"]
-            elif current_entry:
-                entry_data["business_description"] = current_entry.business_description
-            
-            if "technical_description" in tool_input:
-                entry_data["technical_description"] = tool_input["technical_description"]
-            elif current_entry:
-                entry_data["technical_description"] = current_entry.technical_description
-            
-            if "examples" in tool_input:
-                entry_data["examples"] = tool_input["examples"]
-            elif current_entry:
-                entry_data["examples"] = current_entry.examples
-            
-            if "tags" in tool_input:
-                entry_data["tags"] = tool_input["tags"]
-            elif current_entry:
-                entry_data["tags"] = current_entry.tags
-            
-            # Get data_type from current entry or leave None
-            if current_entry:
-                entry_data["data_type"] = current_entry.data_type
-            
-            # Use the existing upsert function with create_new_version=True for human edits
-            count = original_dict_service.upsert_dictionary_entries(
-                session=session,
-                entries=[entry_data],
-                database_name=db_name,
-                create_new_version=True  # Always create new version for human edits
-            )
-            
-            # Get the updated entry to return
-            updated_entry = session.exec(
-                select(DataDictionaryEntry).where(
-                    DataDictionaryEntry.database_name == db_name,
-                    DataDictionaryEntry.schema_name == schema,
-                    DataDictionaryEntry.table_name == table,
-                    DataDictionaryEntry.column_name == column,
-                    DataDictionaryEntry.is_active == True
+                # Create new draft from published entry
+                from sqlalchemy import func as sqla_func
+                max_version = session.exec(
+                    select(sqla_func.max(DataDictionaryEntry.version_number)).where(
+                        DataDictionaryEntry.database_name == db_name,
+                        DataDictionaryEntry.schema_name == schema,
+                        DataDictionaryEntry.table_name == table,
+                        DataDictionaryEntry.column_name == column
+                    )
+                ).first()
+                
+                new_entry = DataDictionaryEntry(
+                    database_name=db_name,
+                    schema_name=schema,
+                    table_name=table,
+                    column_name=column,
+                    version_number=(max_version or 0) + 1,
+                    is_active=False,  # Draft is not active until published
+                    state="draft",
+                    version_notes=version_notes,
+                    business_name=tool_input.get("business_name", current_entry.business_name),
+                    business_description=tool_input.get("business_description", current_entry.business_description),
+                    technical_description=tool_input.get("technical_description", current_entry.technical_description),
+                    data_type=current_entry.data_type,
+                    examples=tool_input.get("examples", current_entry.examples),
+                    tags=tool_input.get("tags", current_entry.tags),
+                    source="human_edited"
                 )
-            ).first()
+                session.add(new_entry)
+                session.commit()
+                session.refresh(new_entry)
+                result_entry = new_entry
+                
+            else:
+                # Create brand new entry as draft
+                new_entry = DataDictionaryEntry(
+                    database_name=db_name,
+                    schema_name=schema,
+                    table_name=table,
+                    column_name=column,
+                    version_number=1,
+                    is_active=False,  # Draft is not active until published
+                    state="draft",
+                    version_notes=version_notes,
+                    business_name=tool_input.get("business_name"),
+                    business_description=tool_input.get("business_description"),
+                    technical_description=tool_input.get("technical_description"),
+                    data_type=tool_input.get("data_type"),
+                    examples=tool_input.get("examples", []),
+                    tags=tool_input.get("tags", []),
+                    source="human_edited"
+                )
+                session.add(new_entry)
+                session.commit()
+                session.refresh(new_entry)
+                result_entry = new_entry
+            
+            # Auto-publish if requested
+            if auto_publish and result_entry.state == "draft":
+                try:
+                    result_entry = original_dict_service.publish_draft_directly(
+                        session, result_entry.id, f"Auto-published: {version_notes}"
+                    )
+                    state_msg = "published"
+                except Exception as pub_err:
+                    logger.warning(f"Auto-publish failed: {pub_err}")
+                    state_msg = "draft (auto-publish failed)"
+            else:
+                state_msg = result_entry.state
             
             return {
                 "success": True,
                 "data": {
                     "message": f"Successfully saved dictionary update for {schema}.{table}.{column}",
                     "column": f"{schema}.{table}.{column}",
-                    "new_version": updated_entry.version_number if updated_entry else None,
-                    "updated_at": updated_entry.updated_at.isoformat() if updated_entry else None,
+                    "entry_id": result_entry.id,
+                    "version": result_entry.version_number,
+                    "state": state_msg,
+                    "is_active": result_entry.is_active,
+                    "updated_at": result_entry.updated_at.isoformat() if result_entry.updated_at else None,
                     "saved_values": {
-                        "business_name": updated_entry.business_name if updated_entry else None,
-                        "business_description": updated_entry.business_description if updated_entry else None,
-                        "technical_description": updated_entry.technical_description if updated_entry else None,
-                        "examples": updated_entry.examples if updated_entry else [],
-                        "tags": updated_entry.tags if updated_entry else []
-                    }
+                        "business_name": result_entry.business_name,
+                        "business_description": result_entry.business_description,
+                        "technical_description": result_entry.technical_description,
+                        "examples": result_entry.examples or [],
+                        "tags": result_entry.tags or []
+                    },
+                    "next_steps": "Entry is now active." if result_entry.is_active else "Use publish_dictionary_entry or submit_for_approval to make this active."
                 }
             }
         except Exception as e:
@@ -2249,6 +2667,7 @@ LEFT JOIN {right_schema}.{right_table} r
                 version_history.append({
                     "entry_id": v.id,
                     "version": v.version_number,
+                    "state": v.state,
                     "is_active": v.is_active,
                     "source": v.source,
                     "business_name": v.business_name,
@@ -2258,13 +2677,23 @@ LEFT JOIN {right_schema}.{right_table} r
                     "updated_at": v.updated_at.isoformat() if v.updated_at else None
                 })
             
+            # Summarize states
+            drafts = [v for v in version_history if v["state"] == "draft"]
+            pending = [v for v in version_history if v["state"] == "pending_approval"]
+            published = [v for v in version_history if v["state"] == "published"]
+            
             return {
                 "success": True,
                 "data": {
                     "column": f"{schema}.{table}.{column}",
                     "total_versions": len(versions),
+                    "summary": {
+                        "drafts": len(drafts),
+                        "pending_approval": len(pending),
+                        "published": len(published)
+                    },
                     "versions": version_history,
-                    "tip": "Use rollback_column_version with an entry_id to restore a previous version"
+                    "tip": "Use rollback_column_version with entry_id to restore, or publish_dictionary_entry to publish a draft"
                 }
             }
         except Exception as e:
@@ -2291,6 +2720,7 @@ LEFT JOIN {right_schema}.{right_table} r
                     "message": f"Successfully rolled back {target_entry.schema_name}.{target_entry.table_name}.{target_entry.column_name} to version {activated.version_number}",
                     "column": f"{target_entry.schema_name}.{target_entry.table_name}.{target_entry.column_name}",
                     "restored_version": activated.version_number,
+                    "state": activated.state,
                     "restored_values": {
                         "business_name": activated.business_name,
                         "business_description": activated.business_description,
@@ -2305,4 +2735,658 @@ LEFT JOIN {right_schema}.{right_table} r
         except Exception as e:
             logger.error(f"rollback_column_version error: {e}")
             return {"success": False, "error": str(e)}
+    
+    @staticmethod
+    def _execute_publish_dictionary_entry(session: Session, tool_input: Dict[str, Any]) -> Dict[str, Any]:
+        """Publish a draft dictionary entry directly."""
+        try:
+            entry_id = tool_input["entry_id"]
+            notes = tool_input.get("notes", "Published via chat")
+            
+            entry = session.get(DataDictionaryEntry, entry_id)
+            if not entry:
+                return {"success": False, "error": f"Entry with ID {entry_id} not found"}
+            
+            if entry.state != "draft":
+                return {"success": False, "error": f"Can only publish draft entries. Current state: {entry.state}"}
+            
+            published = original_dict_service.publish_draft_directly(session, entry_id, notes)
+            
+            return {
+                "success": True,
+                "data": {
+                    "message": f"Successfully published {published.schema_name}.{published.table_name}.{published.column_name}",
+                    "entry_id": published.id,
+                    "column": f"{published.schema_name}.{published.table_name}.{published.column_name}",
+                    "version": published.version_number,
+                    "state": published.state,
+                    "is_active": published.is_active
+                }
+            }
+        except ValueError as e:
+            return {"success": False, "error": str(e)}
+        except Exception as e:
+            logger.error(f"publish_dictionary_entry error: {e}")
+            return {"success": False, "error": str(e)}
+    
+    @staticmethod
+    def _execute_submit_for_approval(session: Session, tool_input: Dict[str, Any]) -> Dict[str, Any]:
+        """Submit a draft entry for approval."""
+        try:
+            entry_id = tool_input["entry_id"]
+            
+            entry = session.get(DataDictionaryEntry, entry_id)
+            if not entry:
+                return {"success": False, "error": f"Entry with ID {entry_id} not found"}
+            
+            if entry.state != "draft":
+                return {"success": False, "error": f"Can only submit draft entries. Current state: {entry.state}"}
+            
+            submitted = original_dict_service.submit_for_approval(session, entry_id)
+            
+            return {
+                "success": True,
+                "data": {
+                    "message": f"Submitted {submitted.schema_name}.{submitted.table_name}.{submitted.column_name} for approval",
+                    "entry_id": submitted.id,
+                    "column": f"{submitted.schema_name}.{submitted.table_name}.{submitted.column_name}",
+                    "version": submitted.version_number,
+                    "state": submitted.state,
+                    "next_step": "An approver can now approve or reject this entry using approve_dictionary_entry or reject_dictionary_entry"
+                }
+            }
+        except ValueError as e:
+            return {"success": False, "error": str(e)}
+        except Exception as e:
+            logger.error(f"submit_for_approval error: {e}")
+            return {"success": False, "error": str(e)}
+    
+    @staticmethod
+    def _execute_list_pending_approvals(session: Session, tool_input: Dict[str, Any]) -> Dict[str, Any]:
+        """List all dictionary entries pending approval."""
+        try:
+            schema_filter = tool_input.get("schema")
+            table_filter = tool_input.get("table")
+            
+            query = select(DataDictionaryEntry).where(
+                DataDictionaryEntry.state == "pending_approval"
+            )
+            
+            if schema_filter:
+                query = query.where(DataDictionaryEntry.schema_name == schema_filter)
+            if table_filter:
+                query = query.where(DataDictionaryEntry.table_name == table_filter)
+            
+            query = query.order_by(
+                DataDictionaryEntry.updated_at.desc()
+            )
+            
+            pending_entries = session.exec(query).all()
+            
+            results = []
+            for entry in pending_entries:
+                results.append({
+                    "entry_id": entry.id,
+                    "column": f"{entry.schema_name}.{entry.table_name}.{entry.column_name}",
+                    "version": entry.version_number,
+                    "business_name": entry.business_name,
+                    "business_description": (entry.business_description or "")[:100],
+                    "source": entry.source,
+                    "submitted_at": entry.updated_at.isoformat() if entry.updated_at else None
+                })
+            
+            return {
+                "success": True,
+                "data": {
+                    "count": len(results),
+                    "pending_entries": results,
+                    "message": f"Found {len(results)} entries pending approval" if results else "No entries pending approval",
+                    "actions": "Use approve_dictionary_entry or reject_dictionary_entry with the entry_id"
+                }
+            }
+        except Exception as e:
+            logger.error(f"list_pending_approvals error: {e}")
+            return {"success": False, "error": str(e)}
+    
+    @staticmethod
+    def _execute_approve_dictionary_entry(session: Session, tool_input: Dict[str, Any]) -> Dict[str, Any]:
+        """Approve a pending dictionary entry."""
+        try:
+            entry_id = tool_input["entry_id"]
+            notes = tool_input.get("notes")
+            
+            entry = session.get(DataDictionaryEntry, entry_id)
+            if not entry:
+                return {"success": False, "error": f"Entry with ID {entry_id} not found"}
+            
+            if entry.state != "pending_approval":
+                return {"success": False, "error": f"Can only approve pending entries. Current state: {entry.state}"}
+            
+            approved = original_dict_service.approve_entry(session, entry_id, notes)
+            
+            return {
+                "success": True,
+                "data": {
+                    "message": f"Approved and published {approved.schema_name}.{approved.table_name}.{approved.column_name}",
+                    "entry_id": approved.id,
+                    "column": f"{approved.schema_name}.{approved.table_name}.{approved.column_name}",
+                    "version": approved.version_number,
+                    "state": approved.state,
+                    "is_active": approved.is_active
+                }
+            }
+        except ValueError as e:
+            return {"success": False, "error": str(e)}
+        except Exception as e:
+            logger.error(f"approve_dictionary_entry error: {e}")
+            return {"success": False, "error": str(e)}
+    
+    @staticmethod
+    def _execute_reject_dictionary_entry(session: Session, tool_input: Dict[str, Any]) -> Dict[str, Any]:
+        """Reject a pending dictionary entry."""
+        try:
+            entry_id = tool_input["entry_id"]
+            reason = tool_input.get("reason", "Rejected via chat")
+            
+            entry = session.get(DataDictionaryEntry, entry_id)
+            if not entry:
+                return {"success": False, "error": f"Entry with ID {entry_id} not found"}
+            
+            if entry.state != "pending_approval":
+                return {"success": False, "error": f"Can only reject pending entries. Current state: {entry.state}"}
+            
+            rejected = original_dict_service.reject_entry(session, entry_id, reason)
+            
+            return {
+                "success": True,
+                "data": {
+                    "message": f"Rejected {rejected.schema_name}.{rejected.table_name}.{rejected.column_name} - returned to draft",
+                    "entry_id": rejected.id,
+                    "column": f"{rejected.schema_name}.{rejected.table_name}.{rejected.column_name}",
+                    "version": rejected.version_number,
+                    "state": rejected.state,
+                    "rejection_reason": reason,
+                    "next_step": "The entry is now a draft again and can be edited before resubmitting"
+                }
+            }
+        except ValueError as e:
+            return {"success": False, "error": str(e)}
+        except Exception as e:
+            logger.error(f"reject_dictionary_entry error: {e}")
+            return {"success": False, "error": str(e)}
 
+    # =========================================================================
+    # ML DEVELOPMENT TOOL IMPLEMENTATIONS
+    # =========================================================================
+    
+    @staticmethod
+    def _get_ml_services():
+        """Get ML service instances."""
+        from sqlalchemy import create_engine
+        from core.config import settings
+        from domains.ml_development.service import (
+            MLRecipeService, MLRecipeVersionService, MLModelService,
+            MLRunService, MLMonitorService, MLSyntheticExampleService
+        )
+        
+        engine = create_engine(settings.database_url)
+        return {
+            "recipe": MLRecipeService(engine),
+            "version": MLRecipeVersionService(engine),
+            "model": MLModelService(engine),
+            "run": MLRunService(engine),
+            "monitor": MLMonitorService(engine),
+            "example": MLSyntheticExampleService(engine)
+        }
+    
+    @staticmethod
+    def _execute_list_ml_recipes(tool_input: Dict[str, Any]) -> Dict[str, Any]:
+        """List ML recipes."""
+        try:
+            services = ChatService._get_ml_services()
+            
+            recipes = services["recipe"].list_recipes(
+                model_family=tool_input.get("model_family"),
+                level=tool_input.get("level"),
+                status=tool_input.get("status"),
+                limit=tool_input.get("limit", 25)
+            )
+            
+            # Format for chat display
+            formatted = []
+            for r in recipes:
+                formatted.append({
+                    "id": r["id"],
+                    "name": r["name"],
+                    "model_family": r["model_family"],
+                    "level": r["level"],
+                    "status": r["status"],
+                    "tags": r.get("tags", []),
+                    "updated_at": r["updated_at"].isoformat() if r.get("updated_at") else None
+                })
+            
+            # Group by model family for summary
+            by_family = {}
+            for r in formatted:
+                family = r["model_family"]
+                if family not in by_family:
+                    by_family[family] = 0
+                by_family[family] += 1
+            
+            return {
+                "success": True,
+                "data": {
+                    "recipes": formatted,
+                    "total": len(formatted),
+                    "by_family": by_family,
+                    "summary": f"Found {len(formatted)} ML recipes"
+                }
+            }
+        except Exception as e:
+            logger.error(f"list_ml_recipes error: {e}")
+            return {"success": False, "error": str(e)}
+    
+    @staticmethod
+    def _execute_get_ml_recipe(tool_input: Dict[str, Any]) -> Dict[str, Any]:
+        """Get details about a specific ML recipe."""
+        try:
+            services = ChatService._get_ml_services()
+            recipe_id = tool_input["recipe_id"]
+            
+            recipe = services["recipe"].get_recipe(recipe_id)
+            if not recipe:
+                return {"success": False, "error": f"Recipe {recipe_id} not found"}
+            
+            # Get versions
+            versions = services["version"].list_versions(recipe_id)
+            
+            return {
+                "success": True,
+                "data": {
+                    "recipe": {
+                        "id": recipe["id"],
+                        "name": recipe["name"],
+                        "model_family": recipe["model_family"],
+                        "level": recipe["level"],
+                        "status": recipe["status"],
+                        "parent_id": recipe.get("parent_id"),
+                        "tags": recipe.get("tags", []),
+                        "created_at": recipe["created_at"].isoformat() if recipe.get("created_at") else None,
+                        "updated_at": recipe["updated_at"].isoformat() if recipe.get("updated_at") else None
+                    },
+                    "versions_count": len(versions),
+                    "latest_version": versions[0]["version_number"] if versions else None
+                }
+            }
+        except Exception as e:
+            logger.error(f"get_ml_recipe error: {e}")
+            return {"success": False, "error": str(e)}
+    
+    @staticmethod
+    def _execute_list_recipe_versions(tool_input: Dict[str, Any]) -> Dict[str, Any]:
+        """List all versions of an ML recipe."""
+        try:
+            services = ChatService._get_ml_services()
+            recipe_id = tool_input["recipe_id"]
+            
+            versions = services["version"].list_versions(recipe_id)
+            
+            formatted = []
+            for v in versions:
+                formatted.append({
+                    "version_id": v["version_id"],
+                    "version_number": v["version_number"],
+                    "created_by": v.get("created_by"),
+                    "change_note": v.get("change_note"),
+                    "created_at": v["created_at"].isoformat() if v.get("created_at") else None
+                })
+            
+            return {
+                "success": True,
+                "data": {
+                    "recipe_id": recipe_id,
+                    "versions": formatted,
+                    "total": len(formatted)
+                }
+            }
+        except Exception as e:
+            logger.error(f"list_recipe_versions error: {e}")
+            return {"success": False, "error": str(e)}
+    
+    @staticmethod
+    def _execute_get_recipe_version(tool_input: Dict[str, Any]) -> Dict[str, Any]:
+        """Get a specific recipe version with manifest."""
+        try:
+            services = ChatService._get_ml_services()
+            version_id = tool_input["version_id"]
+            
+            version = services["version"].get_version(version_id)
+            if not version:
+                return {"success": False, "error": f"Version {version_id} not found"}
+            
+            return {
+                "success": True,
+                "data": {
+                    "version_id": version["version_id"],
+                    "recipe_id": version["recipe_id"],
+                    "version_number": version["version_number"],
+                    "manifest": version.get("manifest_json", {}),
+                    "change_note": version.get("change_note"),
+                    "created_by": version.get("created_by"),
+                    "created_at": version["created_at"].isoformat() if version.get("created_at") else None
+                }
+            }
+        except Exception as e:
+            logger.error(f"get_recipe_version error: {e}")
+            return {"success": False, "error": str(e)}
+    
+    @staticmethod
+    def _execute_list_ml_models(tool_input: Dict[str, Any]) -> Dict[str, Any]:
+        """List ML models."""
+        try:
+            services = ChatService._get_ml_services()
+            
+            models = services["model"].list_models(
+                model_family=tool_input.get("model_family"),
+                status=tool_input.get("status"),
+                limit=tool_input.get("limit", 25)
+            )
+            
+            formatted = []
+            for m in models:
+                formatted.append({
+                    "id": m["id"],
+                    "name": m["name"],
+                    "model_family": m["model_family"],
+                    "status": m["status"],
+                    "recipe_id": m["recipe_id"],
+                    "owner": m.get("owner"),
+                    "updated_at": m["updated_at"].isoformat() if m.get("updated_at") else None
+                })
+            
+            # Count by status
+            by_status = {}
+            for m in formatted:
+                status = m["status"]
+                if status not in by_status:
+                    by_status[status] = 0
+                by_status[status] += 1
+            
+            return {
+                "success": True,
+                "data": {
+                    "models": formatted,
+                    "total": len(formatted),
+                    "by_status": by_status,
+                    "production_count": by_status.get("production", 0)
+                }
+            }
+        except Exception as e:
+            logger.error(f"list_ml_models error: {e}")
+            return {"success": False, "error": str(e)}
+    
+    @staticmethod
+    def _execute_get_ml_model(tool_input: Dict[str, Any]) -> Dict[str, Any]:
+        """Get details about a specific ML model."""
+        try:
+            services = ChatService._get_ml_services()
+            model_id = tool_input["model_id"]
+            
+            model = services["model"].get_model(model_id)
+            if not model:
+                return {"success": False, "error": f"Model {model_id} not found"}
+            
+            # Get recipe info
+            recipe = services["recipe"].get_recipe(model["recipe_id"])
+            
+            # Get recent runs for this model
+            runs = services["run"].list_runs(model_id=model_id, limit=5)
+            
+            return {
+                "success": True,
+                "data": {
+                    "model": {
+                        "id": model["id"],
+                        "name": model["name"],
+                        "model_family": model["model_family"],
+                        "status": model["status"],
+                        "owner": model.get("owner"),
+                        "recipe_id": model["recipe_id"],
+                        "recipe_version_id": model["recipe_version_id"],
+                        "created_at": model["created_at"].isoformat() if model.get("created_at") else None,
+                        "updated_at": model["updated_at"].isoformat() if model.get("updated_at") else None
+                    },
+                    "recipe_name": recipe["name"] if recipe else None,
+                    "recent_runs": len(runs),
+                    "last_run_status": runs[0]["status"] if runs else None
+                }
+            }
+        except Exception as e:
+            logger.error(f"get_ml_model error: {e}")
+            return {"success": False, "error": str(e)}
+    
+    @staticmethod
+    def _execute_list_ml_runs(tool_input: Dict[str, Any]) -> Dict[str, Any]:
+        """List ML runs."""
+        try:
+            services = ChatService._get_ml_services()
+            
+            runs = services["run"].list_runs(
+                model_id=tool_input.get("model_id"),
+                recipe_id=tool_input.get("recipe_id"),
+                status=tool_input.get("status"),
+                limit=tool_input.get("limit", 25)
+            )
+            
+            formatted = []
+            for r in runs:
+                formatted.append({
+                    "id": r["id"],
+                    "run_type": r["run_type"],
+                    "status": r["status"],
+                    "model_id": r.get("model_id"),
+                    "recipe_id": r["recipe_id"],
+                    "started_at": r["started_at"].isoformat() if r.get("started_at") else None,
+                    "finished_at": r["finished_at"].isoformat() if r.get("finished_at") else None,
+                    "has_metrics": bool(r.get("metrics_json"))
+                })
+            
+            # Count by status
+            by_status = {}
+            for r in formatted:
+                status = r["status"]
+                if status not in by_status:
+                    by_status[status] = 0
+                by_status[status] += 1
+            
+            return {
+                "success": True,
+                "data": {
+                    "runs": formatted,
+                    "total": len(formatted),
+                    "by_status": by_status
+                }
+            }
+        except Exception as e:
+            logger.error(f"list_ml_runs error: {e}")
+            return {"success": False, "error": str(e)}
+    
+    @staticmethod
+    def _execute_get_ml_run(tool_input: Dict[str, Any]) -> Dict[str, Any]:
+        """Get details about a specific ML run."""
+        try:
+            services = ChatService._get_ml_services()
+            run_id = tool_input["run_id"]
+            
+            run = services["run"].get_run(run_id)
+            if not run:
+                return {"success": False, "error": f"Run {run_id} not found"}
+            
+            return {
+                "success": True,
+                "data": {
+                    "run": {
+                        "id": run["id"],
+                        "run_type": run["run_type"],
+                        "status": run["status"],
+                        "model_id": run.get("model_id"),
+                        "recipe_id": run["recipe_id"],
+                        "recipe_version_id": run["recipe_version_id"],
+                        "started_at": run["started_at"].isoformat() if run.get("started_at") else None,
+                        "finished_at": run["finished_at"].isoformat() if run.get("finished_at") else None
+                    },
+                    "metrics": run.get("metrics_json", {}),
+                    "artifacts": run.get("artifacts_json", {}),
+                    "logs": run.get("logs_text", "")[:500] if run.get("logs_text") else None
+                }
+            }
+        except Exception as e:
+            logger.error(f"get_ml_run error: {e}")
+            return {"success": False, "error": str(e)}
+    
+    @staticmethod
+    def _execute_get_model_monitoring(tool_input: Dict[str, Any]) -> Dict[str, Any]:
+        """Get monitoring snapshots for a model."""
+        try:
+            services = ChatService._get_ml_services()
+            model_id = tool_input["model_id"]
+            limit = tool_input.get("limit", 10)
+            
+            snapshots = services["monitor"].list_snapshots(model_id, limit=limit)
+            
+            if not snapshots:
+                return {
+                    "success": True,
+                    "data": {
+                        "model_id": model_id,
+                        "message": "No monitoring snapshots found for this model",
+                        "snapshots": []
+                    }
+                }
+            
+            formatted = []
+            for s in snapshots:
+                formatted.append({
+                    "id": s["id"],
+                    "captured_at": s["captured_at"].isoformat() if s.get("captured_at") else None,
+                    "performance_metrics": s.get("performance_metrics_json", {}),
+                    "drift_metrics": s.get("drift_metrics_json", {}),
+                    "alerts": s.get("alerts_json", {})
+                })
+            
+            # Check for any alerts
+            has_alerts = any(s.get("alerts") for s in formatted)
+            
+            return {
+                "success": True,
+                "data": {
+                    "model_id": model_id,
+                    "snapshots": formatted,
+                    "total": len(formatted),
+                    "has_active_alerts": has_alerts,
+                    "latest_snapshot": formatted[0] if formatted else None
+                }
+            }
+        except Exception as e:
+            logger.error(f"get_model_monitoring error: {e}")
+            return {"success": False, "error": str(e)}
+    
+    @staticmethod
+    def _execute_get_synthetic_example(tool_input: Dict[str, Any]) -> Dict[str, Any]:
+        """Get synthetic example for a recipe."""
+        try:
+            services = ChatService._get_ml_services()
+            recipe_id = tool_input["recipe_id"]
+            
+            example = services["example"].get_example(recipe_id)
+            if not example:
+                return {
+                    "success": True,
+                    "data": {
+                        "recipe_id": recipe_id,
+                        "message": "No synthetic example found for this recipe",
+                        "example": None
+                    }
+                }
+            
+            return {
+                "success": True,
+                "data": {
+                    "recipe_id": recipe_id,
+                    "example": {
+                        "id": example["id"],
+                        "dataset_schema": example.get("dataset_schema_json", {}),
+                        "sample_rows": example.get("sample_rows_json", [])[:5],  # Limit rows
+                        "example_run": example.get("example_run_json", {}),
+                        "created_at": example["created_at"].isoformat() if example.get("created_at") else None
+                    }
+                }
+            }
+        except Exception as e:
+            logger.error(f"get_synthetic_example error: {e}")
+            return {"success": False, "error": str(e)}
+    
+    @staticmethod
+    def _execute_get_ml_summary(tool_input: Dict[str, Any]) -> Dict[str, Any]:
+        """Get overall ML development summary."""
+        try:
+            services = ChatService._get_ml_services()
+            
+            # Get counts
+            recipes = services["recipe"].list_recipes(limit=500)
+            models = services["model"].list_models(limit=500)
+            runs = services["run"].list_runs(limit=100)
+            
+            # Count by status
+            recipe_by_status = {}
+            for r in recipes:
+                status = r["status"]
+                recipe_by_status[status] = recipe_by_status.get(status, 0) + 1
+            
+            model_by_status = {}
+            for m in models:
+                status = m["status"]
+                model_by_status[status] = model_by_status.get(status, 0) + 1
+            
+            run_by_status = {}
+            for r in runs:
+                status = r["status"]
+                run_by_status[status] = run_by_status.get(status, 0) + 1
+            
+            # Count by family
+            recipe_by_family = {}
+            for r in recipes:
+                family = r["model_family"]
+                recipe_by_family[family] = recipe_by_family.get(family, 0) + 1
+            
+            # Recent activity
+            recent_runs = runs[:5] if runs else []
+            
+            return {
+                "success": True,
+                "data": {
+                    "summary": {
+                        "total_recipes": len(recipes),
+                        "total_models": len(models),
+                        "total_runs": len(runs),
+                        "production_models": model_by_status.get("production", 0),
+                        "approved_recipes": recipe_by_status.get("approved", 0)
+                    },
+                    "recipes_by_status": recipe_by_status,
+                    "recipes_by_family": recipe_by_family,
+                    "models_by_status": model_by_status,
+                    "runs_by_status": run_by_status,
+                    "recent_runs": [
+                        {
+                            "id": r["id"],
+                            "run_type": r["run_type"],
+                            "status": r["status"],
+                            "started_at": r["started_at"].isoformat() if r.get("started_at") else None
+                        }
+                        for r in recent_runs
+                    ]
+                }
+            }
+        except Exception as e:
+            logger.error(f"get_ml_summary error: {e}")
+            return {"success": False, "error": str(e)}

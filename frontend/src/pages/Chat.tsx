@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Send, Plus, Database, MessageSquare, Settings, Loader2, AlertCircle } from 'lucide-react'
+import { Plus, Database, MessageSquare, Loader2 } from 'lucide-react'
 import {
   createConversation,
   listConversations,
@@ -8,6 +8,7 @@ import {
   sendMessage,
   deleteConversation
 } from '../api/client'
+import ChatAutocomplete from '../components/ChatAutocomplete'
 
 interface Conversation {
   id: string
@@ -705,49 +706,18 @@ export default function Chat() {
               backgroundColor: '#0f1419',
               borderTop: '1px solid rgba(168, 216, 255, 0.2)'
             }}>
-              <div className="flex gap-3">
-            <input
-              type="text"
-                  value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && handleSendMessage()}
-                  disabled={isStreaming}
-                  placeholder="Ask about your data..."
-                  className="flex-1 px-4 py-3 rounded-xl focus:outline-none transition-all"
-                  style={{
-                    backgroundColor: '#0a0e1a',
-                    border: '1px solid rgba(168, 216, 255, 0.3)',
-                    color: '#f0f0f5'
-                  }}
-                  onFocus={(e) => e.target.style.border = '1px solid rgba(168, 216, 255, 0.6)'}
-                  onBlur={(e) => e.target.style.border = '1px solid rgba(168, 216, 255, 0.3)'}
-            />
-            <button
-                  onClick={handleSendMessage}
-                  disabled={!inputValue.trim() || isStreaming}
-                  className="px-6 py-3 rounded-xl transition-all duration-200"
-                  style={!inputValue.trim() || isStreaming ? {
-                    backgroundColor: 'rgba(168, 216, 255, 0.1)',
-                    border: '1px solid rgba(168, 216, 255, 0.2)',
-                    color: '#6a8399',
-                    cursor: 'not-allowed'
-                  } : {
-                    background: 'linear-gradient(90deg, rgba(168, 216, 255, 0.2), rgba(196, 181, 253, 0.2))',
-                    border: '1px solid rgba(168, 216, 255, 0.4)',
-                    color: '#a8d8ff'
-                  }}
-                >
-                  {isStreaming ? (
-                    <Loader2 size={20} className="animate-spin" />
-                  ) : (
-                    <Send size={20} />
-                  )}
-            </button>
-          </div>
+              <ChatAutocomplete
+                value={inputValue}
+                onChange={setInputValue}
+                onSend={handleSendMessage}
+                disabled={isStreaming}
+                placeholder="Ask about your data... (Tab to autocomplete)"
+                messages={messages}
+              />
               <p className="text-xs mt-2" style={{ color: '#8ab3cc' }}>
                 The AI can explore your database using tools like list_tables, profile_table, and run_query
-          </p>
-        </div>
+              </p>
+            </div>
           </>
         ) : (
           <div className="flex-1 flex items-center justify-center" style={{ backgroundColor: '#0a0e1a' }}>

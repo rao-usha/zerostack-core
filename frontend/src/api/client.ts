@@ -282,98 +282,6 @@ export const executeExplorerQuery = async (
   return response.data
 }
 
-// NEX Collector API (localhost:8080)
-const collectorClient = axios.create({
-  baseURL: (import.meta as any).env?.VITE_COLLECTOR_API_URL || 'http://localhost:8080',
-  headers: {
-    'Content-Type': 'application/json',
-  },
-})
-
-// Health check
-export const checkCollectorHealth = async () => {
-  const response = await collectorClient.get('/healthz')
-  return response.data
-}
-
-// Context Docs API
-export const listCollectorContexts = async () => {
-  const response = await collectorClient.get('/v1/contexts/variants')
-  return response.data || []
-}
-
-export const getCollectorContext = async (contextId: string) => {
-  const response = await collectorClient.get(`/v1/contexts/${contextId}`)
-  return response.data
-}
-
-export const getCollectorVariant = async (variantId: string) => {
-  const response = await collectorClient.get(`/v1/contexts/variants/${variantId}`)
-  return response.data
-}
-
-// Datasets API
-export const listCollectorDatasets = async () => {
-  const response = await collectorClient.get('/v1/datasets')
-  return response.data || []
-}
-
-export const getCollectorDataset = async (datasetId: string) => {
-  const response = await collectorClient.get(`/v1/datasets/${datasetId}`)
-  return response.data
-}
-
-// Explorer API - query all tables
-export const listExplorerTables = async () => {
-  const response = await collectorClient.get('/v1/explorer/tables')
-  return response.data.tables || []
-}
-
-export const queryTable = async (tableName: string, limit: number = 100, offset: number = 0) => {
-  const response = await collectorClient.get(`/v1/explorer/tables/${tableName}`, {
-    params: { limit, offset }
-  })
-  return response.data
-}
-
-export const getTableCount = async (tableName: string) => {
-  const response = await collectorClient.get(`/v1/explorer/tables/${tableName}/count`)
-  return response.data
-}
-
-// Distillation API
-export const distillExamples = async (
-  variantIds: string[],
-  exampleType: 'instruction' | 'qa' | 'task',
-  quotaPerVariant: number = 10,
-  rules: Record<string, any> = {}
-) => {
-  const response = await collectorClient.post('/v1/datasets/distill/examples', {
-    variant_ids: variantIds,
-    example_type: exampleType,
-    quota_per_variant: quotaPerVariant,
-    rules
-  })
-  return response.data
-}
-
-export const buildDistilledDataset = async (
-  name: string,
-  version: string,
-  kind: 'train' | 'eval' | 'synthetic' | 'finetune_pack',
-  variantIds: string[],
-  filters: Record<string, any> = {}
-) => {
-  const response = await collectorClient.post('/v1/datasets/distill/build', {
-    name,
-    version,
-    kind,
-    variant_ids: variantIds,
-    filters
-  })
-  return response.data
-}
-
 // =====================================================================
 // Chat API functions
 // =====================================================================
@@ -585,6 +493,7 @@ export interface DictionaryEntry {
   column_name: string
   version_number: number
   is_active: boolean
+  state: string  // "draft", "pending_approval", "published"
   version_notes?: string
   business_name?: string
   business_description?: string
@@ -650,6 +559,27 @@ export const getColumnVersions = async (
 
 export const activateDictionaryVersion = async (entryId: number): Promise<DictionaryEntry> => {
   const response = await client.post(`/api/v1/data-dictionary/activate/${entryId}`)
+  return response.data
+}
+
+// Workflow actions
+export const submitForApproval = async (entryId: number): Promise<DictionaryEntry> => {
+  const response = await client.post(`/api/v1/data-dictionary/${entryId}/submit-for-approval`)
+  return response.data
+}
+
+export const approveEntry = async (entryId: number, notes?: string): Promise<DictionaryEntry> => {
+  const response = await client.post(`/api/v1/data-dictionary/${entryId}/approve`, { notes })
+  return response.data
+}
+
+export const rejectEntry = async (entryId: number, notes?: string): Promise<DictionaryEntry> => {
+  const response = await client.post(`/api/v1/data-dictionary/${entryId}/reject`, { notes })
+  return response.data
+}
+
+export const publishEntry = async (entryId: number, notes?: string): Promise<DictionaryEntry> => {
+  const response = await client.post(`/api/v1/data-dictionary/${entryId}/publish`, { notes })
   return response.data
 }
 
@@ -879,3 +809,175 @@ export const getContextBlob = async (
   return response.data
 }
 
+// --- Files API ---
+
+export interface FileLocation {
+  id: string
+  name: string
+  type: string
+  local_path: string | null
+  is_active: boolean
+  last_scanned_at: string | null
+  created_at: string
+  updated_at: string
+  file_count: number
+}
+
+export interface FileAsset {
+  id: string
+  location_id: string
+  location_name: string
+  relative_path: string
+  file_name: string
+  ext: string
+  mime_type: string | null
+  last_seen_at: string
+  created_at: string
+  latest_version: FileVersion | null
+  version_count: number
+  has_changes: boolean
+}
+
+export interface FileVersion {
+  id: string
+  file_asset_id: string
+  detected_at: string
+  modified_at: string
+  size_bytes: number
+  content_hash: string
+  row_count_estimate: number | null
+  table_count: number
+}
+
+export interface ColumnSchema {
+  name: string
+  data_type: string
+  nullable: boolean
+  example_values: string[] | null
+}
+
+export interface FileTable {
+  id: string
+  file_version_id: string
+  table_name: string
+  row_count: number
+  column_count: number
+  schema: ColumnSchema[]
+  sample_data: any[][] | null
+  is_published: boolean
+  published_dataset_id: string | null
+  created_at: string
+}
+
+export interface FileAssetDetail {
+  asset: FileAsset
+  versions: FileVersion[]
+  latest_tables: FileTable[]
+}
+
+// File Locations
+export const createFileLocation = async (
+  name: string,
+  type: 'local' | 'gdrive',
+  local_path?: string,
+  gdrive_folder_id?: string,
+  gdrive_include_shared_drives?: boolean,
+  external_account_id?: string
+) => {
+  const response = await client.post('/api/files/locations', {
+    name,
+    type,
+    local_path,
+    gdrive_folder_id,
+    gdrive_include_shared_drives,
+    external_account_id,
+  })
+  return response.data as FileLocation
+}
+
+export const listFileLocations = async () => {
+  const response = await client.get('/api/files/locations')
+  return response.data as FileLocation[]
+}
+
+export const getFileLocation = async (locationId: string) => {
+  const response = await client.get(`/api/files/locations/${locationId}`)
+  return response.data as FileLocation
+}
+
+export const updateFileLocation = async (
+  locationId: string, 
+  updates: { name?: string; local_path?: string; is_active?: boolean }
+) => {
+  const response = await client.patch(`/api/files/locations/${locationId}`, updates)
+  return response.data as FileLocation
+}
+
+export const deleteFileLocation = async (locationId: string) => {
+  await client.delete(`/api/files/locations/${locationId}`)
+}
+
+export const scanFileLocation = async (locationId: string) => {
+  const response = await client.post(`/api/files/locations/${locationId}/scan`)
+  return response.data
+}
+
+// File Assets
+export const listFileAssets = async (locationId?: string) => {
+  const params = locationId ? { location_id: locationId } : {}
+  const response = await client.get('/api/files/assets', { params })
+  return response.data as FileAsset[]
+}
+
+export const getFileAssetDetail = async (assetId: string) => {
+  const response = await client.get(`/api/files/assets/${assetId}`)
+  return response.data as FileAssetDetail
+}
+
+// Table Preview
+export const previewFileTable = async (
+  tableId: string, 
+  limit: number = 100, 
+  offset: number = 0
+) => {
+  const response = await client.post('/api/files/tables/preview', {
+    table_id: tableId,
+    limit,
+    offset
+  })
+  return response.data
+}
+
+// Publish Table
+export const publishFileTable = async (
+  tableId: string,
+  datasetName?: string,
+  description?: string
+) => {
+  const response = await client.post(`/api/files/tables/${tableId}/publish`, {
+    table_id: tableId,
+    dataset_name: datasetName,
+    description
+  })
+  return response.data
+}
+
+// Google Drive OAuth
+export interface ExternalAccount {
+  id: string
+  provider: string
+  account_email: string
+  scopes: string[]
+  token_expiry: string | null
+  created_at: string
+}
+
+export const getGDriveAuthUrl = async () => {
+  const response = await client.get('/api/files/gdrive/auth/url')
+  return response.data as { auth_url: string; state: string }
+}
+
+export const listGDriveAccounts = async () => {
+  const response = await client.get('/api/files/gdrive/accounts')
+  return response.data as ExternalAccount[]
+}

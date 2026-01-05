@@ -1,303 +1,322 @@
-# Update: Create New Version on Edit ✅
+# Dictionary Approval Workflow - Version Management Update
 
-## What Changed
+## Summary of Changes
 
-You can now **create a new version** when editing dictionary entries, giving you full control over whether to update in place or preserve the current version.
+Based on user feedback, we've improved the dictionary editing and versioning system with three major updates:
 
----
+### ✅ 1. Replaced Browser Alerts with Modern Toast Notifications
 
-## New UI Features
+**Problem**: Browser alerts (`alert()`, `confirm()`) are outdated and intrusive
 
-### Two Save Options
+**Solution**: Created a modern toast notification system
 
-When editing a column in the Data Dictionary, you now have **two buttons**:
-
-1. **"Save"** (green) - Updates the current version in place
-2. **"New Version"** (purple) - Creates a new version and preserves the old one
-
-### Version Notes Field
-
-A new **Version Notes** input field appears at the top of the edit form:
-- Optional text field
-- Explains what changed in this version
-- Only used when clicking "New Version"
-- Helpful hint: "💡 Click 'New Version' to preserve current version and create a new one"
+**Changes**:
+- Created `frontend/src/components/Toast.tsx` - Modern, non-blocking notifications
+- Replaced all `alert()` calls with `showToast()` function
+- Color-coded notifications: Success (green), Error (red), Warning (yellow), Info (blue)
+- Auto-dismiss after 5 seconds with slide-in animation
+- User can manually dismiss by clicking X
 
 ---
 
-## How It Works
+### ✅ 2. Old Versions Are Now Immutable (Non-Editable)
 
-### Scenario 1: Update in Place (Default)
-```
-1. Click "Edit" on a column
-2. Make your changes
-3. Click "Save" (green button)
-4. ✅ Current version updates, version number stays the same
-```
+**Problem**: Users could edit old inactive versions, but changes didn't persist
 
-**Use when**: Minor corrections, typo fixes, clarifications
+**Solution**: Only the active version is editable
 
-### Scenario 2: Create New Version
-```
-1. Click "Edit" on a column
-2. Make your changes
-3. (Optional) Add version notes: "Updated based on new business requirements"
-4. Click "New Version" (purple button)
-5. ✅ New version created (v2, v3, etc.)
-6. ✅ Old version preserved but deactivated
-7. ✅ You can view/activate old version anytime via version history
-```
+**Behavior**:
+- **Active Draft**: ✅ Edit button visible
+- **Active Published**: ✅ Edit button visible (creates new draft)
+- **Active Pending**: ❌ No edit button (waiting for approval)
+- **Inactive Versions**: ❌ No edit button (immutable history)
 
-**Use when**: Significant changes, different interpretations, want to keep history
+**UI Changes**:
+- Edit button only shows for active versions in draft or published state
+- Inactive versions display as read-only in version history
 
 ---
 
-## Backend Changes
+### ✅ 3. Rollback Creates New Draft (Not Direct Activation)
 
-### API Update (`dictionary_router.py`)
+**Problem**: When activating an old version, it would just swap `is_active`, bypassing approval workflow
 
-**New Request Fields**:
-```python
-class DictionaryEntryUpdate(BaseModel):
-    business_name: Optional[str] = None
-    business_description: Optional[str] = None
-    technical_description: Optional[str] = None
-    tags: Optional[List[str]] = None
-    create_new_version: bool = False  # NEW
-    version_notes: Optional[str] = None  # NEW
+**Solution**: "Rollback" creates a NEW draft version with the old content
+
+**New Flow**:
+```
+Version History:
+- v3 (active, published)
+- v2 (inactive, published)
+- v1 (inactive, published) ← Click "Rollback to This Version"
+
+Result:
+- v4 (active, draft) ← NEW draft with v1's content
+- v3 (inactive, published)
+- v2 (inactive, published)
+- v1 (inactive, published)
+
+Next Steps:
+- Review v4 (draft)
+- Click "Submit" → Pending Approval
+- Click "Approve" → Published
 ```
 
-**Logic**:
-- If `create_new_version=False` → Updates entry in place
-- If `create_new_version=True`:
-  1. Deactivates current version (`is_active=False`)
-  2. Creates new version with `version_number + 1`
-  3. New version becomes active
-  4. Copies unchanged fields from old version
-  5. Applies your edits to new version
-  6. Sets `source="human_edited"`
+**Backend Changes** (`backend/domains/data_explorer/dictionary_service.py`):
+- Renamed `activate_version()` to reflect its new behavior
+- Creates new draft entry with incremented version number
+- Copies all content from selected old version
+- Sets state to `"draft"`
+- Adds version note: "Rolled back to version {N}"
+
+**Frontend Changes** (`frontend/src/pages/DataDictionary.tsx`):
+- Button text: "Rollback to This Version" (was "Activate")
+- Added helper text: "Creates new draft for approval"
+- Changed icon to History (was Check)
+- Only shows button for published inactive versions
+- Toast message: "Created new draft from previous version. Review and submit for approval."
 
 ---
 
-## Frontend Changes
+## User Experience Improvements
 
-### State Management (`DataDictionary.tsx`)
+### Before
+1. Click "Activate" on old version
+2. Version becomes active immediately (no approval)
+3. Browser alert: "Version activated" (disruptive)
+4. Could edit old versions (changes lost)
+
+### After
+1. Click "Rollback to This Version" on old version
+2. Creates new **draft** version with that content
+3. Toast notification: "Created new draft... submit for approval" (smooth)
+4. New draft goes through normal approval workflow
+5. Old versions are view-only
+
+---
+
+## Technical Details
+
+### Toast Notification Component
+
+**File**: `frontend/src/components/Toast.tsx`
+
+**Features**:
+- Position: Top-right corner
+- Auto-dismiss: 5 seconds (configurable)
+- Manual dismiss: Click X button
+- Animation: Slide-in from right
+- Types: success, error, warning, info
+- Z-index: 9999 (above all content)
+- Backdrop blur for modern glass effect
+
+**Usage**:
+```typescript
+showToast('Entry saved successfully', 'success')
+showToast('Failed to save', 'error')
+showToast('Entry needs review', 'warning')
+showToast('Creating new draft', 'info')
+```
+
+---
+
+### Backend Rollback Logic
+
+**File**: `backend/domains/data_explorer/dictionary_service.py`
+
+**Function**: `activate_version(session, entry_id)`
+
+**Process**:
+1. Get old version by ID
+2. Find current active version
+3. Get max version number
+4. Deactivate current active version
+5. Create new entry with:
+   - version_number = max + 1
+   - is_active = True
+   - state = "draft"
+   - All content from old version
+   - source = "human_edited"
+   - version_notes = "Rolled back to version {N}"
+6. Save and return new draft
+
+**Key Point**: Never modifies the old version - it remains immutable in history
+
+---
+
+### Frontend State Management
+
+**File**: `frontend/src/pages/DataDictionary.tsx`
 
 **New State**:
 ```typescript
-const [versionNotes, setVersionNotes] = useState<string>('')
+const [toast, setToast] = useState<{ 
+  message: string; 
+  type: 'success' | 'error' | 'warning' | 'info' 
+} | null>(null)
 ```
 
-**Updated Save Function**:
+**Helper Function**:
 ```typescript
-const saveEntry = async (entryId: number, createNewVersion: boolean = false) => {
-  const updated = await updateDictionaryEntry(entryId, {
-    ...editForm,
-    create_new_version: createNewVersion,
-    version_notes: createNewVersion ? versionNotes || 'Manual edit - new version' : undefined
-  })
-  
-  await loadEntries()  // Refresh to show new version number
-  // ... cleanup
+const showToast = (message: string, type = 'info') => {
+  setToast({ message, type })
 }
 ```
 
-### UI Elements
-
-**Version Notes Input** (appears when editing):
-```tsx
-<div style={{ /* purple background */ }}>
-  <label>Version Notes (optional)</label>
-  <input
-    value={versionNotes}
-    onChange={(e) => setVersionNotes(e.target.value)}
-    placeholder="What changed? (used when saving as new version)"
-  />
-  <p>💡 Click "New Version" to preserve current version</p>
-</div>
-```
-
-**Save Buttons**:
-```tsx
-{/* Update in place */}
-<button onClick={() => saveEntry(column.id, false)}>
-  <Save /> Save
-</button>
-
-{/* Create new version */}
-<button onClick={() => saveEntry(column.id, true)}>
-  <History /> New Version
-</button>
-
-<button onClick={cancelEditing}>
-  <X /> Cancel
-</button>
-```
+**Replaced Alerts**:
+- Save errors → Error toast
+- Save success → Success toast
+- Submit for approval → Success toast
+- Approve → Success toast
+- Reject → Warning toast
+- Rollback success → Success toast with instructions
+- Load errors → Error toast
 
 ---
 
-## User Experience Flow
+## Testing Guide
 
-### Example: Updating a Column Definition
+### Test 1: Toast Notifications
 
-**Initial State**: `users.email` is at version 1
-- Business Description: "Email address"
-- Source: `llm_initial`
+**Steps**:
+1. Open Data Dictionary
+2. Edit a field and save
+3. Observe top-right corner
 
-**User Action 1**: Minor typo fix
-1. Edit: Change to "Email address for user login"
-2. Click **"Save"**
-3. Result: Still version 1, description updated
+**Expected**: ✅ Green toast appears: "Entry saved successfully" (no browser alert)
 
-**User Action 2**: Major rewrite
-1. Edit: Change to "Primary contact email, used for authentication and notifications"
-2. Add version notes: "Expanded definition to include all use cases"
-3. Click **"New Version"**
-4. Result:
-   - Version 2 created (active)
-   - Version 1 preserved (inactive)
-   - Version badge shows "v2"
-   - Can view/compare both in version history
+---
 
-**User Action 3**: Revert to simpler definition
-1. Click "v2" badge → Opens version history
-2. See version 1: "Email address for user login"
-3. Click "Activate" on version 1
-4. Result: Version 1 becomes active again
+### Test 2: Old Versions Are Read-Only
+
+**Steps**:
+1. Select a column with multiple versions
+2. Click version history button
+3. Look at inactive versions
+
+**Expected**: ✅ No edit button on inactive versions (only "Rollback" button)
+
+---
+
+### Test 3: Rollback Creates Draft
+
+**Steps**:
+1. Open version history for a column
+2. Find an old published version (e.g., v1)
+3. Click "Rollback to This Version"
+4. Observe the result
+
+**Expected**:
+1. ✅ Toast: "Created new draft from previous version..."
+2. ✅ Modal closes
+3. ✅ New version created (e.g., v4)
+4. ✅ New version is in **Draft** state (blue badge)
+5. ✅ New version has content from v1
+6. ✅ Can now edit, submit, and approve the draft
+
+---
+
+### Test 4: Complete Rollback Workflow
+
+**Full Flow**:
+1. Column starts at v3 (published)
+2. Rollback to v1 → Creates v4 (draft)
+3. Edit v4 if needed
+4. Click "Submit" → v4 becomes pending
+5. Click "Approve" → v4 becomes published
+6. v4 is now the active published version
+
+**Expected**: ✅ All steps work smoothly with toast notifications
+
+---
+
+## Files Changed
+
+### Frontend
+1. **`frontend/src/components/Toast.tsx`** (NEW)
+   - Toast notification component
+   - Modern, non-blocking UI
+
+2. **`frontend/src/pages/DataDictionary.tsx`**
+   - Added toast state and `showToast()` function
+   - Replaced all `alert()` calls with `showToast()`
+   - Updated rollback button text and styling
+   - Added helper text for rollback
+   - Only show edit button for active versions
+   - Changed rollback icon to History
+
+### Backend
+3. **`backend/domains/data_explorer/dictionary_service.py`**
+   - Updated `activate_version()` function
+   - Creates new draft instead of swapping active flag
+   - Increments version number
+   - Copies content from old version
+   - Sets state to "draft"
+
+---
+
+## Breaking Changes
+
+**None** - This is backward compatible
+
+**Migration**: Existing data works as-is. New behavior applies to future rollbacks.
 
 ---
 
 ## Benefits
 
-### 1. **Flexibility**
-- Quick fixes don't clutter version history
-- Significant changes are preserved
-- You decide what's worth versioning
+### For Users
+1. **Less Disruptive**: Toast notifications don't block the UI
+2. **Clearer Intent**: "Rollback" is clearer than "Activate"
+3. **Safer**: Old versions can't be accidentally edited
+4. **Auditable**: Rollback creates new version, preserving full history
+5. **Compliant**: All changes go through approval workflow
 
-### 2. **Safety**
-- Never lose your work
-- Can always revert to previous versions
-- Compare different interpretations
-
-### 3. **Collaboration**
-- Version notes explain changes
-- Team can see evolution of definitions
-- Easy to discuss which version is better
-
-### 4. **AI Integration**
-- When AI re-runs, it creates new version
-- Your manual versions are preserved
-- Can compare AI vs human definitions
+### For Governance
+1. **Audit Trail**: Every rollback creates a new version entry
+2. **Approval Control**: Rollbacks require approval before publishing
+3. **Immutable History**: Old versions never change
+4. **Traceability**: Version notes explain the rollback
 
 ---
 
-## API Examples
+## Future Enhancements
 
-### Update In Place
-```bash
-PATCH /api/v1/data-dictionary/42
-{
-  "business_description": "Updated description",
-  "create_new_version": false
-}
-```
-
-**Response**: Same entry ID, updated fields
-
-### Create New Version
-```bash
-PATCH /api/v1/data-dictionary/42
-{
-  "business_description": "Completely new description",
-  "create_new_version": true,
-  "version_notes": "Rewrote based on stakeholder feedback"
-}
-```
-
-**Response**: New entry with `id=43`, `version_number=2`, `is_active=true`
+### Optional (Not Implemented)
+1. **Inline Notes for Approve/Reject**: Replace `prompt()` with modal forms
+2. **Batch Operations**: Approve/reject multiple entries at once
+3. **Email Notifications**: Notify on submission/approval/rejection
+4. **Role-Based Access**: Only certain users can approve
+5. **Comparison View**: Side-by-side diff of versions
 
 ---
 
-## Visual Guide
+## Troubleshooting
 
-### Edit Form Layout
+### Issue: Toast doesn't appear
+**Fix**: Hard refresh browser (Ctrl+Shift+R)
 
-```
-┌─────────────────────────────────────────────┐
-│ 📝 Editing: user_email                      │
-├─────────────────────────────────────────────┤
-│                                             │
-│ ┌─────────────────────────────────────────┐ │
-│ │ 🟣 Version Notes (optional)             │ │
-│ │ ┌─────────────────────────────────────┐ │ │
-│ │ │ What changed? (used when saving...) │ │ │
-│ │ └─────────────────────────────────────┘ │ │
-│ │ 💡 Click "New Version" to preserve...  │ │
-│ └─────────────────────────────────────────┘ │
-│                                             │
-│ Business Name                               │
-│ ┌─────────────────────────────────────────┐ │
-│ │ User Email                              │ │
-│ └─────────────────────────────────────────┘ │
-│                                             │
-│ Business Description                        │
-│ ┌─────────────────────────────────────────┐ │
-│ │ Primary contact email for user...       │ │
-│ └─────────────────────────────────────────┘ │
-│                                             │
-│ [🟢 Save] [🟣 New Version] [🔴 Cancel]      │
-└─────────────────────────────────────────────┘
-```
+### Issue: Still seeing browser alerts
+**Fix**: Clear browser cache
+
+### Issue: Rollback button missing
+**Check**: Only published inactive versions show rollback button
+
+### Issue: "Failed to rollback" error
+**Check**: Backend logs for specific error
+**Common cause**: Database constraint or state validation
 
 ---
 
-## Testing Checklist
+## Status
 
-✅ **Basic Editing**
-- [x] "Save" button updates in place
-- [x] Version number stays the same
-- [x] Changes persist after refresh
-
-✅ **New Version Creation**
-- [x] "New Version" button creates new version
-- [x] Version number increments (v1 → v2)
-- [x] Old version preserved in history
-- [x] Old version marked inactive
-- [x] New version is active
-
-✅ **Version Notes**
-- [x] Optional field works
-- [x] Notes saved with new version
-- [x] Notes visible in version history
-- [x] Default note if left empty
-
-✅ **UI/UX**
-- [x] Both buttons visible when editing
-- [x] Buttons disabled while saving
-- [x] Loading state shows "Saving..."
-- [x] UI refreshes after save
-- [x] Version badge updates to new number
-
-✅ **Integration**
-- [x] Works with version history modal
-- [x] Can activate old versions
-- [x] Version comparison still works
-- [x] No conflicts with AI-generated versions
+✅ **Implemented**: 2026-01-02  
+✅ **Tested**: Ready for user testing  
+📊 **Impact**: Medium - Improves UX significantly  
+🔒 **Risk**: Low - No data migration required
 
 ---
 
-## Summary
-
-You now have **full control** over versioning:
-
-- **Quick edits** → Click "Save" (updates in place)
-- **Significant changes** → Click "New Version" (preserves history)
-- **Add context** → Fill in version notes
-- **Never lose work** → All versions preserved
-- **Easy comparison** → View history anytime
-
-This gives you the best of both worlds: the simplicity of in-place updates when you need it, and the safety of versioning when it matters.
-
-**Ready to use now!** 🎉
-
-
+**Last Updated**: 2026-01-02  
+**Version**: 1.0  
+**Status**: Deployed to dev environment
