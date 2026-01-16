@@ -43,7 +43,15 @@ from domains.chat.router import router as chat_router
 from domains.ml_development.router import router as ml_development_router
 from domains.evaluation_packs.router import router as evaluation_packs_router
 from domains.distillation.router import router as distillation_router
-# from domains.files.router import router as files_router  # Temporarily disabled - missing dependencies
+from domains.highlighted_datasets.router import router as highlighted_datasets_router
+from domains.interactions.router import router as interactions_router
+from domains.drift.router import router as drift_router
+from domains.schedules.router import router as schedules_router
+from domains.data_connections.router import router as data_connections_router
+from domains.notebooks.router import router as notebooks_router
+from domains.files.router import router as files_router
+from domains.lineage.router import router as lineage_router
+from domains.synthetic.router import router as synthetic_router
 
 # Core setup
 from core.config import settings
@@ -89,7 +97,75 @@ app.include_router(chat_router, prefix=settings.api_prefix)
 app.include_router(ml_development_router, prefix=settings.api_prefix)
 app.include_router(evaluation_packs_router, prefix=settings.api_prefix)
 app.include_router(distillation_router, prefix=settings.api_prefix)
-# app.include_router(files_router)  # Temporarily disabled - missing dependencies
+app.include_router(highlighted_datasets_router, prefix=settings.api_prefix)
+app.include_router(interactions_router, prefix=settings.api_prefix)
+app.include_router(drift_router, prefix=settings.api_prefix)
+app.include_router(schedules_router, prefix=settings.api_prefix)
+app.include_router(data_connections_router, prefix=settings.api_prefix)
+app.include_router(notebooks_router, prefix=settings.api_prefix)
+app.include_router(files_router)
+app.include_router(lineage_router)
+app.include_router(synthetic_router, prefix=settings.api_prefix)
+
+
+# ========================================
+# Background Tasks (GPU Runner Finalizer)
+# ========================================
+import asyncio
+from contextlib import asynccontextmanager
+
+# Global finalizer reference
+_finalizer = None
+
+
+@asynccontextmanager
+async def lifespan(app):
+    """Application lifespan handler - starts/stops background tasks."""
+    global _finalizer
+    
+    # Start background finalizer if compute adapter is not local-only dev
+    if settings.compute_adapter != "disabled":
+        try:
+            from services.compute import get_compute_adapter
+            from services.compute.finalizer import RunFinalizer
+            from services.object_store import ObjectStoreClient
+            from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+            from sqlalchemy.orm import sessionmaker
+            
+            # Create async engine
+            async_url = settings.database_url.replace('postgresql+psycopg', 'postgresql+asyncpg')
+            if 'asyncpg' not in async_url:
+                async_url = settings.database_url.replace('postgresql://', 'postgresql+asyncpg://')
+            
+            async_engine = create_async_engine(async_url)
+            async_session_factory = sessionmaker(async_engine, class_=AsyncSession, expire_on_commit=False)
+            
+            # Initialize finalizer
+            compute_adapter = get_compute_adapter()
+            object_store = ObjectStoreClient.get_instance()
+            
+            _finalizer = RunFinalizer(
+                compute_adapter=compute_adapter,
+                object_store=object_store,
+                async_session_factory=async_session_factory
+            )
+            
+            # Start finalizer in background
+            asyncio.create_task(_finalizer.start())
+            print(f"✅ GPU Runner finalizer started (polling every {settings.finalizer_poll_interval_seconds}s)")
+        except Exception as e:
+            print(f"⚠️ Could not start GPU Runner finalizer: {e}")
+    
+    yield
+    
+    # Shutdown
+    if _finalizer:
+        await _finalizer.stop()
+        print("🛑 GPU Runner finalizer stopped")
+
+
+# Update app to use lifespan
+app.router.lifespan_context = lifespan
 
 # Initialize services
 db = Database()
@@ -106,7 +182,7 @@ DATA_DIR.mkdir(exist_ok=True)
 
 @app.get("/")
 async def root():
-    return {"message": "NEX.AI - AI Native Data Platform API", "status": "running"}
+    return {"message": "zerostack - AI Native Data Platform API", "status": "running"}
 
 @app.get("/health/config")
 async def health_config():
@@ -136,7 +212,7 @@ async def health():
     
     health_status = {
         "status": "healthy",
-        "service": "NEX.AI API",
+        "service": "zerostack API",
         "database": "unknown"
     }
     

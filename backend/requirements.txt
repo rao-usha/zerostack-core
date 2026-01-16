@@ -5,7 +5,8 @@ numpy==1.26.2
 pandas==2.1.3
 scikit-learn==1.3.2
 sqlalchemy==2.0.23
-openai==1.12.0
+openai==1.54.0
+httpx==0.27.2
 langchain==0.0.335
 python-dotenv==1.0.0
 pydantic==2.5.0
@@ -17,6 +18,7 @@ seaborn==0.13.0
 psutil==5.9.6
 aiofiles==23.2.1
 alembic==1.13.1
+sqlparse==0.4.4
 psycopg[binary]==3.1.18
 sqlmodel==0.0.16
 PyPDF2==3.0.1
@@ -26,3 +28,18 @@ anthropic>=0.18.0
 google-generativeai>=0.3.0
 google-auth-oauthlib>=1.0.0
 
+# GPU Runner dependencies
+boto3>=1.34.0
+asyncpg>=0.29.0
+asyncssh>=2.14.0
+pyarrow>=15.0.0
+
+# Synthetic data generation
+sdv>=1.10.0
+faker>=22.0.0
+
+# Testing dependencies
+pytest>=7.4.0
+pytest-cov>=4.1.0
+pytest-mock>=3.11.1
+pytest-asyncio>=0.21.0
