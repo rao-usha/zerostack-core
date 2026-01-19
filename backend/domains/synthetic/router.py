@@ -6,8 +6,9 @@ from uuid import UUID
 from collections import OrderedDict
 
 import pandas as pd
-from fastapi import APIRouter, HTTPException, Query, Depends, UploadFile, File
+from fastapi import APIRouter, HTTPException, Query, Depends, UploadFile, File, Request
 from fastapi.responses import StreamingResponse, RedirectResponse
+from core.rate_limit import limiter
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 
@@ -149,7 +150,9 @@ async def list_synthesizers():
 # ============================================================================
 
 @router.post("/generate", response_model=JobResponse, status_code=202)
+@limiter.limit("5/minute")
 async def generate_synthetic_data(
+    request_obj: Request,
     request: SyntheticGenerateRequest,
     session: AsyncSession = Depends(get_async_session),
 ):
@@ -199,7 +202,9 @@ async def generate_synthetic_data(
 
 
 @router.post("/generate-from-csv", response_model=JobResponse, status_code=202)
+@limiter.limit("5/minute")
 async def generate_from_csv(
+    request: Request,
     file: UploadFile = File(..., description="CSV file to synthesize"),
     num_rows: int = Query(1000, ge=10, le=100000, description="Number of synthetic rows"),
     synthesizer: str = Query("gaussian_copula", description="Synthesizer type"),

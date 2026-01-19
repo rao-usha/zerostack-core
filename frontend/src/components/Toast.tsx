@@ -6,9 +6,10 @@ interface ToastProps {
   type: 'success' | 'error' | 'warning' | 'info'
   onClose: () => void
   duration?: number
+  inline?: boolean // When true, doesn't use fixed positioning (for use in ToastProvider)
 }
 
-export default function Toast({ message, type, onClose, duration = 5000 }: ToastProps) {
+export default function Toast({ message, type, onClose, duration = 5000, inline = false }: ToastProps) {
   useEffect(() => {
     if (duration > 0) {
       const timer = setTimeout(onClose, duration)
@@ -36,10 +37,7 @@ export default function Toast({ message, type, onClose, duration = 5000 }: Toast
   return (
     <div
       style={{
-        position: 'fixed',
-        top: '1rem',
-        right: '1rem',
-        zIndex: 9999,
+        ...(inline ? {} : { position: 'fixed', top: '1rem', right: '1rem', zIndex: 9999 }),
         minWidth: '300px',
         maxWidth: '500px',
         padding: '1rem',

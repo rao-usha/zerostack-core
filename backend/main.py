@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Dict, Any
 import pandas as pd
@@ -56,6 +56,8 @@ from domains.synthetic.router import router as synthetic_router
 # Core setup
 from core.config import settings
 from core.logging import setup_logging
+from core.rate_limit import limiter, rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
 # Setup logging
 setup_logging()
@@ -70,6 +72,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Rate limiting
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 
 # Include domain routers
 app.include_router(auth_router, prefix=settings.api_prefix)
@@ -281,11 +287,12 @@ async def get_dataset(dataset_id: str):
 
 
 @app.post("/api/synthetic/generate")
-async def generate_synthetic(request: Dict[str, Any]):
+@limiter.limit("5/minute")
+async def generate_synthetic(request: Request, body: Dict[str, Any]):
     """Generate synthetic data from sample dataset"""
     try:
-        dataset_id = request.get("dataset_id")
-        num_rows = request.get("num_rows", 1000)
+        dataset_id = body.get("dataset_id")
+        num_rows = body.get("num_rows", 1000)
         
         dataset = db.get_dataset(dataset_id)
         if dataset is None:
@@ -384,11 +391,12 @@ async def build_predictive_model(request: Dict[str, Any]):
 
 
 @app.post("/api/insights/generate")
-async def generate_insights(request: Dict[str, Any]):
+@limiter.limit("10/minute")
+async def generate_insights(request: Request, body: Dict[str, Any]):
     """Generate strategic insights"""
     try:
-        dataset_id = request.get("dataset_id")
-        context = request.get("context", "general business")
+        dataset_id = body.get("dataset_id")
+        context = body.get("context", "general business")
         
         dataset = db.get_dataset(dataset_id)
         if dataset is None:
@@ -403,11 +411,12 @@ async def generate_insights(request: Dict[str, Any]):
 
 
 @app.post("/api/chat")
-async def chat(request: Dict[str, Any]):
+@limiter.limit("20/minute")
+async def chat(request: Request, body: Dict[str, Any]):
     """Chat interface for asking questions about data"""
     try:
-        query = request.get("query")
-        dataset_id = request.get("dataset_id")
+        query = body.get("query")
+        dataset_id = body.get("dataset_id")
         
         if dataset_id:
             dataset = db.get_dataset(dataset_id)

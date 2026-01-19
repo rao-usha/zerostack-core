@@ -37,6 +37,10 @@ pydantic==2.5.0
 pydantic-settings==2.1.0
 email-validator==2.1.0
 
+# Security
+cryptography>=42.0.0
+slowapi>=0.1.9
+
 # Document processing
 PyPDF2==3.0.1
 python-docx==1.1.0

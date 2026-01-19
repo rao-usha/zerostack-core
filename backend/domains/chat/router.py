@@ -10,8 +10,9 @@ Provides endpoints for:
 import logging
 from typing import List, Optional
 from uuid import UUID
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends, Query, Request
 from fastapi.responses import StreamingResponse
+from core.rate_limit import limiter
 from sqlmodel import Session
 import json
 
@@ -162,7 +163,9 @@ async def delete_conversation(
 
 
 @router.post("/conversations/{conversation_id}/messages")
+@limiter.limit("20/minute")
 async def send_message(
+    request: Request,
     conversation_id: UUID,
     data: MessageCreate,
     session: Session = Depends(get_session)
