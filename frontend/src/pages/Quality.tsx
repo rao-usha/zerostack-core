@@ -1,8 +1,13 @@
 import { useState, useEffect } from 'react'
+import Toast from '../components/Toast'
 import { CheckCircle2, AlertTriangle, TrendingUp } from 'lucide-react'
 import { getDataQuality, listDatasets } from '../api/client'
 
 export default function Quality() {
+  const [toast, setToast] = useState<{
+    message: string
+    type: 'success' | 'error' | 'warning' | 'info'
+  } | null>(null)
   const [datasets, setDatasets] = useState<any[]>([])
   const [selectedDataset, setSelectedDataset] = useState<string>('')
   const [qualityReport, setQualityReport] = useState<any>(null)
@@ -30,7 +35,7 @@ export default function Quality() {
       setQualityReport(result)
     } catch (error: any) {
       console.error('Failed to analyze quality:', error)
-      alert(error.response?.data?.detail || 'Failed to analyze data quality')
+      setToast({ message: error.response?.data?.detail || 'Failed to analyze data quality', type: 'error' })
     } finally {
       setLoading(false)
     }
@@ -264,6 +269,14 @@ export default function Quality() {
             </div>
           )}
         </div>
+      )}
+
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
       )}
     </div>
   )

@@ -1,8 +1,13 @@
 import { useState, useEffect } from 'react'
+import Toast from '../components/Toast'
 import { TrendingUp, Activity, BarChart3 } from 'lucide-react'
 import { buildPredictiveModel, listDatasets, getDataset } from '../api/client'
 
 export default function Models() {
+  const [toast, setToast] = useState<{
+    message: string
+    type: 'success' | 'error' | 'warning' | 'info'
+  } | null>(null)
   const [datasets, setDatasets] = useState<any[]>([])
   const [selectedDataset, setSelectedDataset] = useState<string>('')
   const [datasetInfo, setDatasetInfo] = useState<any>(null)
@@ -52,7 +57,7 @@ export default function Models() {
       setModelResult(result)
     } catch (error: any) {
       console.error('Failed to build model:', error)
-      alert(error.response?.data?.detail || 'Failed to build model')
+      setToast({ message: error.response?.data?.detail || 'Failed to build model', type: 'error' })
     } finally {
       setLoading(false)
     }
@@ -225,6 +230,14 @@ export default function Models() {
             </div>
           </div>
         </div>
+      )}
+
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
       )}
     </div>
   )

@@ -1,8 +1,13 @@
 import { useState, useEffect } from 'react'
+import Toast from '../components/Toast'
 import { AlertCircle, Clock, Database, TrendingUp, CheckCircle2 } from 'lucide-react'
 import { getKnowledgeGaps, listDatasets } from '../api/client'
 
 export default function KnowledgeGaps() {
+  const [toast, setToast] = useState<{
+    message: string
+    type: 'success' | 'error' | 'warning' | 'info'
+  } | null>(null)
   const [datasets, setDatasets] = useState<any[]>([])
   const [selectedDataset, setSelectedDataset] = useState<string>('')
   const [gaps, setGaps] = useState<any>(null)
@@ -30,7 +35,7 @@ export default function KnowledgeGaps() {
       setGaps(result)
     } catch (error: any) {
       console.error('Failed to analyze gaps:', error)
-      alert(error.response?.data?.detail || 'Failed to identify knowledge gaps')
+      setToast({ message: error.response?.data?.detail || 'Failed to identify knowledge gaps', type: 'error' })
     } finally {
       setLoading(false)
     }
@@ -278,6 +283,14 @@ export default function KnowledgeGaps() {
             </div>
           )}
         </div>
+      )}
+
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
       )}
     </div>
   )

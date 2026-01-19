@@ -1,8 +1,13 @@
 import { useState, useEffect } from 'react'
+import Toast from '../components/Toast'
 import { Database, Download, Sparkles } from 'lucide-react'
 import { generateSyntheticData, listDatasets, getDataset } from '../api/client'
 
 export default function SyntheticData() {
+  const [toast, setToast] = useState<{
+    message: string
+    type: 'success' | 'error' | 'warning' | 'info'
+  } | null>(null)
   const [datasets, setDatasets] = useState<any[]>([])
   const [selectedDataset, setSelectedDataset] = useState<string>('')
   const [numRows, setNumRows] = useState<number>(1000)
@@ -31,7 +36,7 @@ export default function SyntheticData() {
       setSyntheticResult(result)
     } catch (error: any) {
       console.error('Failed to generate synthetic data:', error)
-      alert(error.response?.data?.detail || 'Failed to generate synthetic data')
+      setToast({ message: error.response?.data?.detail || 'Failed to generate synthetic data', type: 'error' })
     } finally {
       setLoading(false)
     }
@@ -198,6 +203,14 @@ export default function SyntheticData() {
             </div>
           </div>
         </div>
+      )}
+
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
       )}
     </div>
   )

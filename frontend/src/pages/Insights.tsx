@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import Toast from '../components/Toast'
 import { Sparkles, TrendingUp, TrendingDown, AlertTriangle, Lightbulb, Target, Activity, BarChart3, PieChart } from 'lucide-react'
 import { generateInsights, listDatasets } from '../api/client'
 import { useLocation } from 'react-router-dom'
@@ -9,6 +10,10 @@ import {
 
 export default function Insights() {
   const location = useLocation()
+  const [toast, setToast] = useState<{
+    message: string
+    type: 'success' | 'error' | 'warning' | 'info'
+  } | null>(null)
   const [datasets, setDatasets] = useState<any[]>([])
   const [selectedDataset, setSelectedDataset] = useState<string>('')
   const [insights, setInsights] = useState<any>(null)
@@ -40,7 +45,7 @@ export default function Insights() {
       setInsights(result)
     } catch (error: any) {
       console.error('Failed to generate insights:', error)
-      alert(error.response?.data?.detail || 'Failed to generate insights')
+      setToast({ message: error.response?.data?.detail || 'Failed to generate insights', type: 'error' })
     } finally {
       setLoading(false)
     }
@@ -516,11 +521,11 @@ export default function Insights() {
       )}
 
       {!insights && !loading && (
-        <div 
+        <div
           className="text-center py-16 rounded-xl"
-          style={{ 
-            backgroundColor: '#1a1a24', 
-            border: '1px solid rgba(168, 216, 255, 0.12)' 
+          style={{
+            backgroundColor: '#1a1a24',
+            border: '1px solid rgba(168, 216, 255, 0.12)'
           }}
         >
           <Target className="h-16 w-16 mx-auto mb-4" style={{ color: '#a8d8ff', opacity: 0.5 }} />
@@ -528,6 +533,14 @@ export default function Insights() {
             Select a dataset and generate insights to view executive dashboard
           </p>
         </div>
+      )}
+
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
       )}
     </div>
   )
