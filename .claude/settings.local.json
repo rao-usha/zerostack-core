@@ -1,0 +1,40 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir:*)",
+      "Bash(wc:*)",
+      "Bash(cd:*)",
+      "Bash(git -C \"C:/Users/awron/projects/Nex\" status)",
+      "Bash(git -C \"C:/Users/awron/projects/Nex\" log --oneline -5)",
+      "Bash(git -C \"C:/Users/awron/projects/Nex\" add docs/CODEBASE_IMPROVEMENT_PLAN.md)",
+      "Bash(git -C \"C:/Users/awron/projects/Nex\" commit -m \"$\\(cat <<''EOF''\nAdd comprehensive codebase improvement plan\n\nDocuments feature-by-feature status assessment covering all 28 backend\ndomains, 43+ frontend pages, and services layer. Includes prioritized\nroadmap for reaching production readiness.\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git -C \"C:/Users/awron/projects/Nex\" log --oneline -3)",
+      "Bash(git -C \"C:/Users/awron/projects/Nex\" push origin datadictionary)",
+      "Bash(git -C \"C:/Users/awron/projects/Nex\" log main..datadictionary --oneline)",
+      "Bash(git -C \"C:/Users/awron/projects/Nex\" diff main...HEAD --stat)",
+      "Bash(git -C \"C:/Users/awron/projects/Nex\" log origin/main..datadictionary --oneline)",
+      "Bash(git -C \"C:/Users/awron/projects/Nex\" diff origin/main...HEAD --stat)",
+      "Bash(gh pr create:*)",
+      "Bash(where gh:*)",
+      "Bash(winget install:*)",
+      "Bash(powershell.exe -Command \"winget install --id GitHub.cli -e --accept-source-agreements --accept-package-agreements\")",
+      "Bash(\"C:/Program Files/GitHub CLI/gh.exe\" --version)",
+      "Bash(\"C:/Program Files \\(x86\\)/GitHub CLI/gh.exe\" --version)",
+      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" --version)",
+      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" pr create --repo rao-usha/zerostack-core --base main --head datadictionary --title \"Add data dictionary, synthetic data, and codebase improvement plan\" --body \"$\\(cat <<''EOF''\n## Summary\n\n- **Data Dictionary Features**: Chat access to data dictionary, semantic understanding, approval workflows\n- **Synthetic Data Generation**: SDV integration with privacy controls \\(Phase 1-3\\)\n  - Privacy-safe generation with PII detection\n  - Quality metrics and evaluation\n  - Storage integration\n- **Codebase Improvement Plan**: Comprehensive 740-line assessment of all 28 backend domains and 43+ frontend pages with prioritized roadmap\n\n## Commits Included\n\n1. `chat access to data dictionary` - Enable chat interface to query dictionary\n2. `add data dictionary features` - Core dictionary functionality\n3. `Add synthetic data generation with SDV integration \\(Phase 1\\)` - Basic generation\n4. `Add synthetic data Phase 2-3: Privacy, Quality metrics, and Storage` - Advanced features\n5. `Add comprehensive codebase improvement plan` - Full feature status documentation\n\n## Test plan\n\n- [ ] Verify data dictionary CRUD operations work\n- [ ] Test chat can access dictionary entries\n- [ ] Test synthetic data generation with sample dataset\n- [ ] Review improvement plan document for accuracy\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\nEOF\n\\)\")",
+      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" auth login)",
+      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" pr merge 138 --repo rao-usha/zerostack-core --merge)",
+      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" pr view 138 --repo rao-usha/zerostack-core --json state,mergedAt)",
+      "Bash(git -C \"C:/Users/awron/projects/Nex\" add docs/PARALLEL_EXECUTION_PLAN.md)",
+      "Bash(git -C \"C:/Users/awron/projects/Nex\" commit -m \"$\\(cat <<''EOF''\nAdd parallel execution plan for codebase improvements\n\nOrganizes work into 6 concurrent streams:\n- Stream A: Security & Auth \\(critical path\\)\n- Stream B: Backend feature completion\n- Stream C: Frontend improvements\n- Stream D: Testing\n- Stream E: Operations\n- Stream F: Quick wins \\(Day 1-3\\)\n\nIncludes dependency graph, team allocation, and weekly milestones.\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" pr create --repo rao-usha/zerostack-core --base main --head datadictionary --title \"Add parallel execution plan\" --body \"$\\(cat <<''EOF''\n## Summary\n\nAdds parallel execution plan for codebase improvements with 6 concurrent workstreams:\n- Stream A: Security & Auth \\(critical path\\)\n- Stream B: Backend feature completion  \n- Stream C: Frontend improvements\n- Stream D: Testing\n- Stream E: Operations\n- Stream F: Quick wins \\(Day 1-3\\)\n\nIncludes dependency graph, team allocation, and weekly milestones.\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\nEOF\n\\)\")",
+      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" pr merge --repo rao-usha/zerostack-core --merge)",
+      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" pr merge 140 --repo rao-usha/zerostack-core --merge)",
+      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" pr view 140 --repo rao-usha/zerostack-core --json state,mergedAt,url)",
+      "Bash(docker-compose build:*)",
+      "Bash(git -C \"C:/Users/awron/projects/Nex\" status --short)",
+      "Bash(git -C \"C:/Users/awron/projects/Nex\" diff --stat HEAD)",
+      "Bash(git -C \"C:/Users/awron/projects/Nex\" add .claude/ .cursorrules docs/plans/agent-tasks/ docs/branding/ docs/reference/ docs/testing/RUN_TESTS.md docs/archive/implementation-notes/PROMPT_LIBRARY_COMPLETE.md docs/archive/implementation-notes/PROMPT_RECIPES_IMPLEMENTATION.md docs/archive/implementation-notes/RE_RUN_WITH_PROMPT_FEATURE.md docs/archive/implementation-notes/SUMMARIZATION_TESTS.md docs/archive/implementation-notes/TESTING_AND_RECOMMENDATIONS.md docs/archive/implementation-notes/TEST_RESULTS.md)"
+    ]
+  }
+}
