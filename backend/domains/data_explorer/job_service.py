@@ -16,7 +16,7 @@ from .job_models import AnalysisJob
 from .db_models import AIAnalysisResult, PromptRecipe
 from .models import AnalysisRequest, AnalysisResult
 from .analysis_prompts import AnalysisPromptTemplates
-from .dictionary_service import upsert_dictionary_entries
+from .dictionary_service import upsert_dictionary_entries, get_documented_columns
 from ..chat.service import ChatService
 from llm.providers import get_provider
 
@@ -140,7 +140,8 @@ class AnalysisJobService:
             
             table_data = await AnalysisJobService._gather_data_with_mcp(
                 tables=job.tables,
-                db_id=job.db_id
+                db_id=job.db_id,
+                session=session
             )
             
             # Stage 2: Run analysis for each analysis type
@@ -162,7 +163,74 @@ class AnalysisJobService:
                 session.add(job)
                 session.commit()
                 
+                # For column_documentation, filter out already-documented columns (incremental mode)
+                filtered_table_data = table_data
+                total_columns_before = 0
+                total_columns_after = 0
+                
+                if analysis_type == "column_documentation":
+                    filtered_table_data = []
+                    
+                    for table_info in table_data:
+                        # Get existing documented columns for this table
+                        schema_name = table_info.get("schema", "public")
+                        table_name = table_info.get("table")
+                        
+                        existing_columns = get_documented_columns(
+                            session=session,
+                            database_name=job.db_id,
+                            schema_name=schema_name,
+                            table_name=table_name
+                        )
+                        
+                        # Filter column profiles to only new columns
+                        # Note: column_profiles is a dict with column names as keys
+                        if "profile" in table_info and "column_profiles" in table_info["profile"]:
+                            original_profiles = table_info["profile"]["column_profiles"]
+                            total_columns_before += len(original_profiles)
+                            
+                            # Filter to only columns not already documented
+                            new_column_profiles = {
+                                col_name: col_data 
+                                for col_name, col_data in original_profiles.items()
+                                if col_name not in existing_columns
+                            }
+                            total_columns_after += len(new_column_profiles)
+                            
+                            # Only include this table if it has new columns
+                            if new_column_profiles:
+                                # Create a copy of table_info with filtered columns
+                                filtered_table = table_info.copy()
+                                filtered_table["profile"] = table_info["profile"].copy()
+                                filtered_table["profile"]["column_profiles"] = new_column_profiles
+                                filtered_table_data.append(filtered_table)
+                                
+                                logger.info(
+                                    f"Table {schema_name}.{table_name}: {len(new_column_profiles)} new columns "
+                                    f"(skipped {len(existing_columns)} already documented)"
+                                )
+                    
+                    # If no new columns to document, skip this analysis
+                    if not filtered_table_data:
+                        logger.info(
+                            f"Skipping column_documentation - all {total_columns_before} columns already documented"
+                        )
+                        combined_insights[analysis_type] = {
+                            "message": "All columns already documented",
+                            "skipped_columns": total_columns_before,
+                            "new_columns": 0
+                        }
+                        continue  # Skip to next analysis type
+                    
+                    logger.info(
+                        f"Column documentation (incremental): {total_columns_after} new columns to document "
+                        f"(out of {total_columns_before} total)"
+                    )
+                
                 # Build specialized prompt for this analysis type
+                # Use filtered data for column_documentation, original data for other types
+                prompt_table_data = filtered_table_data if analysis_type == "column_documentation" else table_data
+                
                 # Check if we should use a prompt recipe or default prompts
                 if job.prompt_recipe_id:
                     try:
@@ -170,7 +238,7 @@ class AnalysisJobService:
                             session=session,
                             recipe_id=job.prompt_recipe_id,
                             action_type=analysis_type,
-                            table_data=table_data,
+                            table_data=prompt_table_data,
                             context=job.context
                         )
                         logger.info(f"Using prompt recipe {job.prompt_recipe_id} for {analysis_type}")
@@ -178,14 +246,14 @@ class AnalysisJobService:
                         logger.warning(f"Failed to use recipe {job.prompt_recipe_id}: {e}. Falling back to default prompts.")
                         system_message, user_message = AnalysisPromptTemplates.build_analysis_prompt(
                             analysis_type=analysis_type,
-                            table_data=table_data,
+                            table_data=prompt_table_data,
                             context=job.context
                         )
                 else:
                     # Use default template-based prompts
                     system_message, user_message = AnalysisPromptTemplates.build_analysis_prompt(
                         analysis_type=analysis_type,
-                        table_data=table_data,
+                        table_data=prompt_table_data,
                         context=job.context
                     )
                 
@@ -211,7 +279,23 @@ class AnalysisJobService:
                 
                 # Collect streaming response
                 # Use higher token limit for column_documentation since it needs to return all columns
-                token_limit = 8000 if analysis_type == "column_documentation" else 4000
+                # For column_documentation, calculate token limit based on number of columns
+                if analysis_type == "column_documentation":
+                    # Estimate total columns across all tables (use filtered data)
+                    total_columns = 0
+                    for table in filtered_table_data:
+                        if "profile" in table and "column_profiles" in table["profile"]:
+                            total_columns += len(table["profile"]["column_profiles"])
+                    
+                    # Each column needs ~200 tokens (JSON structure + description)
+                    # Add 1000 tokens for overhead
+                    estimated_tokens = (total_columns * 200) + 1000
+                    
+                    # Set token limit with minimum of 8000 and maximum of 100000
+                    token_limit = max(8000, min(100000, estimated_tokens))
+                    logger.info(f"Column documentation (incremental): {total_columns} new columns, using {token_limit} max_tokens")
+                else:
+                    token_limit = 4000
                 
                 full_response = ""
                 async for event in provider.stream_chat(
@@ -383,7 +467,8 @@ class AnalysisJobService:
     @staticmethod
     async def _gather_data_with_mcp(
         tables: List[Dict[str, str]],
-        db_id: str
+        db_id: str,
+        session: Session
     ) -> List[Dict[str, Any]]:
         """
         Gather data using MCP tools (same as Chat uses).
@@ -407,7 +492,8 @@ class AnalysisJobService:
                         'schema': schema,
                         'table': table_name,
                         'connection_id': db_id
-                    }
+                    },
+                    session=session
                 )
                 
                 # Use MCP sample_rows tool
@@ -418,7 +504,8 @@ class AnalysisJobService:
                         'table': table_name,
                         'limit': 100,
                         'connection_id': db_id
-                    }
+                    },
+                    session=session
                 )
                 
                 # Extract data from MCP response

@@ -234,11 +234,11 @@ class GoogleProvider(LLMProvider):
     """Google provider (Gemini Pro, Gemini Ultra, etc.)."""
     
     def __init__(self, api_key: Optional[str] = None, model: str = "gemini-pro"):
-        self.api_key = api_key or os.getenv("GOOGLE_API_KEY")
+        self.api_key = api_key or os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
         self.model = model
         
         if not self.api_key:
-            raise ValueError("GOOGLE_API_KEY not found in environment")
+            raise ValueError("GOOGLE_API_KEY or GEMINI_API_KEY not found in environment")
     
     async def stream_chat(
         self,
@@ -257,55 +257,60 @@ class GoogleProvider(LLMProvider):
         
         genai.configure(api_key=self.api_key)
         
-        # Convert tools to Gemini format
-        gemini_tools = None
-        if tools:
-            gemini_tools = [
-                {
-                    "name": tool["function"]["name"],
-                    "description": tool["function"]["description"],
-                    "parameters": tool["function"]["parameters"]
-                }
-                for tool in tools
-            ]
+        # Build model (without tools for simpler streaming)
+        model = genai.GenerativeModel(model_name=self.model)
         
-        # Build model
-        model = genai.GenerativeModel(
-            model_name=self.model,
-            tools=gemini_tools
-        )
+        # Convert messages to Gemini format - combine into single prompt for simplicity
+        prompt_parts = []
+        system_prompt = None
         
-        # Convert messages to Gemini format
-        history = []
-        for msg in messages[:-1]:
-            history.append({
-                "role": "user" if msg["role"] in ["user", "system"] else "model",
-                "parts": [msg["content"]]
-            })
+        for msg in messages:
+            role = msg.get("role", "user")
+            content = msg.get("content", "")
+            
+            if role == "system":
+                system_prompt = content
+            elif role == "user":
+                prompt_parts.append(f"User: {content}")
+            elif role == "assistant":
+                prompt_parts.append(f"Assistant: {content}")
         
-        # Get last message as prompt
-        prompt = messages[-1]["content"] if messages else ""
+        # Build final prompt
+        full_prompt = ""
+        if system_prompt:
+            full_prompt = f"System instructions: {system_prompt}\n\n"
+        full_prompt += "\n".join(prompt_parts)
+        if prompt_parts:
+            full_prompt += "\n\nAssistant:"
         
         try:
-            # Start chat
-            chat = model.start_chat(history=history)
+            import asyncio
             
-            # Stream response
-            response = await chat.send_message_async(prompt, stream=True)
+            # Use synchronous generate_content with stream=True
+            # Run in executor to avoid blocking the event loop
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(
+                None,
+                lambda: model.generate_content(
+                    full_prompt,
+                    generation_config=genai.types.GenerationConfig(
+                        temperature=temperature,
+                        max_output_tokens=max_tokens or 4096,
+                    ),
+                    stream=True
+                )
+            )
             
-            async for chunk in response:
-                if chunk.text:
-                    yield {"type": "delta", "content": chunk.text}
-                
-                # Handle function calls
-                if chunk.parts:
-                    for part in chunk.parts:
-                        if hasattr(part, "function_call"):
-                            yield {
-                                "type": "tool_call",
-                                "tool_name": part.function_call.name,
-                                "tool_input": dict(part.function_call.args)
-                            }
+            # Process chunks - yield each one with a small delay to allow event loop to flush
+            if response is not None:
+                for chunk in response:
+                    try:
+                        if chunk.text:
+                            yield {"type": "delta", "content": chunk.text}
+                            await asyncio.sleep(0)  # Allow event loop to process
+                    except Exception as chunk_err:
+                        logger.debug(f"Chunk processing: {chunk_err}")
+                        continue
             
             yield {"type": "done", "finish_reason": "stop"}
         
@@ -318,11 +323,11 @@ class XAIProvider(LLMProvider):
     """xAI provider (Grok, etc.)."""
     
     def __init__(self, api_key: Optional[str] = None, model: str = "grok-beta"):
-        self.api_key = api_key or os.getenv("XAI_API_KEY")
+        self.api_key = api_key or os.getenv("XAI_API_KEY") or os.getenv("X_AI_API_KEY")
         self.model = model
         
         if not self.api_key:
-            raise ValueError("XAI_API_KEY not found in environment")
+            raise ValueError("XAI_API_KEY or X_AI_API_KEY not found in environment")
     
     async def stream_chat(
         self,

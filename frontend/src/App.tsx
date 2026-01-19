@@ -11,13 +11,17 @@ import Contexts from './pages/Contexts'
 import DataExplorer from './pages/DataExplorer'
 import DataAnalysis from './pages/DataAnalysis'
 import DataDictionary from './pages/DataDictionary'
-import Distillation from './pages/Distillation'
 import Chat from './pages/Chat'
 import ModelLibrary from './pages/ModelLibrary'
 import RecipeDetail from './pages/RecipeDetail'
 import ModelDetail from './pages/ModelDetail'
 import RunDetail from './pages/RunDetail'
+import EvaluationPackDetail from './pages/EvaluationPackDetail'
 import MLChat from './pages/MLChat'
+import DistillationWorkbench from './pages/DistillationWorkbench'
+import FileLocations from './pages/FileLocations'
+import FileInventory from './pages/FileInventory'
+import FileAssetDetail from './pages/FileAssetDetail'
 
 function App() {
   return (
@@ -27,7 +31,6 @@ function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/upload" element={<DataUpload />} />
           <Route path="/contexts" element={<Contexts />} />
-          <Route path="/distillation" element={<Distillation />} />
           <Route path="/explorer" element={<DataExplorer />} />
           <Route path="/analysis" element={<DataAnalysis />} />
           <Route path="/dictionary" element={<DataDictionary />} />
@@ -35,7 +38,12 @@ function App() {
           <Route path="/model-development/recipes/:recipeId" element={<RecipeDetail />} />
           <Route path="/model-development/models/:modelId" element={<ModelDetail />} />
           <Route path="/model-development/runs/:runId" element={<RunDetail />} />
+          <Route path="/model-development/evaluation-packs/:packId" element={<EvaluationPackDetail />} />
           <Route path="/model-development/chat" element={<MLChat />} />
+          <Route path="/distillation" element={<DistillationWorkbench />} />
+          <Route path="/files/locations" element={<FileLocations />} />
+          <Route path="/files/inventory" element={<FileInventory />} />
+          <Route path="/files/assets/:assetId" element={<FileAssetDetail />} />
           <Route path="/chat" element={<Chat />} />
           <Route path="/insights" element={<Insights />} />
           <Route path="/quality" element={<Quality />} />

@@ -8,7 +8,6 @@ from sqlalchemy import text
 from .dictionary_enhanced_models import (
     DictionaryAsset,
     DictionaryField,
-    DictionaryRelationship,
     DictionaryProfile,
     DictionaryUsageLog,
     TrustTier,
@@ -16,6 +15,8 @@ from .dictionary_enhanced_models import (
     Cardinality,
     RelationshipConfidence
 )
+# Import DictionaryRelationship from semantics models (unified model)
+from .dictionary_semantics_models import DictionaryRelationship
 
 
 def sync_assets_from_information_schema(

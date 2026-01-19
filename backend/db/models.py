@@ -358,3 +358,70 @@ monitor_evaluation_snapshot = Table(
     Column("status", String(32), nullable=False),  # pass|warn|fail
     Column("results_json", JSON, nullable=False, server_default="{}"),
 )
+
+
+# ============================================================================
+# Relationship Intelligence Tables
+# ============================================================================
+
+dictionary_relationships = Table(
+    "dictionary_relationships",
+    METADATA,
+    Column("id", String(255), primary_key=True),
+    
+    # Source asset
+    Column("from_asset_type", String(32), nullable=False),  # table | column
+    Column("from_database", String(255), nullable=False),
+    Column("from_schema", String(255), nullable=False),
+    Column("from_table", String(255), nullable=False),
+    Column("from_column", String(255), nullable=True),
+    
+    # Target asset
+    Column("to_asset_type", String(32), nullable=False),  # table | column
+    Column("to_database", String(255), nullable=False),
+    Column("to_schema", String(255), nullable=False),
+    Column("to_table", String(255), nullable=False),
+    Column("to_column", String(255), nullable=True),
+    
+    # Relationship metadata
+    Column("relationship_type", String(64), nullable=False),
+    Column("confidence", Integer, nullable=False),  # 0-10000 (representing 0.0000-1.0000)
+    
+    # Evidence and provenance
+    Column("evidence", JSON, nullable=False, server_default="{}"),
+    Column("explanation", Text, nullable=True),
+    Column("generated_by", String(255), nullable=False, server_default="system"),
+    
+    # Workflow status
+    Column("status", String(32), nullable=False, server_default="suggested"),
+    Column("reviewed_by", String(255), nullable=True),
+    Column("reviewed_at", TIMESTAMP(timezone=True), nullable=True),
+    
+    # Timestamps
+    Column("created_at", TIMESTAMP(timezone=True), server_default=func.now()),
+    Column("updated_at", TIMESTAMP(timezone=True), server_default=func.now()),
+)
+
+
+dictionary_relationship_discovery_jobs = Table(
+    "dictionary_relationship_discovery_jobs",
+    METADATA,
+    Column("id", String(255), primary_key=True),
+    Column("connection_id", String(255), nullable=False),
+    Column("scope_database", String(255), nullable=True),
+    Column("scope_schema", String(255), nullable=True),
+    Column("scope_tables", JSON, nullable=True),
+    
+    Column("status", String(32), nullable=False, server_default="pending"),
+    Column("progress", Integer, nullable=False, server_default="0"),
+    
+    Column("config", JSON, nullable=False, server_default="{}"),
+    Column("results_summary", JSON, nullable=True),
+    Column("error_message", Text, nullable=True),
+    
+    Column("started_by", String(255), nullable=True),
+    Column("started_at", TIMESTAMP(timezone=True), nullable=True),
+    Column("completed_at", TIMESTAMP(timezone=True), nullable=True),
+    Column("created_at", TIMESTAMP(timezone=True), server_default=func.now()),
+    Column("updated_at", TIMESTAMP(timezone=True), server_default=func.now()),
+)

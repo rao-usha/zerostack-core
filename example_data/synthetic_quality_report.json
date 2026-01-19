@@ -1,0 +1,39 @@
+{
+  "overall_score": 0.711,
+  "statistical_fidelity": 0.82,
+  "correlation_preservation": 0.547,
+  "column_scores": {
+    "customer_segment": {
+      "score": 0.879,
+      "rating": "fair"
+    },
+    "date": {
+      "score": 0.694,
+      "rating": "poor"
+    },
+    "sales": {
+      "score": 0.814,
+      "rating": "fair"
+    },
+    "quantity": {
+      "score": 0.889,
+      "rating": "fair"
+    },
+    "product_category": {
+      "score": 0.761,
+      "rating": "poor"
+    },
+    "price": {
+      "score": 0.801,
+      "rating": "fair"
+    },
+    "region": {
+      "score": 0.9,
+      "rating": "good"
+    }
+  },
+  "recommendations": [
+    "Columns with poor distribution match: date, product_category. Consider using CTGAN for better capture of complex distributions.",
+    "Correlation preservation is below 70%. The synthetic data may not capture relationships between columns well. Try CTGAN or TVAE for better correlation preservation."
+  ]
+}

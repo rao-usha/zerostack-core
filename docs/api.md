@@ -7,11 +7,6 @@
 - **API Docs**: http://localhost:8000/docs (Swagger UI)
 - **Health Check**: http://localhost:8000/healthz
 
-### NEX-Collector (Port 8080)
-- **Base URL**: http://localhost:8080
-- **API Docs**: http://localhost:8080/docs (Swagger UI)
-- **Health Check**: http://localhost:8080/healthz
-
 ### Frontend (Port 3000)
 - **Base URL**: http://localhost:3000
 - **UI**: Modern React application
@@ -37,31 +32,6 @@
 - `GET /api/v1/contexts/{id}` - Get context details
 - `POST /api/v1/contexts/{id}/documents` - Upload documents to context
 - `POST /api/v1/contexts/{id}/layers` - Add context processing layers
-
-## NEX-Collector API Endpoints
-
-### Context Aggregation
-- `GET /v1/contexts/variants` - List all context variants with filtering
-- `GET /v1/contexts/variants/{id}` - Get specific variant details
-- `POST /v1/contexts/variants/compose` - Mix & match variants to create new contexts
-- `POST /v1/aggregate/sample` - Generate new contexts via LLM sampling
-
-### Dataset Distillation
-- `POST /v1/datasets/distill/examples` - Generate synthetic training examples
-- `POST /v1/datasets/distill/build` - Build fine-tune datasets from examples
-- `GET /v1/datasets` - List all distilled datasets
-- `GET /v1/datasets/{id}` - Get dataset manifest details
-
-### Context Documents
-- `POST /v1/contexts` - Create new context documents
-- `GET /v1/contexts/{id}` - Get context document details
-- `POST /v1/contexts/{id}/variants` - Create context variants
-
-## Authentication
-
-The NEX-Collector service uses a simple token-based authentication:
-- **Header**: `Authorization: Bearer dev-secret`
-- **Default Token**: `dev-secret` (for development)
 
 ## Data Formats
 
@@ -141,7 +111,6 @@ POST /api/chat
 ## Rate Limiting
 
 - **Main Backend**: No rate limiting in development
-- **NEX-Collector**: No rate limiting in development
 - **OpenAI API**: Subject to OpenAI rate limits (depends on your API plan)
 
 ## Error Codes
@@ -215,11 +184,7 @@ curl -X POST http://localhost:8000/api/chat \
    - Set `OPENAI_API_KEY` environment variable
    - Restart backend service
 
-3. **"Context variant not found"**
-   - Verify variant ID exists
-   - Check NEX-Collector service is running
-
-4. **"Rate limit exceeded"**
+3. **"Rate limit exceeded"**
    - OpenAI API limits reached
    - Wait or upgrade API plan
 

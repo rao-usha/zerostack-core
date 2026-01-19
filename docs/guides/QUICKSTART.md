@@ -97,13 +97,6 @@ Open your browser and go to: `http://localhost:3000`
 - Set number of rows
 - Generate privacy-safe synthetic data
 
-#### 🆕 Explore Data Distillation
-- Navigate to "Distillation" tab
-- Browse AI-generated contexts and variants
-- Explore pre-built distillation datasets
-- View distillation pipeline statistics
-- Discover retail, insurance, and finance domains
-
 ## Example Queries for Chat
 
 Try these questions in the Chat interface:

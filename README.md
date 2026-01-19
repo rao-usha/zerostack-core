@@ -2,7 +2,7 @@
 
 ## AI Native Data Platform
 
-A comprehensive, AI-powered data platform that serves as a one-stop solution for all data-related needs in large organizations. This platform eliminates data governance concerns while providing powerful analytics, predictive modeling, and **AI-native data distillation** capabilities.
+A comprehensive, AI-powered data platform that serves as a one-stop solution for all data-related needs in large organizations. This platform eliminates data governance concerns while providing powerful analytics, predictive modeling, and data management capabilities.
 
 ## 🚀 Quick Start (Docker)
 
@@ -11,13 +11,8 @@ A comprehensive, AI-powered data platform that serves as a one-stop solution for
 git clone <repository-url>
 cd Nex
 
-# Start all services (database, backend, frontend, distillation)
+# Start all services (database, backend, frontend)
 docker-compose -f docker-compose.dev.yml up -d
-
-# Seed sample distillation data
-```bash
-docker exec nex-collector-api-1 python scripts/seed_demo.py
-```
 
 **Access:** http://localhost:3000
 
@@ -25,7 +20,7 @@ docker exec nex-collector-api-1 python scripts/seed_demo.py
 - 📊 **Data Upload & Analysis** - CSV datasets with AI insights
 - 🤖 **Predictive Modeling** - One-click ML models with feature importance
 - 🔄 **Synthetic Data** - Privacy-safe synthetic dataset generation
-- 🧪 **Distillation Explorer** - Browse AI-generated contexts and training data
+- 📖 **Data Dictionary** - Business-focused data documentation
 
 ## Features
 
@@ -118,24 +113,16 @@ docker exec nex-collector-api-1 python scripts/seed_demo.py
 
 ## Getting Started
 
-9. **🆕 Data Distillation Explorer**
-   - **NEW**: Explore contexts and synthetic datasets from distillation pipeline
-   - Browse AI-generated domain knowledge and context variants
-   - View distillation statistics and dataset metadata
-   - Interactive exploration of fine-tune packs and training data
-
 ## 🏗️ Architecture
 
-NEX.AI consists of three interconnected services:
+NEX.AI consists of interconnected services:
 
 ### 🔧 **Core Services**
 - **Main Backend** (Port 8000) - Core data platform with analytics, ML, and synthetic data generation
 - **Frontend** (Port 3000) - Modern React UI for data exploration and management
-- **NEX-Collector** (Port 8080) - Data distillation pipeline for context aggregation and dataset building
 
 ### 🗃️ **Databases & Infrastructure**
 - **PostgreSQL + pgvector** (Port 5432) - Vector database for embeddings and relational data
-- **NEX-Collector DB** - Separate instance for distillation metadata
 - **Redis** (Port 6380) - Job queuing for background tasks
 
 ## 🐳 Docker Setup (Recommended)
@@ -152,11 +139,8 @@ NEX.AI consists of three interconnected services:
 git clone <repository-url>
 cd Nex
 
-# Start all services (database, backend, frontend, distillation)
+# Start all services (database, backend, frontend)
 docker-compose -f docker-compose.dev.yml up -d
-
-# Seed sample distillation data (optional)
-docker exec nex-collector-api-1 python scripts/seed_demo.py
 
 # View logs (optional)
 docker-compose -f docker-compose.dev.yml logs -f
@@ -165,7 +149,6 @@ docker-compose -f docker-compose.dev.yml logs -f
 ### Access Points
 - **Frontend UI**: http://localhost:3000
 - **Main API Docs**: http://localhost:8000/docs
-- **Distillation API**: http://localhost:8080/docs
 - **Health Checks**: All services include health endpoints
 
 ### Docker Commands
@@ -234,13 +217,6 @@ docker-compose -f docker-compose.dev.yml exec backend bash
 - Statistical analysis with citations
 - Visual chart generation from text queries
 
-### 🧪 **🆕 Distillation Explorer**
-- **NEW**: Explore AI-generated contexts and variants
-- Browse domain knowledge across personas/tasks/styles
-- View distillation pipeline statistics
-- Interactive exploration of fine-tune datasets
-- Sample data packs for retail, insurance, and finance domains
-
 ### ⚡ **🆕 MCP Data Explorer**
 - **NEW**: AI-powered database exploration with Model Context Protocol
 - **Claude Desktop Integration**: Native conversational database access
@@ -269,7 +245,6 @@ See [MCP_DATA_EXPLORER_SETUP.md](docs/setup/MCP_DATA_EXPLORER_SETUP.md) for comp
 ## 🔌 API Documentation
 
 - **Main Backend**: http://localhost:8000/docs (Swagger UI)
-- **Distillation API**: http://localhost:8080/docs (Swagger UI)
 
 ### Key Endpoints
 - `POST /api/upload` - Upload and analyze CSV datasets
@@ -324,32 +299,12 @@ Nex/
 │   │   ├── pages/            # Page components
 │   │   │   ├── Dashboard.tsx
 │   │   │   ├── DataUpload.tsx
-│   │   │   ├── SyntheticData.tsx
-│   │   │   └── Distillation.tsx # 🆕 NEW
+│   │   │   └── SyntheticData.tsx
 │   │   ├── components/       # Reusable components
 │   │   ├── api/              # API client
 │   │   └── App.tsx           # Main app component
 │   ├── package.json
 │   └── tailwind.config.js
-│
-├── nex-collector/             # Data distillation pipeline
-│   ├── app/
-│   │   ├── routes/           # API routes
-│   │   ├── distill/          # Distillation pipeline
-│   │   │   ├── sampler.py    # Example sampling
-│   │   │   ├── builder.py    # Dataset building
-│   │   │   └── rationales.py # Teacher outputs
-│   │   ├── ingest/           # Data ingestion
-│   │   │   ├── generator.py  # Context generation
-│   │   │   └── embed.py      # Vector embeddings
-│   │   └── providers/        # LLM providers
-│   ├── data/packs/           # Pre-built datasets
-│   │   ├── retail-customer-service@1.0.0/
-│   │   ├── insurance-underwriter-risk-assessment@1.0.0/
-│   │   └── macys-retail-customer-service@1.0.0/
-│   └── scripts/              # Seed and utility scripts
-│       ├── seed_demo.py      # Demo data seeding
-│       └── seed_insurance_dataset.py
 │
 ├── docs/                      # 📚 Documentation
 │   ├── guides/               # User guides and tutorials
@@ -385,8 +340,6 @@ Nex/
 │   ├── install_all.sh        # Install dependencies
 │   ├── install_node.sh       # Install Node.js
 │   ├── check_setup.sh        # Verify setup
-│   ├── load_data_packs.py    # Load sample data
-│   ├── seed_nex_collector.py # Seed distillation data
 │   └── agent_ci.sh           # CI automation
 │
 ├── tests/                     # 🧪 Test files
@@ -401,21 +354,13 @@ Nex/
 └── README.md                  # This file
 ```
 
-## 📦 Sample Data Packs
-
-NEX includes pre-built distillation data packs for immediate exploration:
-- **🛍️ Retail Customer Service** - Macy's support scenarios with multiple personas
-- **💼 Insurance Underwriting** - Risk assessment with different tolerance levels
-- **🏦 Finance Analysis** - CFO persona for financial decision-making
-- **🏪 General Retail** - Broad retail contexts for domain generalization
-
 ## ⭐ Key Features
 
 - **🛡️ Privacy-First**: Synthetic data generation eliminates governance concerns
 - **🤖 AI-Native**: GPT-4 integration with explainable AI insights
-- **🔬 Data Distillation**: Teacher-student distillation for specialized models
 - **📊 Full Analytics**: Statistical analysis, ML modeling, and quality assessment
 - **💬 Natural Language**: Plain English queries about your data
+- **📖 Data Dictionary**: Business-focused documentation with approval workflows
 
 ## 📚 Documentation
 
@@ -450,5 +395,5 @@ This is a prototype application for demonstration and research purposes.
 
 ---
 
-**🚀 Ready to explore AI-native data distillation? Start with `docker-compose -f docker-compose.dev.yml up -d` and visit http://localhost:3000**
+**🚀 Ready to explore AI-native data management? Start with `docker-compose -f docker-compose.dev.yml up -d` and visit http://localhost:3000**
 

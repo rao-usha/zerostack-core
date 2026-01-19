@@ -1,0 +1,13 @@
+# Google Drive Integration - Required Python Packages
+# Add these to backend/requirements.txt
+
+# Google Drive API
+google-api-python-client>=2.100.0
+google-auth>=2.23.0
+google-auth-oauthlib>=1.1.0
+
+# Token encryption
+cryptography>=41.0.0
+
+# Installation command:
+# pip install google-api-python-client google-auth google-auth-oauthlib cryptography

@@ -7,7 +7,16 @@ from sqlmodel import Session, select
 
 from db_session import get_session
 from .db_models import DataDictionaryEntry
-from .dictionary_service import get_dictionary_for_tables, format_dictionary_as_context, get_column_versions, activate_version
+from .dictionary_service import (
+    get_dictionary_for_tables, 
+    format_dictionary_as_context, 
+    get_column_versions, 
+    activate_version,
+    submit_for_approval,
+    approve_entry,
+    reject_entry,
+    publish_draft_directly
+)
 
 router = APIRouter(prefix="/data-dictionary", tags=["Data Dictionary"])
 
@@ -22,6 +31,7 @@ class DictionaryEntryResponse(BaseModel):
     column_name: str
     version_number: int
     is_active: bool
+    state: str  # "draft", "pending_approval", "published"
     version_notes: Optional[str] = None
     business_name: Optional[str] = None
     business_description: Optional[str] = None
@@ -52,7 +62,7 @@ def list_dictionary_entries(
     database_name: Optional[str] = Query(None),
     schema_name: Optional[str] = Query(None),
     table_name: Optional[str] = Query(None),
-    active_only: bool = Query(True, description="Only return active versions"),
+    active_only: bool = Query(True, description="Only return working versions (draft if exists, otherwise published)"),
     session: Session = Depends(get_session)
 ):
     """
@@ -62,7 +72,7 @@ def list_dictionary_entries(
     - database_name: Filter by database
     - schema_name: Filter by schema
     - table_name: Filter by table
-    - active_only: Only return active versions (default: true)
+    - active_only: Return working versions - draft if exists, otherwise active/published (default: true)
     """
     statement = select(DataDictionaryEntry)
     
@@ -72,8 +82,15 @@ def list_dictionary_entries(
         statement = statement.where(DataDictionaryEntry.schema_name == schema_name)
     if table_name:
         statement = statement.where(DataDictionaryEntry.table_name == table_name)
+    
+    # If active_only, we want the "working version" for each column:
+    # - Draft version if one exists (for editing)
+    # - Otherwise, the published/active version
     if active_only:
-        statement = statement.where(DataDictionaryEntry.is_active == True)
+        statement = statement.where(
+            (DataDictionaryEntry.state == "draft") |  # Include drafts
+            (DataDictionaryEntry.is_active == True)    # Include active/published versions
+        )
     
     statement = statement.order_by(
         DataDictionaryEntry.schema_name,
@@ -82,7 +99,19 @@ def list_dictionary_entries(
         DataDictionaryEntry.version_number.desc()
     )
     
-    entries = session.exec(statement).all()
+    all_entries = session.exec(statement).all()
+    
+    # Filter to get only one version per column (draft if exists, otherwise active)
+    if active_only:
+        seen_columns = set()
+        entries = []
+        for entry in all_entries:
+            column_key = (entry.database_name, entry.schema_name, entry.table_name, entry.column_name)
+            if column_key not in seen_columns:
+                seen_columns.add(column_key)
+                entries.append(entry)
+    else:
+        entries = all_entries
     
     return [
         DictionaryEntryResponse(
@@ -93,6 +122,7 @@ def list_dictionary_entries(
             column_name=entry.column_name,
             version_number=entry.version_number,
             is_active=entry.is_active,
+            state=entry.state,
             version_notes=entry.version_notes,
             business_name=entry.business_name,
             business_description=entry.business_description,
@@ -133,6 +163,7 @@ def get_table_dictionary(
             column_name=entry.column_name,
             version_number=entry.version_number,
             is_active=entry.is_active,
+            state=entry.state,
             version_notes=entry.version_notes,
             business_name=entry.business_name,
             business_description=entry.business_description,
@@ -167,6 +198,7 @@ def get_dictionary_entry(
         version_number=entry.version_number,
         is_active=entry.is_active,
         version_notes=entry.version_notes,
+        state=entry.state,
         business_name=entry.business_name,
         business_description=entry.business_description,
         technical_description=entry.technical_description,
@@ -198,31 +230,79 @@ def update_dictionary_entry(
         raise HTTPException(status_code=404, detail="Dictionary entry not found")
     
     if update.create_new_version:
-        # Create new version, deactivate current
-        entry.is_active = False
-        session.add(entry)
+        # When creating a new version from a published entry, check if there's already a draft
+        # If there is, update it instead of creating a duplicate
+        from sqlmodel import select
         
-        # Create new version with updated fields
-        new_entry = DataDictionaryEntry(
-            database_name=entry.database_name,
-            schema_name=entry.schema_name,
-            table_name=entry.table_name,
-            column_name=entry.column_name,
-            version_number=entry.version_number + 1,
-            is_active=True,
-            version_notes=update.version_notes or "Manual edit - new version",
-            business_name=update.business_name if update.business_name is not None else entry.business_name,
-            business_description=update.business_description if update.business_description is not None else entry.business_description,
-            technical_description=update.technical_description if update.technical_description is not None else entry.technical_description,
-            data_type=entry.data_type,
-            examples=entry.examples,
-            tags=update.tags if update.tags is not None else entry.tags,
-            source="human_edited"
-        )
-        session.add(new_entry)
-        session.commit()
-        session.refresh(new_entry)
-        entry = new_entry
+        existing_draft = session.exec(
+            select(DataDictionaryEntry).where(
+                DataDictionaryEntry.database_name == entry.database_name,
+                DataDictionaryEntry.schema_name == entry.schema_name,
+                DataDictionaryEntry.table_name == entry.table_name,
+                DataDictionaryEntry.column_name == entry.column_name,
+                DataDictionaryEntry.state == "draft"
+            )
+        ).first()
+        
+        if existing_draft:
+            # Update the existing draft instead of creating a new one
+            if update.business_name is not None:
+                existing_draft.business_name = update.business_name
+            if update.business_description is not None:
+                existing_draft.business_description = update.business_description
+            if update.technical_description is not None:
+                existing_draft.technical_description = update.technical_description
+            if update.tags is not None:
+                existing_draft.tags = update.tags
+            
+            existing_draft.source = "human_edited"
+            existing_draft.updated_at = datetime.utcnow()
+            if update.version_notes:
+                existing_draft.version_notes = update.version_notes
+            
+            session.add(existing_draft)
+            session.commit()
+            session.refresh(existing_draft)
+            entry = existing_draft
+        else:
+            # No existing draft - create a new draft version
+            # IMPORTANT: Do NOT deactivate the published entry - it stays active until the draft is published
+            
+            # Find the highest version number for this column to avoid duplicates
+            from sqlmodel import func
+            max_version = session.exec(
+                select(func.max(DataDictionaryEntry.version_number)).where(
+                    DataDictionaryEntry.database_name == entry.database_name,
+                    DataDictionaryEntry.schema_name == entry.schema_name,
+                    DataDictionaryEntry.table_name == entry.table_name,
+                    DataDictionaryEntry.column_name == entry.column_name
+                )
+            ).first()
+            
+            new_version_number = (max_version or 0) + 1
+            
+            # Create new draft version (NOT active - only published versions are active)
+            new_entry = DataDictionaryEntry(
+                database_name=entry.database_name,
+                schema_name=entry.schema_name,
+                table_name=entry.table_name,
+                column_name=entry.column_name,
+                version_number=new_version_number,
+                is_active=False,  # Drafts are NOT active - only published versions are active
+                state="draft",
+                version_notes=update.version_notes or "Edited published entry - new draft created",
+                business_name=update.business_name if update.business_name is not None else entry.business_name,
+                business_description=update.business_description if update.business_description is not None else entry.business_description,
+                technical_description=update.technical_description if update.technical_description is not None else entry.technical_description,
+                data_type=entry.data_type,
+                examples=entry.examples,
+                tags=update.tags if update.tags is not None else entry.tags,
+                source="human_edited"
+            )
+            session.add(new_entry)
+            session.commit()
+            session.refresh(new_entry)
+            entry = new_entry
     else:
         # Update in place
         if update.business_name is not None:
@@ -253,6 +333,7 @@ def update_dictionary_entry(
         version_number=entry.version_number,
         is_active=entry.is_active,
         version_notes=entry.version_notes,
+        state=entry.state,
         business_name=entry.business_name,
         business_description=entry.business_description,
         technical_description=entry.technical_description,
@@ -324,6 +405,7 @@ def get_column_version_history(
             column_name=entry.column_name,
             version_number=entry.version_number,
             is_active=entry.is_active,
+            state=entry.state,
             version_notes=entry.version_notes,
             business_name=entry.business_name,
             business_description=entry.business_description,
@@ -359,6 +441,7 @@ def activate_dictionary_version(
             column_name=entry.column_name,
             version_number=entry.version_number,
             is_active=entry.is_active,
+            state=entry.state,
             version_notes=entry.version_notes,
             business_name=entry.business_name,
             business_description=entry.business_description,
@@ -372,4 +455,156 @@ def activate_dictionary_version(
         )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+# ============================================================================
+# Approval Workflow Endpoints
+# ============================================================================
+
+class WorkflowActionRequest(BaseModel):
+    """Request model for workflow actions."""
+    notes: Optional[str] = None
+
+
+@router.post("/{entry_id}/submit-for-approval", response_model=DictionaryEntryResponse)
+def submit_entry_for_approval(
+    entry_id: int,
+    session: Session = Depends(get_session)
+):
+    """
+    Submit a draft entry for approval.
+    Changes state from 'draft' to 'pending_approval'.
+    """
+    try:
+        entry = submit_for_approval(session, entry_id)
+        return DictionaryEntryResponse(
+            id=entry.id,
+            database_name=entry.database_name,
+            schema_name=entry.schema_name,
+            table_name=entry.table_name,
+            column_name=entry.column_name,
+            version_number=entry.version_number,
+            is_active=entry.is_active,
+            state=entry.state,
+            version_notes=entry.version_notes,
+            business_name=entry.business_name,
+            business_description=entry.business_description,
+            technical_description=entry.technical_description,
+            data_type=entry.data_type,
+            examples=entry.examples or [],
+            tags=entry.tags or [],
+            source=entry.source,
+            created_at=entry.created_at.isoformat(),
+            updated_at=entry.updated_at.isoformat(),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/{entry_id}/approve", response_model=DictionaryEntryResponse)
+def approve_dictionary_entry(
+    entry_id: int,
+    request: WorkflowActionRequest,
+    session: Session = Depends(get_session)
+):
+    """
+    Approve a pending entry and publish it.
+    Changes state from 'pending_approval' to 'published'.
+    """
+    try:
+        entry = approve_entry(session, entry_id, request.notes)
+        return DictionaryEntryResponse(
+            id=entry.id,
+            database_name=entry.database_name,
+            schema_name=entry.schema_name,
+            table_name=entry.table_name,
+            column_name=entry.column_name,
+            version_number=entry.version_number,
+            is_active=entry.is_active,
+            state=entry.state,
+            version_notes=entry.version_notes,
+            business_name=entry.business_name,
+            business_description=entry.business_description,
+            technical_description=entry.technical_description,
+            data_type=entry.data_type,
+            examples=entry.examples or [],
+            tags=entry.tags or [],
+            source=entry.source,
+            created_at=entry.created_at.isoformat(),
+            updated_at=entry.updated_at.isoformat(),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/{entry_id}/reject", response_model=DictionaryEntryResponse)
+def reject_dictionary_entry(
+    entry_id: int,
+    request: WorkflowActionRequest,
+    session: Session = Depends(get_session)
+):
+    """
+    Reject a pending entry and return it to draft state.
+    Changes state from 'pending_approval' back to 'draft'.
+    """
+    try:
+        entry = reject_entry(session, entry_id, request.notes)
+        return DictionaryEntryResponse(
+            id=entry.id,
+            database_name=entry.database_name,
+            schema_name=entry.schema_name,
+            table_name=entry.table_name,
+            column_name=entry.column_name,
+            version_number=entry.version_number,
+            is_active=entry.is_active,
+            state=entry.state,
+            version_notes=entry.version_notes,
+            business_name=entry.business_name,
+            business_description=entry.business_description,
+            technical_description=entry.technical_description,
+            data_type=entry.data_type,
+            examples=entry.examples or [],
+            tags=entry.tags or [],
+            source=entry.source,
+            created_at=entry.created_at.isoformat(),
+            updated_at=entry.updated_at.isoformat(),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/{entry_id}/publish", response_model=DictionaryEntryResponse)
+def publish_entry_directly(
+    entry_id: int,
+    request: WorkflowActionRequest,
+    session: Session = Depends(get_session)
+):
+    """
+    Publish a draft entry directly without approval workflow.
+    Useful for auto-approved changes or admin overrides.
+    """
+    try:
+        entry = publish_draft_directly(session, entry_id, request.notes)
+        return DictionaryEntryResponse(
+            id=entry.id,
+            database_name=entry.database_name,
+            schema_name=entry.schema_name,
+            table_name=entry.table_name,
+            column_name=entry.column_name,
+            version_number=entry.version_number,
+            is_active=entry.is_active,
+            state=entry.state,
+            version_notes=entry.version_notes,
+            business_name=entry.business_name,
+            business_description=entry.business_description,
+            technical_description=entry.technical_description,
+            data_type=entry.data_type,
+            examples=entry.examples or [],
+            tags=entry.tags or [],
+            source=entry.source,
+            created_at=entry.created_at.isoformat(),
+            updated_at=entry.updated_at.isoformat(),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 

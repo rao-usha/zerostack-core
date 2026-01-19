@@ -10,13 +10,14 @@ from db_session import get_session
 from .dictionary_enhanced_models import (
     DictionaryAsset,
     DictionaryField,
-    DictionaryRelationship,
     DictionaryProfile,
     TrustTier,
     EntityRole,
     Cardinality,
     RelationshipConfidence
 )
+# Import DictionaryRelationship from semantics models (unified model)
+from .dictionary_semantics_models import DictionaryRelationship
 from . import dictionary_enhanced_service as service
 from .connection import get_db_connection
 

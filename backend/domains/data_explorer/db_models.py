@@ -81,6 +81,7 @@ class DataDictionaryEntry(SQLModel, table=True):
     version_number: int = SQLField(default=1, index=True)
     is_active: bool = SQLField(default=True, index=True)
     version_notes: Optional[str] = None
+    state: str = SQLField(default="draft", max_length=50, index=True)  # "draft", "pending_approval", "published"
     
     # Business documentation
     business_name: Optional[str] = SQLField(default=None, max_length=255)

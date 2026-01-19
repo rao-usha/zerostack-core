@@ -11,10 +11,11 @@ import {
   Database,
   Layers,
   Table,
-  FlaskConical,
   Brain,
   Book,
-  Activity
+  Activity,
+  FlaskConical,
+  FolderOpen
 } from 'lucide-react'
 
 interface LayoutProps {
@@ -28,11 +29,12 @@ export default function Layout({ children }: LayoutProps) {
     { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
     { path: '/upload', icon: Upload, label: 'Upload Data' },
     { path: '/contexts', icon: Layers, label: 'Contexts' },
-    { path: '/distillation', icon: FlaskConical, label: 'Distillation' },
     { path: '/explorer', icon: Table, label: 'Data Explorer' },
     { path: '/analysis', icon: Brain, label: 'Data Analysis' },
     { path: '/dictionary', icon: Book, label: 'Data Dictionary' },
+    { path: '/files/locations', icon: FolderOpen, label: 'Files' },
     { path: '/model-development', icon: Activity, label: 'Model Development' },
+    { path: '/distillation', icon: FlaskConical, label: 'Distillation' },
     { path: '/chat', icon: MessageCircle, label: 'Chat with Data' },
     { path: '/insights', icon: Sparkles, label: 'Insights' },
     { path: '/quality', icon: CheckCircle2, label: 'Data Quality' },
@@ -72,7 +74,10 @@ export default function Layout({ children }: LayoutProps) {
           <nav className="p-4 space-y-2 flex-1">
             {navItems.map((item) => {
               const Icon = item.icon
-              const isActive = location.pathname === item.path
+              // Special handling for Files menu - highlight on any /files/* route
+              const isActive = item.path === '/files/locations' 
+                ? location.pathname.startsWith('/files')
+                : location.pathname === item.path
               return (
                 <Link
                   key={item.path}

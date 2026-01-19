@@ -1,11 +1,47 @@
+# Pre-commit hooks for Nex
+# Install: pre-commit install
+# Run manually: pre-commit run --all-files
+
 repos:
+  # Check for duplicate SQLModel table definitions
+  - repo: local
+    hooks:
+      - id: check-duplicate-tables
+        name: Check for duplicate table definitions
+        entry: python backend/scripts/check_duplicate_tables.py
+        language: system
+        types: [python]
+        files: ^backend/domains/.*\.py$
+        pass_filenames: false
+        always_run: false
+        
+  # Standard Python hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: ^(.*\.md|.*\.txt)$
+      - id: end-of-file-fixer
+        exclude: ^(.*\.md|.*\.txt)$
+      - id: check-yaml
+      - id: check-json
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+      - id: check-merge-conflict
+      - id: debug-statements
+      
+  # Python formatting with black
   - repo: https://github.com/psf/black
-    rev: 24.8.0
+    rev: 23.12.1
     hooks:
       - id: black
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.6.9
+        language_version: python3.11
+        files: ^backend/.*\.py$
+        
+  # Python import sorting
+  - repo: https://github.com/pycqa/isort
+    rev: 5.13.2
     hooks:
-      - id: ruff
-        args: [--fix, --exit-non-zero-on-fix]
-
+      - id: isort
+        files: ^backend/.*\.py$
+        args: ["--profile", "black"]
