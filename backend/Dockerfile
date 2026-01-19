@@ -1,5 +1,15 @@
-# Backend Dockerfile
-FROM python:3.11-slim
+# syntax=docker/dockerfile:1.4
+# Backend Dockerfile - Optimized for fast rebuilds
+#
+# Build commands:
+#   DOCKER_BUILDKIT=1 docker build -t nex-backend .                    # Core (fast, no ML)
+#   DOCKER_BUILDKIT=1 docker build --build-arg REQUIREMENTS=ml -t nex-backend .   # With ML
+#   DOCKER_BUILDKIT=1 docker build --build-arg REQUIREMENTS=full -t nex-backend . # Everything
+#
+# For CPU-only PyTorch (saves ~1.5GB), use:
+#   DOCKER_BUILDKIT=1 docker build --build-arg TORCH_CPU=1 --build-arg REQUIREMENTS=ml -t nex-backend .
+
+FROM python:3.11-slim AS base
 
 # Set working directory
 WORKDIR /app
@@ -7,35 +17,48 @@ WORKDIR /app
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
-# Build argument to choose requirements file
-# Default: core (fast, no PyTorch)
-# Options: core, ml, full
-ARG REQUIREMENTS=core
-
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
+# Install system dependencies and uv (fast Python package installer)
+RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && pip install uv
 
-# Copy all requirements files for flexibility
+# -------------------------------------------------------------------
+# Dependencies stage - cached separately from application code
+# -------------------------------------------------------------------
+FROM base AS dependencies
+
+# Build arguments
+# REQUIREMENTS: core (default), ml, full
+# TORCH_CPU: set to 1 for CPU-only PyTorch (saves ~1.5GB)
+ARG REQUIREMENTS=core
+ARG TORCH_CPU=0
+
+# Copy only requirements files (cache layer)
 COPY requirements*.txt ./
 
-# Install Python dependencies based on build arg
-# - core: Fast install, no ML/PyTorch (~2 min)
-# - ml: Includes SDV/PyTorch (~10 min)
-# - full: Everything including test deps
-RUN pip install --upgrade pip && \
+# Install Python dependencies with caching
+# uv is 10-100x faster than pip
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=cache,target=/root/.cache/pip \
+    if [ "$TORCH_CPU" = "1" ] && [ "$REQUIREMENTS" != "core" ]; then \
+        uv pip install --system torch --index-url https://download.pytorch.org/whl/cpu; \
+    fi && \
     if [ "$REQUIREMENTS" = "full" ]; then \
-        pip install -r requirements.txt; \
+        uv pip install --system -r requirements.txt; \
     elif [ "$REQUIREMENTS" = "ml" ]; then \
-        pip install -r requirements-ml.txt; \
+        uv pip install --system -r requirements-ml.txt; \
     else \
-        pip install -r requirements-core.txt; \
+        uv pip install --system -r requirements-core.txt; \
     fi
+
+# -------------------------------------------------------------------
+# Final stage - application code (rebuilds fast when only code changes)
+# -------------------------------------------------------------------
+FROM dependencies AS final
 
 # Copy application code
 COPY . .
