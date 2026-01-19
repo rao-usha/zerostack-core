@@ -17,7 +17,7 @@
 | F1: Password encryption | ✅ COMPLETE | tab-1 | 2026-01-19 | 2026-01-19 | Fernet encryption in core/encryption.py |
 | F2: MLWorkbench API client | ✅ COMPLETE | tab-2 | 2026-01-19 | 2026-01-19 | Uses axios client |
 | F3: Toast notifications | ✅ COMPLETE | tab-2 | 2026-01-19 | 2026-01-19 | ToastContext + useToast hook |
-| F4: LineageDemo real API | 🟡 AVAILABLE | - | - | - | Frontend |
+| F4: LineageDemo real API | ✅ COMPLETE | tab-1 | 2026-01-19 | 2026-01-19 | Demo/Live toggle, uses api/client |
 | F5: Rate limiting | ✅ COMPLETE | tab-1 | 2026-01-19 | 2026-01-19 | slowapi in core/rate_limit.py |
 | F6: Frontend health check | ✅ COMPLETE | tab-2 | 2026-01-19 | 2026-01-19 | HealthIndicator in Layout |
 
