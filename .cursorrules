@@ -1,0 +1,189 @@
+# zerostack Project Rules
+
+## Development Workflow (MANDATORY)
+
+All code changes MUST follow this workflow. Do NOT skip steps.
+
+### Phase 1: PLAN
+Before writing any code:
+1. **Understand the request** - Read and analyze what's being asked
+2. **Explore the codebase** - Read relevant files, understand existing patterns
+3. **Create a plan** - Use the TodoWrite tool to outline specific steps
+4. **Identify affected files** - List all files that will be created/modified
+5. **Consider edge cases** - Think about what could go wrong
+
+### Phase 2: EXECUTE
+Implement the changes:
+1. **Follow the plan** - Work through todos systematically
+2. **One change at a time** - Don't make unrelated changes
+3. **Match existing patterns** - Follow the codebase's style and conventions
+4. **Update todos** - Mark items complete as you finish them
+
+### Phase 3: TEST (First Pass)
+Verify the implementation works:
+1. **Run relevant tests** - Execute existing test suites
+2. **Manual verification** - Test the feature/fix manually if applicable
+3. **Check for linter errors** - Use ReadLints on modified files
+4. **Verify no regressions** - Ensure existing functionality still works
+
+### Phase 4: REFINE/FIX
+Address any issues found:
+1. **Fix failing tests** - Debug and resolve test failures
+2. **Fix linter errors** - Clean up any code quality issues
+3. **Address edge cases** - Handle scenarios discovered during testing
+4. **Refactor if needed** - Improve code quality without changing behavior
+
+### Phase 5: TEST AGAIN (Second Pass)
+Confirm fixes are complete:
+1. **Re-run all tests** - Verify everything passes
+2. **Re-check lints** - Ensure no new issues introduced
+3. **Final manual verification** - Confirm the feature works as expected
+
+### Phase 6: COMMIT
+Create a proper git commit:
+1. **Stage relevant files** - Only include files related to this change
+2. **Write clear commit message** - Explain the "why" not just the "what"
+3. **Do NOT commit secrets** - Check for .env files, credentials, API keys
+
+### Phase 7: PUSH
+Push changes to remote:
+1. **Push to feature branch** - Never push directly to main/master
+2. **Verify push succeeded** - Check for any errors
+
+### Phase 8: MERGE (if applicable)
+Create or update pull request:
+1. **Create PR with description** - Use gh pr create with summary and test plan
+2. **Request review if needed** - Tag appropriate reviewers
+3. **Only merge when approved** - Wait for CI and review approval
+
+### Phase 9: POST-MERGE TEST
+Verify production readiness:
+1. **Pull latest changes** - Ensure local is up to date
+2. **Run full test suite** - Verify nothing broke in merge
+3. **Notify user** - Use Telegram bridge if configured
+
+### Workflow Enforcement Rules
+- **NEVER skip the PLAN phase** - Understanding before implementing prevents mistakes
+- **NEVER skip TEST phases** - Both pre and post-fix testing are mandatory
+- **NEVER push to main/master directly** - Always use feature branches
+- **NEVER commit without testing** - Broken commits waste everyone's time
+- **ALWAYS create todos for multi-step tasks** - Track progress systematically
+
+---
+
+## Documentation Organization
+
+All documentation MUST follow this structure. Do NOT create markdown files in the project root.
+
+### Documentation Structure
+```
+docs/
+├── README.md                 # Documentation index (entry point)
+├── api.md                    # API reference
+├── development.md            # Development guide
+├── docker.md                 # Docker guide
+├── testing.md                # Testing overview
+├── TECHNICAL_OVERVIEW.md     # Architecture overview
+│
+├── features/                 # Feature documentation (one per feature)
+│   ├── data-dictionary.md
+│   ├── ml-development.md
+│   ├── files.md
+│   ├── gdrive-integration.md
+│   ├── data-lineage-complete.md
+│   └── m5-dataset.md
+│
+├── setup/                    # Setup & installation guides
+│   ├── INSTALLATION.md
+│   ├── DATABASE_SETUP.md
+│   ├── ENVIRONMENT_VARIABLES.md
+│   └── *.md
+│
+├── guides/                   # User guides & tutorials
+│   ├── QUICKSTART.md
+│   ├── START_HERE.md
+│   └── *.md
+│
+├── plans/                    # Roadmaps, improvement plans, status
+│   ├── CODEBASE_IMPROVEMENT_PLAN.md   # Master improvement plan
+│   ├── PARALLEL_EXECUTION_PLAN.md     # Parallel work streams
+│   ├── FEATURE_ROADMAP.md             # Feature roadmap
+│   ├── FEATURE_STATUS.md              # Current feature status
+│   ├── PHASE_2_ROADMAP.md
+│   └── */                             # Feature-specific plans
+│
+├── reference/                # Technical reference docs
+│   ├── ML_API_QUICK_REFERENCE.md
+│   ├── ML_MODEL_DEVELOPMENT.md
+│   ├── MCP_DATA_DICTIONARY_DESIGN.md
+│   ├── GPU_RUNNER_QUICKSTART.md
+│   └── *.md
+│
+├── branding/                 # Style & branding guides
+│   ├── BRANDING.md
+│   └── COLOR_SCHEME.md
+│
+├── testing/                  # Test documentation & procedures
+│   ├── TESTING_GUIDE.md
+│   ├── RUN_TESTS.md
+│   └── TEST_*.md
+│
+└── archive/                  # Historical docs (read-only)
+    ├── bug-fixes/
+    └── implementation-notes/
+```
+
+### Rules for Documentation
+1. **NO markdown files in project root** - Only `README.md` belongs there
+2. **Feature docs** → `docs/features/` - One consolidated doc per feature
+3. **Setup guides** → `docs/setup/` - Installation and configuration
+4. **User guides** → `docs/guides/` - How-to tutorials
+5. **Plans & roadmaps** → `docs/plans/` - All planning documents
+6. **Technical references** → `docs/reference/` - API refs, ML docs, MCP specs
+7. **Branding/style** → `docs/branding/` - Visual guidelines
+8. **Test docs** → `docs/testing/` - Test procedures and guides
+9. **Historical notes** → `docs/archive/` - Bug fixes, implementation notes
+10. **Scripts** → `scripts/` folder - All .bat, .sh, .ps1 files
+
+### When Creating New Documentation
+- For a **new feature**: Create `docs/features/<feature-name>.md`
+- For **setup instructions**: Create in `docs/setup/`
+- For **roadmaps/plans**: Create in `docs/plans/`
+- For **technical references**: Create in `docs/reference/`
+- For **implementation notes**: These are temporary; archive when done
+- For **bug fix notes**: Archive to `docs/archive/bug-fixes/` when resolved
+
+---
+
+## Telegram Notification Bridge
+
+ALWAYS use the Telegram bridge at http://localhost:8765 to communicate with the user.
+
+### WHEN TO USE THE BRIDGE:
+1. **Task completion** - When you finish a multi-step task
+2. **Need confirmation** - Before deleting files, deploying, or major changes
+3. **Long-running tasks** - When something takes more than a few seconds
+4. **User explicitly asks** - "notify me when done", "text me", "let me know on Telegram"
+
+### WHEN NOT TO USE (just respond normally in Cursor):
+- Regular conversation and questions
+- Showing code or explanations
+- Quick tasks that complete immediately
+- When actively chatting back and forth
+
+### How to send messages (user can always reply):
+```
+curl -X POST http://localhost:8765/ask -H "Content-Type: application/json" -d "{\"prompt\": \"YOUR MESSAGE OR QUESTION\", \"project\": \"REPO_NAME\", \"timeout_seconds\": 300, \"default\": \"ok\"}"
+```
+
+The user will reply directly to your message on Telegram. Their reply comes back to you.
+
+Replace REPO_NAME with the current repository/project name.
+
+Note: This is a BLOCKING call - it waits up to 5 minutes for a reply. If no reply, it returns "ok" as default.
+
+### IMPORTANT - When task is complete:
+Always end your completion message with:
+"Return to Cursor to start a new task."
+
+This reminds the user that Telegram cannot initiate new prompts - they must go back to Cursor.

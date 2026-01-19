@@ -1,0 +1,18 @@
+# ZeroStack Backend - ML Dependencies
+# Includes PyTorch via SDV (~2GB additional download)
+# Only install if you need synthetic data generation
+#
+# Install: pip install -r requirements-ml.txt
+# Or for CPU-only (saves ~1.5GB):
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu
+#   pip install -r requirements-ml.txt
+
+# Requires core dependencies first
+-r requirements-core.txt
+
+# Machine Learning
+scikit-learn==1.3.2
+
+# Synthetic Data Generation (pulls PyTorch)
+sdv>=1.10.0
+faker>=22.0.0

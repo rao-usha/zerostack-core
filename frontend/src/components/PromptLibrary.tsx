@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import Toast from './Toast'
 import {
   Brain,
   Plus,
@@ -32,6 +33,10 @@ interface Recipe {
 }
 
 export default function PromptLibrary() {
+  const [toast, setToast] = useState<{
+    message: string
+    type: 'success' | 'error' | 'warning' | 'info'
+  } | null>(null)
   const [recipes, setRecipes] = useState<Recipe[]>([])
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<'list' | 'edit'>('list')
@@ -71,9 +76,9 @@ export default function PromptLibrary() {
     } catch (error: any) {
       console.error('Failed to delete recipe:', error)
       if (error.response?.status === 400) {
-        alert('Cannot delete seed recipe. Use force delete if necessary.')
+        setToast({ message: 'Cannot delete seed recipe. Use force delete if necessary.', type: 'warning' })
       } else {
-        alert('Failed to delete recipe: ' + error.message)
+        setToast({ message: 'Failed to delete recipe: ' + error.message, type: 'error' })
       }
     }
   }
@@ -84,7 +89,7 @@ export default function PromptLibrary() {
       setRecipes([...recipes, cloned])
     } catch (error) {
       console.error('Failed to clone recipe:', error)
-      alert('Failed to clone recipe')
+      setToast({ message: 'Failed to clone recipe', type: 'error' })
     }
   }
 
@@ -103,7 +108,7 @@ export default function PromptLibrary() {
       await loadRecipes()
     } catch (error) {
       console.error('Failed to set default:', error)
-      alert('Failed to set as default')
+      setToast({ message: 'Failed to set as default', type: 'error' })
     }
   }
 
@@ -333,6 +338,14 @@ export default function PromptLibrary() {
             </div>
           </div>
         </div>
+      )}
+
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
       )}
     </div>
   )

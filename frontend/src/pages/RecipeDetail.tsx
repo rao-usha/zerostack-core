@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { BookOpen, ArrowLeft, Save, Copy, CheckCircle, Edit, FileText, GitBranch, Beaker, Github, ExternalLink, Star, Database, ArrowRight } from 'lucide-react'
+import Toast from '../components/Toast'
+import { BookOpen, ArrowLeft, Save, Copy, CheckCircle, Edit, FileText, GitBranch, Beaker, Github, ExternalLink, Star, Database, ArrowRight, PlayCircle, X, Cloud, Monitor } from 'lucide-react'
+import LiveRunStatus from '../components/LiveRunStatus'
 
 interface Recipe {
   id: string
@@ -76,6 +78,10 @@ GROUP BY p.wm_yr_wk, p.item_id, p.sell_price`
 export default function RecipeDetail() {
   const { recipeId } = useParams<{ recipeId: string }>()
   const navigate = useNavigate()
+  const [toast, setToast] = useState<{
+    message: string
+    type: 'success' | 'error' | 'warning' | 'info'
+  } | null>(null)
   const [activeTab, setActiveTab] = useState<TabType>('overview')
   const [recipe, setRecipe] = useState<Recipe | null>(null)
   const [versions, setVersions] = useState<RecipeVersion[]>([])
@@ -84,6 +90,21 @@ export default function RecipeDetail() {
   const [editMode, setEditMode] = useState(false)
   const [manifestText, setManifestText] = useState('')
   const [saving, setSaving] = useState(false)
+  
+  // Run Recipe Modal State
+  const [showRunModal, setShowRunModal] = useState(false)
+  const [runParams, setRunParams] = useState<Record<string, any>>({})
+  const [computeTarget, setComputeTarget] = useState<'local' | 'runpod'>('runpod')
+  const [creatingRun, setCreatingRun] = useState(false)
+  const [runError, setRunError] = useState<string | null>(null)
+  const [availableGpus, setAvailableGpus] = useState<any[]>([])
+  const [runningPods, setRunningPods] = useState<any[]>([])
+  const [selectedPod, setSelectedPod] = useState<string>('')
+  const [loadingGpus, setLoadingGpus] = useState(false)
+  const [spending, setSpending] = useState<any>(null)
+  
+  // Live run tracking
+  const [activeRunId, setActiveRunId] = useState<string | null>(null)
 
   useEffect(() => {
     loadRecipe()
@@ -146,7 +167,7 @@ export default function RecipeDetail() {
       }
     } catch (error) {
       console.error('Error saving version:', error)
-      alert('Error saving manifest. Please check JSON syntax.')
+      setToast({ message: 'Error saving manifest. Please check JSON syntax.', type: 'error' })
     } finally {
       setSaving(false)
     }
@@ -181,6 +202,94 @@ export default function RecipeDetail() {
       }
     } catch (error) {
       console.error('Error cloning recipe:', error)
+    }
+  }
+
+  const openRunModal = async () => {
+    // Set default parameters based on recipe family
+    const defaultParams: Record<string, any> = {}
+    if (recipe?.model_family === 'forecasting') {
+      defaultParams.horizon = 28
+      defaultParams.n_estimators = 100
+    } else if (recipe?.model_family === 'pricing') {
+      defaultParams.features = ['price', 'demand']
+    }
+    setRunParams(defaultParams)
+    setRunError(null)
+    setShowRunModal(true)
+    
+    // Fetch available GPUs, running pods, and spending info
+    setLoadingGpus(true)
+    try {
+      const [gpuResponse, podResponse, spendingResponse] = await Promise.all([
+        fetch('/api/v1/ml-development/runpod/gpus').then(r => r.ok ? r.json() : { gpus: [] }),
+        fetch('/api/v1/ml-development/runpod/pods').then(r => r.ok ? r.json() : { pods: [] }),
+        fetch('/api/v1/ml-development/runpod/spending').then(r => r.ok ? r.json() : null)
+      ])
+      setAvailableGpus(gpuResponse.gpus || [])
+      setRunningPods(podResponse.pods || [])
+      setSpending(spendingResponse)
+      // Auto-select a running pod if available
+      const activePods = (podResponse.pods || []).filter((p: any) => p.status === 'RUNNING')
+      if (activePods.length > 0) {
+        setSelectedPod(activePods[0].id)
+      }
+    } catch (error) {
+      console.error('Failed to fetch RunPod data:', error)
+    } finally {
+      setLoadingGpus(false)
+    }
+  }
+
+  const createRun = async () => {
+    if (!selectedVersion) return
+    
+    // Check if using RunPod but no running pod selected
+    if (computeTarget === 'runpod') {
+      const activePods = runningPods.filter(p => p.status === 'RUNNING')
+      if (activePods.length === 0) {
+        setRunError('No running pods available. Start a pod on RunPod or use Local compute.')
+        return
+      }
+      if (!selectedPod) {
+        setRunError('Please select a running pod to use.')
+        return
+      }
+    }
+    
+    setCreatingRun(true)
+    setRunError(null)
+    
+    try {
+      const response = await fetch('/api/v1/ml-development/runs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          recipe_id: recipeId,
+          recipe_version_id: selectedVersion.version_id,
+          run_type: 'train',
+          compute_target: computeTarget,
+          parameters: {
+            ...runParams,
+            ...(selectedPod ? { pod_id: selectedPod } : {})
+          }
+        })
+      })
+      
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.detail || 'Failed to create run')
+      }
+      
+      const run = await response.json()
+      setShowRunModal(false)
+      // Show live status tracker instead of navigating away
+      setActiveRunId(run.id)
+    } catch (error: any) {
+      console.error('Error creating run:', error)
+      setRunError(error.message || 'Failed to create run')
+    } finally {
+      setCreatingRun(false)
     }
   }
 
@@ -257,6 +366,28 @@ export default function RecipeDetail() {
           </div>
 
           <div style={{ display: 'flex', gap: '1rem' }}>
+            {/* Run Recipe Button - Primary Action */}
+            <button
+              onClick={openRunModal}
+              disabled={!selectedVersion}
+              style={{
+                padding: '0.75rem 1.5rem',
+                background: 'linear-gradient(135deg, #a8d8ff, #c4b5fd)',
+                border: 'none',
+                borderRadius: '0.5rem',
+                color: '#0a0a0f',
+                fontWeight: '700',
+                cursor: selectedVersion ? 'pointer' : 'not-allowed',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                opacity: selectedVersion ? 1 : 0.5
+              }}
+            >
+              <PlayCircle className="h-5 w-5" />
+              Run Recipe
+            </button>
+
             {recipe.status === 'draft' && (
               <button
                 onClick={approveRecipe}
@@ -842,6 +973,472 @@ export default function RecipeDetail() {
           </div>
         )}
       </div>
+
+      {/* Run Recipe Modal */}
+      {showRunModal && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 50
+        }}>
+          <div style={{
+            backgroundColor: '#1a1a24',
+            borderRadius: '1rem',
+            border: '1px solid rgba(168, 216, 255, 0.3)',
+            width: '100%',
+            maxWidth: '500px',
+            maxHeight: '90vh',
+            overflow: 'auto'
+          }}>
+            {/* Modal Header */}
+            <div style={{
+              padding: '1.5rem',
+              borderBottom: '1px solid rgba(168, 216, 255, 0.2)',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <PlayCircle className="h-6 w-6" style={{ color: '#a8d8ff' }} />
+                <h2 style={{ fontSize: '1.25rem', fontWeight: '700', color: '#f0f0f5', margin: 0 }}>
+                  Run Recipe
+                </h2>
+              </div>
+              <button
+                onClick={() => setShowRunModal(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#b3b3c4',
+                  cursor: 'pointer',
+                  padding: '0.5rem'
+                }}
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div style={{ padding: '1.5rem' }}>
+              {/* Recipe Info */}
+              <div style={{
+                padding: '1rem',
+                backgroundColor: 'rgba(168, 216, 255, 0.05)',
+                borderRadius: '0.5rem',
+                marginBottom: '1.5rem'
+              }}>
+                <p style={{ color: '#b3b3c4', fontSize: '0.875rem', marginBottom: '0.25rem' }}>Recipe</p>
+                <p style={{ color: '#f0f0f5', fontWeight: '600' }}>{recipe?.name}</p>
+                <p style={{ color: '#b3b3c4', fontSize: '0.75rem', marginTop: '0.5rem' }}>
+                  Version: {selectedVersion?.version_number}
+                </p>
+              </div>
+
+              {/* Compute Target */}
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label style={{ display: 'block', color: '#f0f0f5', fontWeight: '600', marginBottom: '0.75rem' }}>
+                  Compute Target
+                </label>
+                <div style={{ display: 'flex', gap: '1rem' }}>
+                  <button
+                    onClick={() => setComputeTarget('runpod')}
+                    style={{
+                      flex: 1,
+                      padding: '1rem',
+                      backgroundColor: computeTarget === 'runpod' ? 'rgba(168, 216, 255, 0.15)' : 'transparent',
+                      border: computeTarget === 'runpod' 
+                        ? '2px solid #a8d8ff' 
+                        : '1px solid rgba(168, 216, 255, 0.2)',
+                      borderRadius: '0.5rem',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: '0.5rem'
+                    }}
+                  >
+                    <Cloud className="h-6 w-6" style={{ color: computeTarget === 'runpod' ? '#a8d8ff' : '#b3b3c4' }} />
+                    <span style={{ color: computeTarget === 'runpod' ? '#a8d8ff' : '#b3b3c4', fontWeight: '600' }}>
+                      RunPod GPU
+                    </span>
+                    <span style={{ color: '#9ca3af', fontSize: '0.75rem' }}>
+                      ~$0.20/hr
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => setComputeTarget('local')}
+                    style={{
+                      flex: 1,
+                      padding: '1rem',
+                      backgroundColor: computeTarget === 'local' ? 'rgba(168, 216, 255, 0.15)' : 'transparent',
+                      border: computeTarget === 'local' 
+                        ? '2px solid #a8d8ff' 
+                        : '1px solid rgba(168, 216, 255, 0.2)',
+                      borderRadius: '0.5rem',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: '0.5rem'
+                    }}
+                  >
+                    <Monitor className="h-6 w-6" style={{ color: computeTarget === 'local' ? '#a8d8ff' : '#b3b3c4' }} />
+                    <span style={{ color: computeTarget === 'local' ? '#a8d8ff' : '#b3b3c4', fontWeight: '600' }}>
+                      Local
+                    </span>
+                    <span style={{ color: '#9ca3af', fontSize: '0.75rem' }}>
+                      Free
+                    </span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Parameters */}
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label style={{ display: 'block', color: '#f0f0f5', fontWeight: '600', marginBottom: '0.75rem' }}>
+                  Parameters
+                </label>
+                {recipe?.model_family === 'forecasting' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    <div>
+                      <label style={{ display: 'block', color: '#b3b3c4', fontSize: '0.875rem', marginBottom: '0.5rem' }}>
+                        Forecast Horizon (days)
+                      </label>
+                      <input
+                        type="number"
+                        value={runParams.horizon || 28}
+                        onChange={(e) => setRunParams({ ...runParams, horizon: parseInt(e.target.value) })}
+                        style={{
+                          width: '100%',
+                          padding: '0.75rem',
+                          backgroundColor: '#0a0a0f',
+                          border: '1px solid rgba(168, 216, 255, 0.2)',
+                          borderRadius: '0.375rem',
+                          color: '#f0f0f5',
+                          fontSize: '0.95rem'
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', color: '#b3b3c4', fontSize: '0.875rem', marginBottom: '0.5rem' }}>
+                        Number of Estimators
+                      </label>
+                      <input
+                        type="number"
+                        value={runParams.n_estimators || 100}
+                        onChange={(e) => setRunParams({ ...runParams, n_estimators: parseInt(e.target.value) })}
+                        style={{
+                          width: '100%',
+                          padding: '0.75rem',
+                          backgroundColor: '#0a0a0f',
+                          border: '1px solid rgba(168, 216, 255, 0.2)',
+                          borderRadius: '0.375rem',
+                          color: '#f0f0f5',
+                          fontSize: '0.95rem'
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+                {recipe?.model_family !== 'forecasting' && (
+                  <textarea
+                    value={JSON.stringify(runParams, null, 2)}
+                    onChange={(e) => {
+                      try {
+                        setRunParams(JSON.parse(e.target.value))
+                      } catch {}
+                    }}
+                    style={{
+                      width: '100%',
+                      minHeight: '100px',
+                      padding: '0.75rem',
+                      backgroundColor: '#0a0a0f',
+                      border: '1px solid rgba(168, 216, 255, 0.2)',
+                      borderRadius: '0.375rem',
+                      color: '#f0f0f5',
+                      fontFamily: 'monospace',
+                      fontSize: '0.875rem',
+                      resize: 'vertical'
+                    }}
+                  />
+                )}
+              </div>
+
+              {/* Error Message */}
+              {runError && (
+                <div style={{
+                  padding: '1rem',
+                  backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                  borderRadius: '0.5rem',
+                  marginBottom: '1.5rem'
+                }}>
+                  <p style={{ color: '#ef4444', fontSize: '0.875rem', margin: 0 }}>
+                    {runError}
+                  </p>
+                </div>
+              )}
+
+              {/* RunPod Dashboard */}
+              {computeTarget === 'runpod' && (
+                <div style={{ marginBottom: '1.5rem' }}>
+                  {loadingGpus ? (
+                    <p style={{ color: '#b3b3c4', fontSize: '0.875rem' }}>Loading RunPod data...</p>
+                  ) : (
+                    <>
+                      {/* Account Balance & Jobs Link */}
+                      {spending && (
+                        <div style={{
+                          padding: '1rem',
+                          backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                          border: '1px solid rgba(16, 185, 129, 0.3)',
+                          borderRadius: '0.5rem',
+                          marginBottom: '1rem'
+                        }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                              <p style={{ color: '#10b981', fontSize: '0.75rem', margin: 0, marginBottom: '0.25rem' }}>
+                                💰 RunPod Balance
+                              </p>
+                              <p style={{ color: '#f0f0f5', fontSize: '1.25rem', fontWeight: '700', margin: 0 }}>
+                                ${spending.client_balance?.toFixed(2) || '0.00'}
+                              </p>
+                            </div>
+                            <div style={{ textAlign: 'right' }}>
+                              <p style={{ color: '#b3b3c4', fontSize: '0.75rem', margin: 0 }}>
+                                Current: ${spending.spend_per_hour?.toFixed(2) || '0'}/hr
+                              </p>
+                              <p style={{ color: '#b3b3c4', fontSize: '0.75rem', margin: 0 }}>
+                                Limit: ${spending.spend_limit || 'None'}
+                              </p>
+                            </div>
+                          </div>
+                          <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(16, 185, 129, 0.2)' }}>
+                            <a
+                              href="/model-development/runpod-jobs"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{
+                                color: '#10b981',
+                                fontSize: '0.875rem',
+                                textDecoration: 'none',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.5rem'
+                              }}
+                            >
+                              📊 View Previous Jobs & Results →
+                            </a>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Your Running Pods */}
+                      <label style={{ display: 'block', color: '#f0f0f5', fontWeight: '600', marginBottom: '0.75rem' }}>
+                        Your Running Pods
+                      </label>
+                      {runningPods.filter(p => p.status === 'RUNNING').length > 0 ? (
+                        <div style={{ marginBottom: '1rem' }}>
+                          {runningPods.filter(p => p.status === 'RUNNING').map((pod) => (
+                            <div
+                              key={pod.id}
+                              onClick={() => setSelectedPod(pod.id)}
+                              style={{
+                                padding: '0.75rem 1rem',
+                                backgroundColor: selectedPod === pod.id ? 'rgba(16, 185, 129, 0.2)' : 'rgba(168, 216, 255, 0.05)',
+                                border: selectedPod === pod.id ? '2px solid #10b981' : '1px solid rgba(168, 216, 255, 0.2)',
+                                borderRadius: '0.5rem',
+                                marginBottom: '0.5rem',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s'
+                              }}
+                            >
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <div>
+                                  <p style={{ color: '#f0f0f5', fontWeight: '600', margin: 0, fontSize: '0.9rem' }}>
+                                    {pod.name}
+                                  </p>
+                                  <p style={{ color: '#b3b3c4', fontSize: '0.75rem', margin: 0, marginTop: '0.25rem' }}>
+                                    {pod.gpu_type} • {Math.round((pod.uptime_seconds || 0) / 3600)}h uptime
+                                  </p>
+                                </div>
+                                <div style={{ textAlign: 'right' }}>
+                                  <span style={{
+                                    padding: '0.25rem 0.5rem',
+                                    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+                                    color: '#10b981',
+                                    borderRadius: '0.25rem',
+                                    fontSize: '0.7rem',
+                                    fontWeight: '600'
+                                  }}>
+                                    RUNNING
+                                  </span>
+                                  <p style={{ color: '#fbbf24', fontSize: '0.75rem', margin: 0, marginTop: '0.25rem' }}>
+                                    ${pod.cost_per_hour?.toFixed(2)}/hr
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                          <p style={{ color: '#10b981', fontSize: '0.75rem', marginTop: '0.5rem' }}>
+                            ✓ Jobs will be sent to selected pod
+                          </p>
+                        </div>
+                      ) : (
+                        <div style={{
+                          padding: '1rem',
+                          backgroundColor: 'rgba(251, 191, 36, 0.1)',
+                          border: '1px solid rgba(251, 191, 36, 0.3)',
+                          borderRadius: '0.5rem',
+                          marginBottom: '1rem'
+                        }}>
+                          <p style={{ color: '#fbbf24', fontSize: '0.875rem', margin: 0 }}>
+                            ⚠️ No running pods. Add RUNPOD_POD_ID to .env or start a pod on RunPod.
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Stopped Pods */}
+                      {runningPods.filter(p => p.status !== 'RUNNING').length > 0 && (
+                        <div style={{ marginBottom: '1rem' }}>
+                          <p style={{ color: '#b3b3c4', fontSize: '0.75rem', marginBottom: '0.5rem' }}>
+                            Stopped pods ({runningPods.filter(p => p.status !== 'RUNNING').length}):
+                          </p>
+                          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                            {runningPods.filter(p => p.status !== 'RUNNING').slice(0, 5).map((pod) => (
+                              <span key={pod.id} style={{
+                                padding: '0.25rem 0.5rem',
+                                backgroundColor: 'rgba(168, 216, 255, 0.05)',
+                                border: '1px solid rgba(168, 216, 255, 0.1)',
+                                borderRadius: '0.25rem',
+                                fontSize: '0.7rem',
+                                color: '#6b7280'
+                              }}>
+                                {pod.name.slice(0, 20)}...
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Available GPUs (collapsed by default) */}
+                      <details style={{ marginTop: '1rem' }}>
+                        <summary style={{ 
+                          color: '#b3b3c4', 
+                          fontSize: '0.75rem', 
+                          cursor: 'pointer',
+                          marginBottom: '0.5rem'
+                        }}>
+                          📊 Available GPU Types ({availableGpus.length})
+                        </summary>
+                        <div style={{ 
+                          maxHeight: '200px', 
+                          overflowY: 'auto', 
+                          marginTop: '0.5rem',
+                          padding: '0.5rem',
+                          backgroundColor: 'rgba(0,0,0,0.2)',
+                          borderRadius: '0.375rem'
+                        }}>
+                          <table style={{ width: '100%', fontSize: '0.7rem', color: '#b3b3c4' }}>
+                            <thead>
+                              <tr style={{ borderBottom: '1px solid rgba(168, 216, 255, 0.1)' }}>
+                                <th style={{ textAlign: 'left', padding: '0.25rem' }}>GPU</th>
+                                <th style={{ textAlign: 'right', padding: '0.25rem' }}>VRAM</th>
+                                <th style={{ textAlign: 'right', padding: '0.25rem' }}>$/hr</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {availableGpus.slice(0, 15).map((gpu) => (
+                                <tr key={gpu.id} style={{ borderBottom: '1px solid rgba(168, 216, 255, 0.05)' }}>
+                                  <td style={{ padding: '0.25rem' }}>{gpu.name}</td>
+                                  <td style={{ textAlign: 'right', padding: '0.25rem' }}>{gpu.memory_gb}GB</td>
+                                  <td style={{ textAlign: 'right', padding: '0.25rem', color: '#fbbf24' }}>
+                                    ${gpu.hourly_rate_usd?.toFixed(2) || '?'}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </details>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div style={{
+              padding: '1.5rem',
+              borderTop: '1px solid rgba(168, 216, 255, 0.2)',
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: '1rem'
+            }}>
+              <button
+                onClick={() => setShowRunModal(false)}
+                style={{
+                  padding: '0.75rem 1.5rem',
+                  background: 'transparent',
+                  border: '1px solid rgba(168, 216, 255, 0.3)',
+                  borderRadius: '0.5rem',
+                  color: '#b3b3c4',
+                  fontWeight: '600',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={createRun}
+                disabled={creatingRun}
+                style={{
+                  padding: '0.75rem 1.5rem',
+                  background: 'linear-gradient(135deg, #a8d8ff, #c4b5fd)',
+                  border: 'none',
+                  borderRadius: '0.5rem',
+                  color: '#0a0a0f',
+                  fontWeight: '700',
+                  cursor: creatingRun ? 'not-allowed' : 'pointer',
+                  opacity: creatingRun ? 0.7 : 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem'
+                }}
+              >
+                <PlayCircle className="h-5 w-5" />
+                {creatingRun ? 'Creating Run...' : 'Create Run'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Live Run Status Tracker */}
+      {activeRunId && (
+        <LiveRunStatus
+          runId={activeRunId}
+          onComplete={() => {
+            // Keep showing for 10 seconds after completion, then auto-hide
+            setTimeout(() => {
+              setActiveRunId(null)
+            }, 10000)
+          }}
+          onClose={() => setActiveRunId(null)}
+        />
+      )}
+
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
     </div>
   )
 }

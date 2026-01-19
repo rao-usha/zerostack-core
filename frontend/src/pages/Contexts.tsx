@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import Toast from '../components/Toast'
 import {
   Layers,
   Plus,
@@ -78,6 +79,10 @@ interface Version {
 }
 
 export default function Contexts() {
+  const [toast, setToast] = useState<{
+    message: string
+    type: 'success' | 'error' | 'warning' | 'info'
+  } | null>(null)
   const [contexts, setContexts] = useState<Context[]>([])
   const [selectedContext, setSelectedContext] = useState<Context | null>(null)
   const [layers, setLayers] = useState<Layer[]>([])
@@ -116,7 +121,7 @@ export default function Contexts() {
       setContexts(data)
     } catch (error) {
       console.error('Failed to load contexts:', error)
-      alert('Failed to load contexts')
+      setToast({ message: 'Failed to load contexts', type: 'error' })
     }
   }
 
@@ -140,7 +145,7 @@ export default function Contexts() {
 
   const handleCreateContext = async () => {
     if (!newContextName.trim()) {
-      alert('Context name is required')
+      setToast({ message: 'Context name is required', type: 'warning' })
       return
     }
     setLoading(true)
@@ -152,7 +157,7 @@ export default function Contexts() {
       loadContexts()
     } catch (error: any) {
       console.error('Failed to create context:', error)
-      alert(error.response?.data?.detail || 'Failed to create context')
+      setToast({ message: error.response?.data?.detail || 'Failed to create context', type: 'error' })
     } finally {
       setLoading(false)
     }
@@ -160,7 +165,7 @@ export default function Contexts() {
 
   const handleAddLayer = async () => {
     if (!selectedContext || !newLayerName.trim()) {
-      alert('Context must be selected and layer name is required')
+      setToast({ message: 'Context must be selected and layer name is required', type: 'warning' })
       return
     }
     setLoading(true)
@@ -169,7 +174,7 @@ export default function Contexts() {
       try {
         spec = JSON.parse(newLayerSpec)
       } catch (e) {
-        alert('Invalid JSON in layer spec')
+        setToast({ message: 'Invalid JSON in layer spec', type: 'warning' })
         return
       }
       await addContextLayer(selectedContext.id, newLayerKind, newLayerName, spec)
@@ -180,7 +185,7 @@ export default function Contexts() {
       loadContextData()
     } catch (error: any) {
       console.error('Failed to add layer:', error)
-      alert(error.response?.data?.detail || 'Failed to add layer')
+      setToast({ message: error.response?.data?.detail || 'Failed to add layer', type: 'error' })
     } finally {
       setLoading(false)
     }
@@ -188,7 +193,7 @@ export default function Contexts() {
 
   const handleAddDictionary = async () => {
     if (!selectedContext || !newDictName.trim()) {
-      alert('Context must be selected and dictionary name is required')
+      setToast({ message: 'Context must be selected and dictionary name is required', type: 'warning' })
       return
     }
     setLoading(true)
@@ -207,7 +212,7 @@ export default function Contexts() {
       loadContextData()
     } catch (error: any) {
       console.error('Failed to add dictionary:', error)
-      alert(error.response?.data?.detail || 'Failed to add dictionary')
+      setToast({ message: error.response?.data?.detail || 'Failed to add dictionary', type: 'error' })
     } finally {
       setLoading(false)
     }
@@ -219,10 +224,10 @@ export default function Contexts() {
     try {
       await createContextVersion(selectedContext.id)
       loadContextData()
-      alert('Context versioned successfully!')
+      setToast({ message: 'Context versioned successfully!', type: 'success' })
     } catch (error: any) {
       console.error('Failed to create version:', error)
-      alert(error.response?.data?.detail || 'Failed to create version')
+      setToast({ message: error.response?.data?.detail || 'Failed to create version', type: 'error' })
     } finally {
       setLoading(false)
     }
@@ -241,7 +246,7 @@ export default function Contexts() {
       URL.revokeObjectURL(url)
     } catch (error: any) {
       console.error('Failed to export:', error)
-      alert(error.response?.data?.detail || 'Failed to export context')
+      setToast({ message: error.response?.data?.detail || 'Failed to export context', type: 'error' })
     }
   }
 
@@ -251,7 +256,7 @@ export default function Contexts() {
       loadContextData()
     } catch (error: any) {
       console.error('Failed to update layer:', error)
-      alert(error.response?.data?.detail || 'Failed to update layer')
+      setToast({ message: error.response?.data?.detail || 'Failed to update layer', type: 'error' })
     }
   }
 
@@ -262,13 +267,13 @@ export default function Contexts() {
       loadContextData()
     } catch (error: any) {
       console.error('Failed to delete layer:', error)
-      alert(error.response?.data?.detail || 'Failed to delete layer')
+      setToast({ message: error.response?.data?.detail || 'Failed to delete layer', type: 'error' })
     }
   }
 
   const handleUploadDocument = async () => {
     if (!selectedContext || !selectedFile) {
-      alert('Please select a file')
+      setToast({ message: 'Please select a file', type: 'warning' })
       return
     }
     setLoading(true)
@@ -277,10 +282,10 @@ export default function Contexts() {
       setSelectedFile(null)
       setShowDocumentModal(false)
       loadContextData()
-      alert('Document uploaded and summarized successfully!')
+      setToast({ message: 'Document uploaded and summarized successfully!', type: 'success' })
     } catch (error: any) {
       console.error('Failed to upload document:', error)
-      alert(error.response?.data?.detail || 'Failed to upload document')
+      setToast({ message: error.response?.data?.detail || 'Failed to upload document', type: 'error' })
     } finally {
       setLoading(false)
     }
@@ -291,10 +296,10 @@ export default function Contexts() {
     try {
       const result = await summarizeDocument(documentId)
       loadContextData()
-      alert('Document summarized successfully!')
+      setToast({ message: 'Document summarized successfully!', type: 'success' })
     } catch (error: any) {
       console.error('Failed to summarize document:', error)
-      alert(error.response?.data?.detail || 'Failed to summarize document')
+      setToast({ message: error.response?.data?.detail || 'Failed to summarize document', type: 'error' })
     } finally {
       setLoading(false)
     }
@@ -307,7 +312,7 @@ export default function Contexts() {
       loadContextData()
     } catch (error: any) {
       console.error('Failed to delete document:', error)
-      alert(error.response?.data?.detail || 'Failed to delete document')
+      setToast({ message: error.response?.data?.detail || 'Failed to delete document', type: 'error' })
     }
   }
 
@@ -1187,6 +1192,14 @@ export default function Contexts() {
             </div>
           </div>
         </div>
+      )}
+
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
       )}
     </div>
   )

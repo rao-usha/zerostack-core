@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
+import Toast from '../components/Toast'
 import {
   Brain,
   Play,
@@ -93,6 +94,10 @@ interface Table {
 }
 
 export default function DataAnalysis() {
+  const [toast, setToast] = useState<{
+    message: string
+    type: 'success' | 'error' | 'warning' | 'info'
+  } | null>(null)
   const location = useLocation()
   const navigationState = location.state as {
     preselectedTables?: Array<{ schema: string; name: string }>
@@ -365,11 +370,11 @@ export default function DataAnalysis() {
 
   const startAnalysis = async () => {
     if (!jobName.trim()) {
-      alert('Please enter a job name')
+      setToast({ message: 'Please enter a job name', type: 'warning' })
       return
     }
     if (selectedTables.length === 0) {
-      alert('Please select at least one table')
+      setToast({ message: 'Please select at least one table', type: 'warning' })
       return
     }
     if (!apiKeys[provider]) {
@@ -379,11 +384,11 @@ export default function DataAnalysis() {
         google: 'GOOGLE_API_KEY or GEMINI_API_KEY',
         xai: 'X_AI_API_KEY'
       }
-      alert(`No API key configured for ${provider}. Please add ${envVarMap[provider]} to your environment.`)
+      setToast({ message: `No API key configured for ${provider}. Please add ${envVarMap[provider]} to your environment.`, type: 'error' })
       return
     }
     if (!availableModels[provider] || availableModels[provider].length === 0) {
-      alert(`No models available for ${provider}. Please check your API key configuration.`)
+      setToast({ message: `No models available for ${provider}. Please check your API key configuration.`, type: 'error' })
       return
     }
 
@@ -418,7 +423,7 @@ export default function DataAnalysis() {
       }
     } catch (error: any) {
       console.error('Failed to start analysis:', error)
-      alert('Failed to start analysis: ' + (error.response?.data?.detail || error.message))
+      setToast({ message: 'Failed to start analysis: ' + (error.response?.data?.detail || error.message), type: 'error' })
     } finally {
       setSubmitting(false)
     }
@@ -457,7 +462,7 @@ export default function DataAnalysis() {
       }
     } catch (error) {
       console.error('Failed to delete job:', error)
-      alert('Failed to delete job: ' + (error as any).message)
+      setToast({ message: 'Failed to delete job: ' + (error as any).message, type: 'error' })
     }
   }
 
@@ -506,7 +511,7 @@ export default function DataAnalysis() {
       setView('list')
     } catch (error) {
       console.error('Failed to re-run job:', error)
-      alert('Failed to re-run job: ' + (error as any).message)
+      setToast({ message: 'Failed to re-run job: ' + (error as any).message, type: 'error' })
     } finally {
       setSubmitting(false)
     }
@@ -1578,6 +1583,14 @@ export default function DataAnalysis() {
         </div>
       )}
       </div>
+
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
     </div>
   )
 }
