@@ -1,10 +1,10 @@
-import { ReactNode } from 'react'
+import { ReactNode, useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { 
-  LayoutDashboard, 
-  Upload, 
-  Sparkles, 
-  MessageCircle, 
+import {
+  LayoutDashboard,
+  Upload,
+  Sparkles,
+  MessageCircle,
   CheckCircle2,
   AlertCircle,
   TrendingUp,
@@ -15,8 +15,52 @@ import {
   Book,
   Activity,
   FlaskConical,
-  FolderOpen
+  FolderOpen,
+  PlugZap,
+  FileCode2,
+  HardDrive,
+  WifiOff
 } from 'lucide-react'
+import { checkBackendHealth } from '../api/health'
+
+function HealthIndicator() {
+  const [healthy, setHealthy] = useState(true)
+  const [checking, setChecking] = useState(true)
+
+  useEffect(() => {
+    const check = async () => {
+      setChecking(true)
+      const isHealthy = await checkBackendHealth()
+      setHealthy(isHealthy)
+      setChecking(false)
+    }
+
+    check()
+    const interval = setInterval(check, 30000) // Check every 30s
+    return () => clearInterval(interval)
+  }, [])
+
+  if (checking || healthy) return null
+
+  return (
+    <div
+      style={{
+        backgroundColor: 'rgba(239, 68, 68, 0.15)',
+        borderBottom: '1px solid rgba(239, 68, 68, 0.5)',
+        color: '#f87171',
+        padding: '0.75rem 1rem',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '0.5rem',
+        fontSize: '0.875rem'
+      }}
+    >
+      <WifiOff size={16} />
+      <span>Backend connection lost. Some features may not work.</span>
+    </div>
+  )
+}
 
 interface LayoutProps {
   children: ReactNode
@@ -29,6 +73,9 @@ export default function Layout({ children }: LayoutProps) {
     { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
     { path: '/upload', icon: Upload, label: 'Upload Data' },
     { path: '/contexts', icon: Layers, label: 'Contexts' },
+    { path: '/data-sources', icon: PlugZap, label: 'Data Sources' },
+    { path: '/notebooks', icon: FileCode2, label: 'SQL Notebooks' },
+    { path: '/datasets', icon: HardDrive, label: 'Datasets' },
     { path: '/explorer', icon: Table, label: 'Data Explorer' },
     { path: '/analysis', icon: Brain, label: 'Data Analysis' },
     { path: '/dictionary', icon: Book, label: 'Data Dictionary' },
@@ -45,10 +92,11 @@ export default function Layout({ children }: LayoutProps) {
 
   return (
     <div className="min-h-screen bg-dark-bg">
+      <HealthIndicator />
       <div className="flex">
         {/* Sidebar */}
         <aside className="w-64 bg-dark-surface shadow-2xl min-h-screen border-r border-dark-border flex flex-col">
-          {/* NEX.AI Logo */}
+          {/* zerostack Logo */}
           <div className="p-6 border-b border-dark-border">
             <div className="flex items-center space-x-3">
               <div className="p-2 rounded-lg" style={{
@@ -64,7 +112,7 @@ export default function Layout({ children }: LayoutProps) {
                   WebkitTextFillColor: 'transparent',
                   backgroundClip: 'text'
                 }}>
-                  NEX.AI
+                  zerostack
                 </h1>
                 <p className="text-xs" style={{ color: '#b3d9ff' }}>AI Native Data Platform</p>
               </div>

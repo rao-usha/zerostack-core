@@ -19,11 +19,13 @@ import {
   FileTable,
 } from '../api/client'
 import DataTable from '../components/DataTable'
+import { useToast } from '../contexts/ToastContext'
 
 export default function FileAssetDetail() {
   const { assetId } = useParams<{ assetId: string }>()
   const navigate = useNavigate()
-  
+  const toast = useToast()
+
   const [detail, setDetail] = useState<FileAssetDetailType | null>(null)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'versions' | 'tables'>('tables')
@@ -51,7 +53,7 @@ export default function FileAssetDetail() {
         handleTableSelect(data.latest_tables[0])
       }
     } catch (err) {
-      console.error('Failed to load asset detail:', err)
+      toast.error('Failed to load asset details')
     } finally {
       setLoading(false)
     }
@@ -64,7 +66,7 @@ export default function FileAssetDetail() {
       const data = await previewFileTable(table.id, 100, 0)
       setPreviewData(data)
     } catch (err) {
-      console.error('Failed to load table preview:', err)
+      toast.error('Failed to load table preview')
     } finally {
       setLoadingPreview(false)
     }
@@ -75,8 +77,9 @@ export default function FileAssetDetail() {
     try {
       await publishFileTable(tableId)
       await loadDetail() // Reload to get updated publish status
+      toast.success('Table published successfully')
     } catch (err) {
-      console.error('Failed to publish table:', err)
+      toast.error('Failed to publish table')
     } finally {
       setPublishing(prev => ({ ...prev, [tableId]: false }))
     }
