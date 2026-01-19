@@ -44,6 +44,7 @@ slowapi>=0.1.9
 # Document processing
 PyPDF2==3.0.1
 python-docx==1.1.0
+openpyxl>=3.1.0  # Excel file support
 
 # Google Drive integration
 google-auth-oauthlib>=1.0.0

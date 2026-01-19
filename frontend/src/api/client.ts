@@ -13,15 +13,232 @@ const client = axios.create({
 
 export default client
 
-// API functions
+// ========================================
+// Lineage API
+// ========================================
+
+export const getLineage = async (entityType: string, entityId: string, params?: {
+  direction?: 'upstream' | 'downstream' | 'both'
+  maxDepth?: number
+  includeColumns?: boolean
+}) => {
+  const response = await client.get(`/api/v1/lineage/${entityType}/${entityId}`, { params })
+  return response.data
+}
+
+export const getLineageSummary = async (entityType: string, entityId: string) => {
+  const response = await client.get(`/api/v1/lineage/${entityType}/${entityId}/summary`)
+  return response.data
+}
+
+export const getUpstreamLineage = async (entityType: string, entityId: string, maxDepth?: number) => {
+  const response = await client.get(`/api/v1/lineage/${entityType}/${entityId}/upstream`, {
+    params: { max_depth: maxDepth }
+  })
+  return response.data
+}
+
+export const getDownstreamLineage = async (entityType: string, entityId: string, maxDepth?: number) => {
+  const response = await client.get(`/api/v1/lineage/${entityType}/${entityId}/downstream`, {
+    params: { max_depth: maxDepth }
+  })
+  return response.data
+}
+
+export const analyzeImpact = async (entityType: string, entityId: string) => {
+  const response = await client.get(`/api/v1/lineage/${entityType}/${entityId}/impact`)
+  return response.data
+}
+
+// Advanced Lineage API functions
+export const parseColumnLineage = async (sql: string) => {
+  const response = await client.post('/api/v1/lineage/parse-sql/column-level', { sql })
+  return response.data
+}
+
+export const analyzeMLQuery = async (sql: string) => {
+  const response = await client.post('/api/v1/lineage/analyze-ml-query', { sql })
+  return response.data
+}
+
+export const discoverPipelines = async (minStages: number = 3, timeWindowHours?: number) => {
+  const response = await client.get('/api/v1/lineage/pipelines', {
+    params: { min_stages: minStages, time_window_hours: timeWindowHours }
+  })
+  return response.data
+}
+
+export const findQueryChains = async (tableName: string, maxDepth: number = 10, timeWindowHours?: number) => {
+  const response = await client.get(`/api/v1/lineage/query-chains/${tableName}`, {
+    params: { max_depth: maxDepth, time_window_hours: timeWindowHours }
+  })
+  return response.data
+}
+
+export const trackLineage = async (data: {
+  source_type: string
+  source_id: string
+  source_name: string
+  target_type: string
+  target_id: string
+  target_name: string
+  edge_type: string
+  transform_sql?: string
+  transform_config?: any
+  source_row_count?: number
+  target_row_count?: number
+}) => {
+  const response = await client.post('/api/v1/lineage/track', data)
+  return response.data
+}
+
+// ========================================
+// Datasets API (File Upload)
+// ========================================
+
+export interface UploadedDataset {
+  id: string
+  name: string
+  description?: string
+  status: 'active' | 'processing' | 'error' | 'archived'
+  source_type: 'upload' | 'notebook' | 'connection' | 'synthetic'
+  schema: { columns: Array<{ name: string; dtype: string; nullable: boolean; stats?: any }> }
+  row_count?: number
+  column_count?: number
+  size_bytes?: number
+  storage_uri?: string
+  storage_format: string
+  current_version_number: number
+  tags: string[]
+  org_id: string
+  created_at: string
+  updated_at: string
+}
+
+export interface DatasetVersion {
+  id: string
+  dataset_id: string
+  version_number: number
+  sha256: string
+  storage_uri: string
+  storage_format: string
+  original_filename?: string
+  row_count?: number
+  column_count?: number
+  size_bytes?: number
+  schema: any
+  quality_profile: any
+  created_at: string
+  notes?: string
+}
+
+export interface DatasetUploadResponse {
+  dataset: UploadedDataset
+  version: DatasetVersion
+  message: string
+}
+
+export const uploadDatasetFile = async (
+  file: File,
+  name: string,
+  description?: string,
+  tags?: string,
+  orgId: string = 'default',
+  onProgress?: (progress: number) => void
+): Promise<DatasetUploadResponse> => {
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('name', name)
+  if (description) formData.append('description', description)
+  if (tags) formData.append('tags', tags)
+  formData.append('org_id', orgId)
+
+  const response = await client.post('/api/v1/datasets/upload', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    onUploadProgress: onProgress ? (e) => onProgress(Math.round((e.loaded * 100) / (e.total || 1))) : undefined,
+  })
+  return response.data
+}
+
+export const listUploadedDatasets = async (params?: {
+  status?: string
+  source_type?: string
+  org_id?: string
+  search?: string
+  page?: number
+  page_size?: number
+}): Promise<{ items: UploadedDataset[]; total: number; page: number; page_size: number }> => {
+  const response = await client.get('/api/v1/datasets', { params })
+  return response.data
+}
+
+export const getUploadedDataset = async (datasetId: string): Promise<UploadedDataset> => {
+  const response = await client.get(`/api/v1/datasets/${datasetId}`)
+  return response.data
+}
+
+export const updateUploadedDataset = async (
+  datasetId: string,
+  data: { name?: string; description?: string; tags?: string[]; status?: string }
+): Promise<UploadedDataset> => {
+  const response = await client.patch(`/api/v1/datasets/${datasetId}`, data)
+  return response.data
+}
+
+export const deleteUploadedDataset = async (datasetId: string, deleteStorage: boolean = true): Promise<void> => {
+  await client.delete(`/api/v1/datasets/${datasetId}`, { params: { delete_storage: deleteStorage } })
+}
+
+export const listDatasetVersions = async (datasetId: string): Promise<{ items: DatasetVersion[]; total: number }> => {
+  const response = await client.get(`/api/v1/datasets/${datasetId}/versions`)
+  return response.data
+}
+
+export const uploadNewVersion = async (
+  datasetId: string,
+  file: File,
+  notes?: string
+): Promise<DatasetVersion> => {
+  const formData = new FormData()
+  formData.append('file', file)
+  if (notes) formData.append('notes', notes)
+
+  const response = await client.post(`/api/v1/datasets/${datasetId}/versions`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+  return response.data
+}
+
+export const previewUploadedDataset = async (
+  datasetId: string,
+  version?: number,
+  limit: number = 100
+): Promise<{ columns: string[]; rows: any[]; total_rows: number; preview_rows: number }> => {
+  const response = await client.get(`/api/v1/datasets/${datasetId}/preview`, {
+    params: { version, limit },
+  })
+  return response.data
+}
+
+export const getDatasetDownloadUrl = async (
+  datasetId: string,
+  version?: number,
+  format: 'csv' | 'parquet' = 'csv',
+  expiresIn: number = 3600
+): Promise<{ download_url: string; expires_in: number; format: string }> => {
+  const response = await client.get(`/api/v1/datasets/${datasetId}/download`, {
+    params: { version, format, expires_in: expiresIn },
+  })
+  return response.data
+}
+
+// Legacy API functions (kept for backward compatibility)
 export const uploadDataset = async (file: File) => {
   const formData = new FormData()
   formData.append('file', file)
-  
+
   const response = await client.post('/api/upload', formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data',
-    },
+    headers: { 'Content-Type': 'multipart/form-data' },
   })
   return response.data
 }
@@ -502,6 +719,7 @@ export interface DictionaryEntry {
   examples?: string[]
   tags?: string[]
   source: string
+  data_source?: string
   created_at: string
   updated_at: string
 }
@@ -580,6 +798,46 @@ export const rejectEntry = async (entryId: number, notes?: string): Promise<Dict
 
 export const publishEntry = async (entryId: number, notes?: string): Promise<DictionaryEntry> => {
   const response = await client.post(`/api/v1/data-dictionary/${entryId}/publish`, { notes })
+  return response.data
+}
+
+// ==================== Data Source Summary API ====================
+
+export interface DataSourceSummary {
+  source_name: string
+  table_count: number
+  column_count: number
+  documented_columns: number
+  documentation_percentage: number
+  schemas: string[]
+  sample_tables: string[]
+  last_updated?: string
+  description?: string
+}
+
+export const getDataSources = async (databaseName?: string): Promise<DataSourceSummary[]> => {
+  const params = databaseName ? { database_name: databaseName } : {}
+  const response = await client.get('/api/v1/data-dictionary/sources', { params })
+  return response.data
+}
+
+export const quickAnalyzeSource = async (sourceName: string, databaseName?: string) => {
+  const params = databaseName ? { database_name: databaseName } : {}
+  const response = await client.post(
+    `/api/v1/data-dictionary/sources/${encodeURIComponent(sourceName)}/quick-analysis`,
+    {},
+    { params }
+  )
+  return response.data
+}
+
+export const recategorizeDataSources = async (databaseName?: string) => {
+  const params = databaseName ? { database_name: databaseName } : {}
+  const response = await client.post(
+    '/api/v1/data-dictionary/recategorize',
+    {},
+    { params }
+  )
   return response.data
 }
 
