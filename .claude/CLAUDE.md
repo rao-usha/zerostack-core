@@ -117,10 +117,28 @@ When working on codebase improvements, reference:
 - Conventional commits: `feat:`, `fix:`, `docs:`, `refactor:`
 - Always test before committing
 
+## Development Workflow (MANDATORY)
+
+Every feature implementation MUST follow this sequence:
+
+1. **Explore** - Read existing code, understand patterns, identify dependencies
+2. **Plan** - Create a clear plan with steps, use TodoWrite to track
+3. **Approve** - Get user approval before implementing (use EnterPlanMode for complex tasks)
+4. **Execute** - Implement the feature following existing patterns
+5. **Test** - Run tests, verify functionality works:
+   - Backend: `pytest backend/tests/` or specific test file
+   - Frontend: `npm run build` (catches TS errors), manual verification
+   - API: `curl` or Postman to verify endpoints
+6. **Fix** - Address any test failures or bugs found
+7. **Test Again** - Verify fixes work, run full test suite
+8. **Commit** - Only commit after tests pass
+
+**NEVER commit untested code.** Testing is not optional.
+
 ## Important Notes
 
-1. **Never skip planning** - Use TodoWrite for multi-step tasks
-2. **Follow existing patterns** - Check similar domains before implementing
-3. **Test changes** - Run `pytest` for backend, verify frontend renders
+1. **Never skip testing** - Test before every commit
+2. **Never skip planning** - Use TodoWrite for multi-step tasks
+3. **Follow existing patterns** - Check similar domains before implementing
 4. **Update docs** - Keep feature docs in sync with implementation
 5. **Archive completed work** - Move implementation notes to `docs/archive/`

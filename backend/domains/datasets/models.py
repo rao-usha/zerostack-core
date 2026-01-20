@@ -43,7 +43,7 @@ class Dataset(BaseModel):
     status: DatasetStatus = DatasetStatus.ACTIVE
     source_type: DatasetSourceType = DatasetSourceType.UPLOAD
     source_id: Optional[UUID] = None
-    schema: Dict[str, Any] = Field(default_factory=dict)
+    data_schema: Dict[str, Any] = Field(default_factory=dict, alias="schema")
     row_count: Optional[int] = None
     column_count: Optional[int] = None
     size_bytes: Optional[int] = None
@@ -58,6 +58,7 @@ class Dataset(BaseModel):
 
     class Config:
         from_attributes = True
+        populate_by_name = True
 
 
 class DatasetCreate(BaseModel):
@@ -88,7 +89,7 @@ class DatasetVersion(BaseModel):
     row_count: Optional[int] = None
     column_count: Optional[int] = None
     size_bytes: Optional[int] = None
-    schema: Dict[str, Any] = Field(default_factory=dict)
+    data_schema: Dict[str, Any] = Field(default_factory=dict, alias="schema")
     quality_profile: Dict[str, Any] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     created_by: Optional[str] = None
@@ -96,6 +97,7 @@ class DatasetVersion(BaseModel):
 
     class Config:
         from_attributes = True
+        populate_by_name = True
 
 
 class DatasetUploadResponse(BaseModel):
