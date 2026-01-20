@@ -1,12 +1,12 @@
-# 🎉 NEX.AI - Installation Complete - Next Steps
+# 🎉 ZeroStack - Installation Complete - Next Steps
 
 ## ✅ What's Installed
 
 All packages have been successfully installed:
-- ✅ **Node.js v24.11.0** - Frontend runtime
-- ✅ **Python 3.9.6** - Backend runtime
-- ✅ **60+ Backend packages** - FastAPI, Pandas, Scikit-learn, etc.
-- ✅ **385 Frontend packages** - React, TypeScript, Tailwind CSS, etc.
+- ✅ **Node.js 18+** - Frontend runtime
+- ✅ **Python 3.8+** - Backend runtime
+- ✅ **Backend packages** - FastAPI, Pandas, Scikit-learn, etc.
+- ✅ **Frontend packages** - React, TypeScript, Tailwind CSS, etc.
 
 ## 🚀 Start the Application
 
@@ -14,13 +14,13 @@ You need to start both servers in separate terminal windows:
 
 ### Terminal 1 - Start Backend
 ```bash
-cd /Users/usharao/Documents/Nex
-./start_backend.sh
+cd backend
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+uvicorn main:app --reload --port 8000
 ```
 
 You should see:
 ```
-Starting Backend Server...
 INFO:     Started server process [xxxxx]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
@@ -29,14 +29,13 @@ INFO:     Uvicorn running on http://0.0.0.0:8000
 
 ### Terminal 2 - Start Frontend
 ```bash
-cd /Users/usharao/Documents/Nex
-./start_frontend.sh
+cd frontend
+npm run dev
 ```
 
 You should see:
 ```
-Starting Frontend Server...
-  VITE v5.0.8  ready in 1234 ms
+VITE v5.x.x  ready in 1234 ms
 
   ➜  Local:   http://localhost:3000/
   ➜  press h + enter to show help
@@ -48,12 +47,12 @@ Once both servers are running, open your browser:
 
 **http://localhost:3000**
 
-You should see the NEX.AI dashboard!
+You should see the ZeroStack dashboard!
 
 ## 📊 Quick Test
 
-1. Click **"Upload Data"** in the sidebar
-2. Upload the sample file: `example_data/sample_sales_data.csv`
+1. Click **"Data Explorer"** in the sidebar
+2. Upload a sample CSV file
 3. Navigate to **"Insights"** to see AI-generated analysis
 4. Try the **"Chat"** feature to ask questions about your data
 
@@ -61,51 +60,58 @@ You should see the NEX.AI dashboard!
 
 Once running, you can:
 
-- **Upload Data** - Load your CSV files
-- **Generate Insights** - Get AI-powered strategic insights
-- **Build Models** - Create predictive models
+- **Data Explorer** - Browse and analyze your datasets
+- **Data Dictionary** - Define and document your data schema
+- **Distillation Workbench** - Create distilled datasets for ML
+- **ML Development** - Build and train machine learning models
 - **Chat** - Ask questions in natural language
-- **Check Quality** - Assess data quality
-- **Find Gaps** - Identify knowledge gaps
-- **Generate Synthetic Data** - Create privacy-safe data
+- **Model Library** - Manage and deploy trained models
 
 ## 🛠 Troubleshooting
 
 ### Backend won't start
 ```bash
-cd /Users/usharao/Documents/Nex/backend
+cd backend
 source venv/bin/activate
-python main.py
+python -c "import fastapi; print('FastAPI OK')"
+uvicorn main:app --reload
 ```
 
 ### Frontend won't start
 ```bash
-cd /Users/usharao/Documents/Nex/frontend
-export NVM_DIR="$HOME/.nvm"
-source "$NVM_DIR/nvm.sh"
+cd frontend
+npm install
 npm run dev
 ```
 
 ### Check installation status
 ```bash
-./check_setup.sh
+./scripts/check_setup.sh
 ```
 
 ### Stop servers
 ```bash
 # Stop backend (port 8000)
+# Linux/Mac:
 lsof -ti:8000 | xargs kill -9
 
+# Windows PowerShell:
+Stop-Process -Id (Get-NetTCPConnection -LocalPort 8000).OwningProcess
+
 # Stop frontend (port 3000)
+# Linux/Mac:
 lsof -ti:3000 | xargs kill -9
+
+# Windows PowerShell:
+Stop-Process -Id (Get-NetTCPConnection -LocalPort 3000).OwningProcess
 ```
 
 ## 📚 Documentation
 
-- `README.md` - Complete platform documentation
-- `INSTALLATION.md` - Installation guide
-- `QUICKSTART.md` - Quick start guide
-- `SETUP_GUIDE.md` - Troubleshooting
+- `docs/development.md` - Development guide
+- `docs/guides/QUICKSTART.md` - Quick start guide
+- `docs/setup/DATABASE_SETUP.md` - Database configuration
+- `docs/api.md` - API reference
 
 ## 🔗 Quick Links
 
@@ -124,4 +130,3 @@ In the Chat interface:
 - "What's the maximum value in quantity?"
 
 Enjoy your AI-powered data platform! 🚀
-

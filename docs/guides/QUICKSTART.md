@@ -1,6 +1,6 @@
 # Quick Start Guide
 
-Get up and running with the AI Native Data Platform in minutes!
+Get up and running with ZeroStack in minutes!
 
 ## Prerequisites Check
 
@@ -13,18 +13,14 @@ Get up and running with the AI Native Data Platform in minutes!
 ### Option 1: Automated Setup (Recommended)
 
 ```bash
-# Make the start script executable (if not already)
-chmod +x start.sh
-
-# Run the start script
-./start.sh
+# Run the install script from project root
+./scripts/install_all.sh
 ```
 
 This will:
 1. Set up Python virtual environment
 2. Install all backend dependencies
 3. Install all frontend dependencies
-4. Start both servers automatically
 
 ### Option 2: Manual Setup
 
@@ -34,7 +30,7 @@ cd backend
 python3 -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
-python main.py
+uvicorn main:app --reload --port 8000
 ```
 
 #### Frontend Setup (in a new terminal)
@@ -50,25 +46,31 @@ npm run dev
 Open your browser and go to: `http://localhost:3000`
 
 ### 2. Upload Sample Data
-- Click on "Upload Data" in the sidebar
-- Use the sample file: `example_data/sample_sales_data.csv`
-- Or upload your own CSV file
+- Click on "Data Explorer" in the sidebar
+- Upload a CSV file
+- Or use the example data if available
 
 ### 3. Explore Features
 
-#### Generate Insights
-- Go to "Insights" page
-- Select your uploaded dataset
-- Enter context (e.g., "retail business")
-- Click "Generate Insights"
-- View trends, correlations, and recommendations
+#### Data Explorer
+- Browse uploaded datasets
+- View data previews and statistics
+- Run SQL queries on your data
 
-#### Build Predictive Models
-- Navigate to "Predictive Models"
-- Select dataset and target column (e.g., "sales")
-- Choose model type
-- Click "Build Predictive Model"
-- Review feature importance and performance
+#### Data Dictionary
+- Define column metadata
+- Document data schemas
+- Track data lineage
+
+#### Distillation Workbench
+- Create distilled datasets for ML training
+- Configure distillation parameters
+- Export processed data
+
+#### ML Development
+- Build predictive models
+- Track experiments
+- Evaluate model performance
 
 #### Chat with AI
 - Go to "Chat" section
@@ -78,24 +80,6 @@ Open your browser and go to: `http://localhost:3000`
   - "What's the average sales?"
   - "Show me correlations"
   - "How many rows are there?"
-
-#### Check Data Quality
-- Navigate to "Data Quality"
-- Select your dataset
-- View quality scores and issues
-- Get recommendations
-
-#### Identify Knowledge Gaps
-- Go to "Knowledge Gaps"
-- Select dataset
-- Review identified gaps
-- See recommendations
-
-#### Generate Synthetic Data
-- Navigate to "Synthetic Data"
-- Select source dataset
-- Set number of rows
-- Generate privacy-safe synthetic data
 
 ## Example Queries for Chat
 
@@ -110,12 +94,12 @@ Try these questions in the Chat interface:
 ## Troubleshooting
 
 ### Backend won't start
-- Check if port 8000 is available: `lsof -i :8000`
+- Check if port 8000 is available: `lsof -i :8000` (or `netstat -ano | findstr 8000` on Windows)
 - Make sure all dependencies are installed: `pip install -r requirements.txt`
 - Check Python version: `python3 --version` (should be 3.8+)
 
 ### Frontend won't start
-- Check if port 3000 is available: `lsof -i :3000`
+- Check if port 3000 is available: `lsof -i :3000` (or `netstat -ano | findstr 3000` on Windows)
 - Make sure node_modules is installed: `npm install`
 - Check Node version: `node --version` (should be 18+)
 
@@ -134,7 +118,6 @@ Try these questions in the Chat interface:
 2. Explore all features
 3. Generate insights for your business
 4. Build predictive models
-5. Use synthetic data for testing
+5. Check out the API documentation at `http://localhost:8000/docs`
 
-Enjoy exploring your data with AI!
-
+Enjoy exploring your data with ZeroStack!

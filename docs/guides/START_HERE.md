@@ -1,17 +1,18 @@
-# 🚀 NEX.AI - START HERE - Quick Setup
+# 🚀 ZeroStack - START HERE - Quick Setup
 
-## Current Status
-❌ **Xcode Command Line Tools** - Not installed (REQUIRED)  
-❌ **Node.js** - Not installed  
-❌ **Dependencies** - Not installed  
+## Prerequisites
 
-## One-Command Installation (After Xcode Tools)
+Before starting, ensure you have:
+- **Python 3.8+** - `python3 --version`
+- **Node.js 18+** - `node --version`
+- **PostgreSQL** - Running locally or via Docker
 
-Once Xcode Command Line Tools are ready, just run:
+## One-Command Installation
+
+From the project root directory, run:
 
 ```bash
-cd /Users/usharao/Documents/Nex
-./install_all.sh
+./scripts/install_all.sh
 ```
 
 This will automatically install everything!
@@ -20,42 +21,37 @@ This will automatically install everything!
 
 ## Step-by-Step Instructions
 
-### 1️⃣ Install Xcode Command Line Tools (5-10 minutes)
+### 1️⃣ Clone and Navigate to Project
 
-Run this command:
 ```bash
-xcode-select --install
+cd /path/to/zerostack
 ```
 
-A dialog will appear:
-- Click **"Install"**
-- Wait for it to finish (grab a coffee ☕)
-- Click **"Done"**
+### 2️⃣ Install Dependencies
 
-### 2️⃣ Install Everything Else (5-10 minutes)
-
-After Xcode tools are done:
 ```bash
-cd /Users/usharao/Documents/Nex
-./install_all.sh
+./scripts/install_all.sh
 ```
 
 The script will:
-- ✅ Install Node.js
+- ✅ Install Node.js dependencies
 - ✅ Install all backend packages
 - ✅ Install all frontend packages
 - ✅ Create start scripts
 
 ### 3️⃣ Start the Application
 
-**Terminal 1:**
+**Terminal 1 - Backend:**
 ```bash
-./start_backend.sh
+cd backend
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+uvicorn main:app --reload --port 8000
 ```
 
-**Terminal 2:**
+**Terminal 2 - Frontend:**
 ```bash
-./start_frontend.sh
+cd frontend
+npm run dev
 ```
 
 ### 4️⃣ Open Your Browser
@@ -71,25 +67,23 @@ Go to: **http://localhost:3000**
 - Pandas (data analysis)
 - Scikit-learn (machine learning)
 - NumPy, SciPy (math libraries)
-- And 10+ more packages
+- SQLAlchemy, Alembic (database)
+- And 50+ more packages
 
 ### Frontend Packages
 - React 18 (UI framework)
 - TypeScript (programming language)
 - Tailwind CSS (styling)
 - Vite (build tool)
-- And 15+ more packages
-
-**Total download size:** ~300-500 MB  
-**Installation time:** 10-15 minutes total
+- And 100+ more packages
 
 ---
 
 ## Quick Test
 
 Once running:
-1. Click "Upload Data"
-2. Upload `example_data/sample_sales_data.csv`
+1. Navigate to the Dashboard
+2. Upload a CSV file via "Data Explorer"
 3. Go to "Insights" to see AI analysis
 4. Try "Chat" to ask questions about your data
 
@@ -99,42 +93,30 @@ Once running:
 
 Check if everything is ready:
 ```bash
-./check_setup.sh
+./scripts/check_setup.sh
 ```
 
 See detailed guides:
-- `INSTALLATION.md` - Complete installation guide
-- `SETUP_GUIDE.md` - Troubleshooting
-- `README.md` - Full documentation
-
----
-
-## Why Multiple Steps?
-
-1. **Xcode Command Line Tools** - Required by macOS for development tools
-2. **Node.js** - Runs the frontend (React application)
-3. **Python packages** - Powers the backend AI/ML features
-
-Without Xcode tools, nothing else can install properly.
+- `docs/guides/QUICKSTART.md` - Quick start guide
+- `docs/setup/DATABASE_SETUP.md` - Database configuration
+- `docs/development.md` - Development guide
 
 ---
 
 ## TL;DR
 
 ```bash
-# Step 1: Install Xcode tools (do this once)
-xcode-select --install
+# Step 1: Install everything
+./scripts/install_all.sh
 
-# Step 2: Install everything (after Xcode completes)
-./install_all.sh
+# Step 2: Start backend (Terminal 1)
+cd backend && source venv/bin/activate && uvicorn main:app --reload
 
-# Step 3: Start servers
-./start_backend.sh    # Terminal 1
-./start_frontend.sh   # Terminal 2
+# Step 3: Start frontend (Terminal 2)
+cd frontend && npm run dev
 
 # Step 4: Open browser
 open http://localhost:3000
 ```
 
 That's it! 🎉
-

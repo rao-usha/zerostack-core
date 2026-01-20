@@ -11,6 +11,34 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
+def get_api_key(key_name: str, fallback_names: List[str] = None) -> Optional[str]:
+    """
+    Get API key from ConfigProvider (DB -> env -> settings fallback).
+    """
+    try:
+        from domains.settings.config_provider import config
+        value = config.get(key_name, category="llm")
+        if value:
+            return value
+        if fallback_names:
+            for name in fallback_names:
+                value = config.get(name, category="llm")
+                if value:
+                    return value
+        return None
+    except Exception:
+        # Fallback to os.getenv if config provider fails
+        value = os.getenv(key_name)
+        if value:
+            return value
+        if fallback_names:
+            for name in fallback_names:
+                value = os.getenv(name)
+                if value:
+                    return value
+        return None
+
 router = APIRouter(prefix="/ai-models", tags=["ai-models"])
 
 
@@ -37,7 +65,7 @@ async def get_available_models():
     providers = []
     
     # OpenAI - Use verified working chat models
-    openai_key = os.getenv("OPENAI_API_KEY")
+    openai_key = get_api_key("OPENAI_API_KEY")
     if openai_key:
         # Just use the verified list - simpler and more reliable
         # These are ALL tested and working with chat completions
@@ -69,7 +97,7 @@ async def get_available_models():
             logger.info(f"OpenAI models available: {p.models[:5]}...")  # Log first 5
     
     # Anthropic
-    anthropic_key = os.getenv("ANTHROPIC_API_KEY")
+    anthropic_key = get_api_key("ANTHROPIC_API_KEY")
     if anthropic_key:
         # Anthropic doesn't have a models list API, use known models
         providers.append(ProviderModels(
@@ -91,7 +119,7 @@ async def get_available_models():
         ))
     
     # Google (Gemini)
-    google_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
+    google_key = get_api_key("GOOGLE_API_KEY", ["GEMINI_API_KEY"])
     if google_key:
         try:
             import google.generativeai as genai
@@ -144,7 +172,7 @@ async def get_available_models():
         ))
     
     # xAI
-    xai_key = os.getenv("X_AI_API_KEY")  # Note: underscore in X_AI
+    xai_key = get_api_key("XAI_API_KEY", ["X_AI_API_KEY"])
     if xai_key:
         # xAI uses OpenAI-compatible API
         try:
@@ -185,9 +213,9 @@ async def get_available_models():
 async def check_api_keys():
     """Check which API keys are configured."""
     return {
-        "openai": bool(os.getenv("OPENAI_API_KEY")),
-        "anthropic": bool(os.getenv("ANTHROPIC_API_KEY")),
-        "google": bool(os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")),
-        "xai": bool(os.getenv("X_AI_API_KEY"))
+        "openai": bool(get_api_key("OPENAI_API_KEY")),
+        "anthropic": bool(get_api_key("ANTHROPIC_API_KEY")),
+        "google": bool(get_api_key("GOOGLE_API_KEY", ["GEMINI_API_KEY"])),
+        "xai": bool(get_api_key("XAI_API_KEY", ["X_AI_API_KEY"]))
     }
 

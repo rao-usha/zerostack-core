@@ -1239,3 +1239,91 @@ export const listGDriveAccounts = async () => {
   const response = await client.get('/api/files/gdrive/accounts')
   return response.data as ExternalAccount[]
 }
+
+// ========================================
+// Settings API
+// ========================================
+
+export interface SettingCategory {
+  category: string
+  display_name: string
+  description: string
+  icon?: string
+  total_settings: number
+  configured_count: number
+}
+
+export interface Setting {
+  id: string | null
+  category: string
+  key: string
+  value_masked: string | null
+  is_secret: boolean
+  description: string | null
+  display_name: string | null
+  has_value: boolean
+  updated_at: string | null
+  updated_by: string | null
+}
+
+export interface SettingTestResult {
+  key: string
+  valid: boolean
+  message: string
+  details?: Record<string, any>
+}
+
+// List all setting categories
+export const getSettingCategories = async (): Promise<{ categories: SettingCategory[] }> => {
+  const response = await client.get('/api/v1/settings')
+  return response.data
+}
+
+// List settings in a category
+export const getSettingsByCategory = async (category: string): Promise<{ settings: Setting[]; total: number }> => {
+  const response = await client.get(`/api/v1/settings/${category}`)
+  return response.data
+}
+
+// Get a single setting
+export const getSetting = async (category: string, key: string): Promise<Setting> => {
+  const response = await client.get(`/api/v1/settings/${category}/${key}`)
+  return response.data
+}
+
+// Update a setting
+export const updateSetting = async (
+  category: string,
+  key: string,
+  value: string,
+  description?: string
+): Promise<Setting> => {
+  const response = await client.put(`/api/v1/settings/${category}/${key}`, {
+    value,
+    description
+  })
+  return response.data
+}
+
+// Delete (clear) a setting
+export const clearSetting = async (category: string, key: string): Promise<void> => {
+  await client.delete(`/api/v1/settings/${category}/${key}`)
+}
+
+// Test a setting (e.g., API key validation)
+export const testSetting = async (category: string, key: string): Promise<SettingTestResult> => {
+  const response = await client.post(`/api/v1/settings/test/${category}/${key}`)
+  return response.data
+}
+
+// Test all settings in a category
+export const testCategorySettings = async (category: string): Promise<{ results: Record<string, { valid: boolean; message: string }> }> => {
+  const response = await client.post(`/api/v1/settings/test/${category}`)
+  return response.data
+}
+
+// Seed settings from environment variables
+export const seedSettingsFromEnv = async (overwrite: boolean = false): Promise<{ seeded: string[]; skipped: string[]; seeded_count: number; skipped_count: number }> => {
+  const response = await client.post(`/api/v1/settings/seed-from-env?overwrite=${overwrite}`)
+  return response.data
+}

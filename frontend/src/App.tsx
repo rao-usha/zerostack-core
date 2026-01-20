@@ -36,6 +36,7 @@ import NotebookPage from './pages/NotebookPage'
 import DatasetsPage from './pages/DatasetsPage'
 import LineageDemo from './pages/LineageDemo'
 import LineageFullDemo from './pages/LineageFullDemo'
+import Settings from './pages/Settings'
 
 function App() {
   return (
@@ -78,6 +79,7 @@ function App() {
           <Route path="/gaps" element={<KnowledgeGaps />} />
           <Route path="/models" element={<Models />} />
           <Route path="/synthetic" element={<SyntheticData />} />
+          <Route path="/settings" element={<Settings />} />
         </Routes>
         </Layout>
       </Router>

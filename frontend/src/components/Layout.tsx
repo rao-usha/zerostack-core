@@ -19,7 +19,8 @@ import {
   PlugZap,
   FileCode2,
   HardDrive,
-  WifiOff
+  WifiOff,
+  Settings
 } from 'lucide-react'
 import { checkBackendHealth } from '../api/health'
 
@@ -88,6 +89,7 @@ export default function Layout({ children }: LayoutProps) {
     { path: '/gaps', icon: AlertCircle, label: 'Knowledge Gaps' },
     { path: '/models', icon: TrendingUp, label: 'Predictive Models' },
     { path: '/synthetic', icon: Database, label: 'Synthetic Data' },
+    { path: '/settings', icon: Settings, label: 'Settings' },
   ]
 
   return (

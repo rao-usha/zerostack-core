@@ -22,6 +22,47 @@ from abc import ABC, abstractmethod
 logger = logging.getLogger(__name__)
 
 
+def get_api_key(key_name: str, fallback_names: List[str] = None) -> Optional[str]:
+    """
+    Get API key from ConfigProvider (DB -> env -> settings fallback).
+
+    Args:
+        key_name: Primary key name (e.g., "OPENAI_API_KEY")
+        fallback_names: Alternative key names to try
+
+    Returns:
+        API key value or None
+    """
+    try:
+        from domains.settings.config_provider import config
+
+        # Try primary key
+        value = config.get(key_name, category="llm")
+        if value:
+            return value
+
+        # Try fallback keys
+        if fallback_names:
+            for name in fallback_names:
+                value = config.get(name, category="llm")
+                if value:
+                    return value
+
+        return None
+    except Exception as e:
+        # Fallback to direct os.getenv if config provider fails
+        logger.debug(f"ConfigProvider failed for {key_name}: {e}, falling back to os.getenv")
+        value = os.getenv(key_name)
+        if value:
+            return value
+        if fallback_names:
+            for name in fallback_names:
+                value = os.getenv(name)
+                if value:
+                    return value
+        return None
+
+
 class LLMProvider(ABC):
     """Abstract base class for LLM providers."""
     
@@ -49,13 +90,13 @@ class LLMProvider(ABC):
 
 class OpenAIProvider(LLMProvider):
     """OpenAI provider (GPT-4, GPT-4 Turbo, etc.)."""
-    
+
     def __init__(self, api_key: Optional[str] = None, model: str = "gpt-4-turbo-preview"):
-        self.api_key = api_key or os.getenv("OPENAI_API_KEY")
+        self.api_key = api_key or get_api_key("OPENAI_API_KEY")
         self.model = model
-        
+
         if not self.api_key:
-            raise ValueError("OPENAI_API_KEY not found in environment")
+            raise ValueError("OPENAI_API_KEY not configured. Set it via Settings UI or .env file.")
     
     async def stream_chat(
         self,
@@ -151,13 +192,13 @@ class OpenAIProvider(LLMProvider):
 
 class AnthropicProvider(LLMProvider):
     """Anthropic provider (Claude 3.5 Sonnet, Claude 3 Opus, etc.)."""
-    
+
     def __init__(self, api_key: Optional[str] = None, model: str = "claude-3-5-sonnet-20241022"):
-        self.api_key = api_key or os.getenv("ANTHROPIC_API_KEY")
+        self.api_key = api_key or get_api_key("ANTHROPIC_API_KEY")
         self.model = model
-        
+
         if not self.api_key:
-            raise ValueError("ANTHROPIC_API_KEY not found in environment")
+            raise ValueError("ANTHROPIC_API_KEY not configured. Set it via Settings UI or .env file.")
     
     async def stream_chat(
         self,
@@ -232,13 +273,13 @@ class AnthropicProvider(LLMProvider):
 
 class GoogleProvider(LLMProvider):
     """Google provider (Gemini Pro, Gemini Ultra, etc.)."""
-    
+
     def __init__(self, api_key: Optional[str] = None, model: str = "gemini-pro"):
-        self.api_key = api_key or os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
+        self.api_key = api_key or get_api_key("GOOGLE_API_KEY", ["GEMINI_API_KEY"])
         self.model = model
-        
+
         if not self.api_key:
-            raise ValueError("GOOGLE_API_KEY or GEMINI_API_KEY not found in environment")
+            raise ValueError("GOOGLE_API_KEY not configured. Set it via Settings UI or .env file.")
     
     async def stream_chat(
         self,
@@ -321,13 +362,13 @@ class GoogleProvider(LLMProvider):
 
 class XAIProvider(LLMProvider):
     """xAI provider (Grok, etc.)."""
-    
+
     def __init__(self, api_key: Optional[str] = None, model: str = "grok-beta"):
-        self.api_key = api_key or os.getenv("XAI_API_KEY") or os.getenv("X_AI_API_KEY")
+        self.api_key = api_key or get_api_key("XAI_API_KEY", ["X_AI_API_KEY"])
         self.model = model
-        
+
         if not self.api_key:
-            raise ValueError("XAI_API_KEY or X_AI_API_KEY not found in environment")
+            raise ValueError("XAI_API_KEY not configured. Set it via Settings UI or .env file.")
     
     async def stream_chat(
         self,
