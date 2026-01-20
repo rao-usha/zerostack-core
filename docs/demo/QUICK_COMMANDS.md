@@ -179,12 +179,12 @@ curl -X POST http://localhost:8000/api/v1/insights/generate \
 
 | Page | URL |
 |------|-----|
-| Dashboard | http://localhost:5173/ |
-| Data Explorer | http://localhost:5173/explorer |
-| Chat | http://localhost:5173/chat |
-| Data Dictionary | http://localhost:5173/dictionary |
-| ML Workbench | http://localhost:5173/ml-workbench |
-| Distillation | http://localhost:5173/distillation |
-| Lineage Demo | http://localhost:5173/lineage-demo |
-| Data Quality | http://localhost:5173/quality |
-| Insights | http://localhost:5173/insights |
+| Dashboard | http://localhost:3000/ |
+| Data Explorer | http://localhost:3000/explorer |
+| Chat | http://localhost:3000/chat |
+| Data Dictionary | http://localhost:3000/dictionary |
+| ML Workbench | http://localhost:3000/ml-workbench |
+| Distillation | http://localhost:3000/distillation |
+| Lineage Demo | http://localhost:3000/lineage-demo |
+| Data Quality | http://localhost:3000/quality |
+| Insights | http://localhost:3000/insights |

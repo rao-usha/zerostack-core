@@ -2,7 +2,7 @@
 
 > Quick reference for demonstrating ZeroStack's AI-native data platform capabilities.
 
-**Frontend:** `http://localhost:5173`
+**Frontend:** `http://localhost:3000`
 **Backend API:** `http://localhost:8000`
 **API Docs:** `http://localhost:8000/docs`
 
@@ -13,7 +13,7 @@
 **What it does:** Ask questions about your database in plain English - get SQL, insights, and visualizations.
 
 ### Via UI
-1. Open `http://localhost:5173/chat`
+1. Open `http://localhost:3000/chat`
 2. Type: *"What tables do I have and how are they related?"*
 3. Follow up: *"Show me the top 10 customers by revenue"*
 
@@ -79,7 +79,7 @@ curl -X POST http://localhost:8000/api/v1/chat/message \
 **What it does:** Browse any PostgreSQL database with schema introspection, data profiling, and safe query execution.
 
 ### Via UI
-1. Open `http://localhost:5173/explorer`
+1. Open `http://localhost:3000/explorer`
 2. Select database connection
 3. Browse schemas → tables → columns
 4. Click **Profile** to see statistics
@@ -295,7 +295,7 @@ Add to your Claude Desktop config:
 ## Quick Demo Script (5 minutes)
 
 ### 1. Open the Dashboard (30 sec)
-Open `http://localhost:5173` - *"Here's our AI-native data platform"*
+Open `http://localhost:3000` - *"Here's our AI-native data platform"*
 
 ### 2. Explore a Database (1 min)
 1. Click **Data Explorer**
