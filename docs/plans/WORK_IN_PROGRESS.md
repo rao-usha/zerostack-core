@@ -17,9 +17,9 @@
 
 | Task | Status | Agent | Started | Completed | Notes |
 |------|--------|-------|---------|-----------|-------|
-| 1.1: Dataset Upload | 🟡 AVAILABLE | - | - | - | CRITICAL - users can't import data |
-| 1.2: Insights Generation | 🟡 AVAILABLE | - | - | - | Frontend exists, backend stubbed |
-| 1.3: Notification Delivery | 🟡 AVAILABLE | - | - | - | Completes drift/schedules |
+| 1.1: Dataset Upload | ✅ COMPLETE | tab-1 | 2026-01-19 | 2026-01-19 | Backend API + frontend client done |
+| 1.2: Insights Generation | ✅ COMPLETE | tab-1 | 2026-01-19 | 2026-01-19 | Connected to new dataset system |
+| 1.3: Notification Delivery | ✅ COMPLETE | tab-1 | 2026-01-19 | 2026-01-19 | Wired drift + scheduler to NotificationService |
 
 ### Tier 2: High-Value Differentiators
 
