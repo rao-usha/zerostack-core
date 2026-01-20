@@ -52,6 +52,13 @@ from domains.notebooks.router import router as notebooks_router
 from domains.files.router import router as files_router
 from domains.lineage.router import router as lineage_router
 from domains.synthetic.router import router as synthetic_router
+from domains.settings.router import router as settings_router
+
+# New dataset system imports
+from domains.datasets.storage import DatasetStorage, get_dataset_storage
+from domains.datasets.db_models import datasets as datasets_table
+from db_session import get_session
+from uuid import UUID as PyUUID
 
 # Core setup
 from core.config import settings
@@ -112,6 +119,7 @@ app.include_router(notebooks_router, prefix=settings.api_prefix)
 app.include_router(files_router)
 app.include_router(lineage_router)
 app.include_router(synthetic_router, prefix=settings.api_prefix)
+app.include_router(settings_router, prefix=settings.api_prefix)
 
 
 # ========================================
@@ -393,19 +401,54 @@ async def build_predictive_model(request: Dict[str, Any]):
 @app.post("/api/insights/generate")
 @limiter.limit("10/minute")
 async def generate_insights(request: Request, body: Dict[str, Any]):
-    """Generate strategic insights"""
+    """Generate strategic insights.
+
+    Supports datasets from both:
+    - New system: PostgreSQL metadata + MinIO/Parquet storage (Task 1.1)
+    - Legacy system: SQLite with JSON data
+    """
     try:
         dataset_id = body.get("dataset_id")
         context = body.get("context", "general business")
-        
-        dataset = db.get_dataset(dataset_id)
-        if dataset is None:
-            raise HTTPException(status_code=404, detail="Dataset not found")
-        
-        df = pd.read_json(dataset['data'], orient='records')
+
+        if not dataset_id:
+            raise HTTPException(status_code=400, detail="dataset_id is required")
+
+        df = None
+
+        # Try new dataset system first (PostgreSQL + MinIO)
+        try:
+            with next(get_session()) as session:
+                # Check if dataset exists in new system
+                result = session.execute(
+                    datasets_table.select().where(datasets_table.c.id == PyUUID(dataset_id))
+                )
+                row = result.fetchone()
+
+                if row:
+                    # Load from MinIO storage
+                    storage = get_dataset_storage()
+                    df = storage.read_dataframe(
+                        PyUUID(dataset_id),
+                        row.current_version_number or 1,
+                        row.storage_format or "parquet"
+                    )
+        except Exception as e:
+            # New system failed, will try legacy
+            pass
+
+        # Fall back to legacy SQLite system
+        if df is None:
+            dataset = db.get_dataset(dataset_id)
+            if dataset is None:
+                raise HTTPException(status_code=404, detail="Dataset not found")
+            df = pd.read_json(dataset['data'], orient='records')
+
         insights = insights_gen.generate(df, context)
-        
+
         return insights
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 

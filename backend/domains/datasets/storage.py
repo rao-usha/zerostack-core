@@ -262,6 +262,32 @@ class DatasetStorage:
 
         return rows, list(df.columns)
 
+    def read_dataframe(
+        self, dataset_id: UUID, version: int, format: str = "parquet"
+    ) -> pd.DataFrame:
+        """Read full dataset as DataFrame.
+
+        Args:
+            dataset_id: Dataset UUID
+            version: Version number
+            format: Storage format (parquet or csv)
+
+        Returns:
+            pandas DataFrame with full dataset
+        """
+        key = f"datasets/{str(dataset_id)}/v{version}/data.{format}"
+        data = self.client.get_bytes(key)
+
+        if format == "parquet":
+            df = pd.read_parquet(io.BytesIO(data))
+        elif format == "csv":
+            df = pd.read_csv(io.BytesIO(data))
+        else:
+            raise ValueError(f"Unsupported format: {format}")
+
+        logger.info(f"Read dataset {dataset_id} v{version}: {len(df)} rows")
+        return df
+
     def delete_version(self, dataset_id: UUID, version: int) -> bool:
         """Delete a specific version."""
         prefix = f"datasets/{str(dataset_id)}/v{version}/"
