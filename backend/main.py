@@ -53,6 +53,7 @@ from domains.files.router import router as files_router
 from domains.lineage.router import router as lineage_router
 from domains.synthetic.router import router as synthetic_router
 from domains.settings.router import router as settings_router
+from domains.feature_store.router import router as feature_store_router
 
 # New dataset system imports
 from domains.datasets.storage import DatasetStorage, get_dataset_storage
@@ -120,6 +121,7 @@ app.include_router(files_router)
 app.include_router(lineage_router)
 app.include_router(synthetic_router, prefix=settings.api_prefix)
 app.include_router(settings_router, prefix=settings.api_prefix)
+app.include_router(feature_store_router, prefix=settings.api_prefix)
 
 
 # ========================================
