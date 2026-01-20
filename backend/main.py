@@ -13,6 +13,7 @@ from pathlib import Path
 from services.synthetic_data import SyntheticDataGenerator
 from services.insights import InsightsGenerator
 from services.chat import ChatService
+from services.ontology_chat import OntologyChatService
 from services.data_quality import DataQualityAnalyzer
 from services.knowledge_gaps import KnowledgeGapIdentifier
 from database import Database
@@ -54,6 +55,7 @@ from domains.lineage.router import router as lineage_router
 from domains.synthetic.router import router as synthetic_router
 from domains.settings.router import router as settings_router
 from domains.feature_store.router import router as feature_store_router
+from domains.ontology.router import router as ontology_router
 
 # New dataset system imports
 from domains.datasets.storage import DatasetStorage, get_dataset_storage
@@ -122,6 +124,7 @@ app.include_router(lineage_router)
 app.include_router(synthetic_router, prefix=settings.api_prefix)
 app.include_router(settings_router, prefix=settings.api_prefix)
 app.include_router(feature_store_router, prefix=settings.api_prefix)
+app.include_router(ontology_router, prefix=settings.api_prefix)
 
 
 # ========================================
@@ -138,7 +141,7 @@ _finalizer = None
 async def lifespan(app):
     """Application lifespan handler - starts/stops background tasks."""
     global _finalizer
-    
+
     # Start background finalizer if compute adapter is not local-only dev
     if settings.compute_adapter != "disabled":
         try:
@@ -147,37 +150,37 @@ async def lifespan(app):
             from services.object_store import ObjectStoreClient
             from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
             from sqlalchemy.orm import sessionmaker
-            
+
             # Create async engine
             async_url = settings.database_url.replace('postgresql+psycopg', 'postgresql+asyncpg')
             if 'asyncpg' not in async_url:
                 async_url = settings.database_url.replace('postgresql://', 'postgresql+asyncpg://')
-            
+
             async_engine = create_async_engine(async_url)
             async_session_factory = sessionmaker(async_engine, class_=AsyncSession, expire_on_commit=False)
-            
+
             # Initialize finalizer
             compute_adapter = get_compute_adapter()
             object_store = ObjectStoreClient.get_instance()
-            
+
             _finalizer = RunFinalizer(
                 compute_adapter=compute_adapter,
                 object_store=object_store,
                 async_session_factory=async_session_factory
             )
-            
+
             # Start finalizer in background
             asyncio.create_task(_finalizer.start())
-            print(f"✅ GPU Runner finalizer started (polling every {settings.finalizer_poll_interval_seconds}s)")
+            print(f"[OK] GPU Runner finalizer started (polling every {settings.finalizer_poll_interval_seconds}s)")
         except Exception as e:
-            print(f"⚠️ Could not start GPU Runner finalizer: {e}")
-    
+            print(f"[WARN] Could not start GPU Runner finalizer: {e}")
+
     yield
-    
+
     # Shutdown
     if _finalizer:
         await _finalizer.stop()
-        print("🛑 GPU Runner finalizer stopped")
+        print("[STOP] GPU Runner finalizer stopped")
 
 
 # Update app to use lifespan
@@ -188,6 +191,7 @@ db = Database()
 synthetic_gen = SyntheticDataGenerator()
 insights_gen = InsightsGenerator()
 chat_service = ChatService()
+ontology_chat_service = OntologyChatService()
 quality_analyzer = DataQualityAnalyzer()
 gap_identifier = KnowledgeGapIdentifier()
 
@@ -458,11 +462,61 @@ async def generate_insights(request: Request, body: Dict[str, Any]):
 @app.post("/api/chat")
 @limiter.limit("20/minute")
 async def chat(request: Request, body: Dict[str, Any]):
-    """Chat interface for asking questions about data"""
+    """Enhanced chat interface supporting both data analysis and ontology management"""
     try:
-        query = body.get("query")
+        query = body.get("query", "")
         dataset_id = body.get("dataset_id")
+        session_id = body.get("session_id", "default")
+        action = body.get("action")
+        payload = body.get("payload")
         
+        # If there's an action (like "confirm"), execute it
+        if action == "confirm" and payload:
+            action_type = payload.get("type")
+            params = payload.get("params", {})
+            
+            if action_type == "create_ontology":
+                # Execute ontology creation
+                from services.ontology.manager import OntologyManager
+                mgr = OntologyManager()
+                result = mgr.create(
+                    params.get("org_id", "demo"),
+                    params.get("name", "New Ontology"),
+                    params.get("description"),
+                    params.get("actor", "user")
+                )
+                
+                # Set as current ontology in session
+                ontology_chat_service.set_current_ontology(session_id, {
+                    "id": result["ontology_id"],
+                    "name": params.get("name", "New Ontology")
+                })
+                
+                return {
+                    "query": query,
+                    "response": f"✅ Created ontology **{params.get('name')}**!\n\nOntology ID: `{result['ontology_id']}`\n\n💡 You can now:\n• Add terms: \"suggest terms for {params.get('name').lower()}\"\n• View it: \"show me the ontology\"\n• Publish a version: \"publish version\"",
+                    "response_type": "success",
+                    "metadata": {"ontology_id": result["ontology_id"]},
+                    "timestamp": datetime.now().isoformat()
+                }
+        
+        # Check if this is an ontology-related query
+        ontology_intent = ontology_chat_service.detect_ontology_intent(query, session_id)
+        
+        if ontology_intent:
+            # This is an ontology query - return structured response
+            structured_response = ontology_chat_service.generate_response(ontology_intent, session_id)
+            return {
+                "query": query,
+                "response": structured_response.get("message"),
+                "response_type": structured_response.get("type"),
+                "action": structured_response.get("action"),
+                "ui_elements": structured_response.get("ui_elements", []),
+                "metadata": structured_response.get("metadata", {}),
+                "timestamp": datetime.now().isoformat()
+            }
+        
+        # Not an ontology query - handle as data analysis
         if dataset_id:
             dataset = db.get_dataset(dataset_id)
             if dataset is None:
@@ -476,6 +530,7 @@ async def chat(request: Request, body: Dict[str, Any]):
         return {
             "query": query,
             "response": response,
+            "response_type": "text",
             "timestamp": datetime.now().isoformat()
         }
     except Exception as e:

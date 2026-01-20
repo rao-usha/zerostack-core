@@ -37,6 +37,7 @@ import DatasetsPage from './pages/DatasetsPage'
 import LineageDemo from './pages/LineageDemo'
 import LineageFullDemo from './pages/LineageFullDemo'
 import Settings from './pages/Settings'
+import Ontology from './pages/Ontology'
 
 function App() {
   return (
@@ -46,6 +47,7 @@ function App() {
           <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/upload" element={<DataUpload />} />
+          <Route path="/ontology" element={<Ontology />} />
           <Route path="/contexts" element={<Contexts />} />
           <Route path="/explorer" element={<DataExplorer />} />
           <Route path="/analysis" element={<DataAnalysis />} />

@@ -20,7 +20,8 @@ import {
   FileCode2,
   HardDrive,
   WifiOff,
-  Settings
+  Settings,
+  Network
 } from 'lucide-react'
 import { checkBackendHealth } from '../api/health'
 
@@ -73,6 +74,7 @@ export default function Layout({ children }: LayoutProps) {
   const navItems = [
     { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
     { path: '/upload', icon: Upload, label: 'Upload Data' },
+    { path: '/ontology', icon: Network, label: 'Ontology' },
     { path: '/contexts', icon: Layers, label: 'Contexts' },
     { path: '/data-sources', icon: PlugZap, label: 'Data Sources' },
     { path: '/notebooks', icon: FileCode2, label: 'SQL Notebooks' },

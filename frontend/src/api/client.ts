@@ -1194,8 +1194,8 @@ export const getFileAssetDetail = async (assetId: string) => {
 
 // Table Preview
 export const previewFileTable = async (
-  tableId: string, 
-  limit: number = 100, 
+  tableId: string,
+  limit: number = 100,
   offset: number = 0
 ) => {
   const response = await client.post('/api/files/tables/preview', {
@@ -1326,4 +1326,89 @@ export const testCategorySettings = async (category: string): Promise<{ results:
 export const seedSettingsFromEnv = async (overwrite: boolean = false): Promise<{ seeded: string[]; skipped: string[]; seeded_count: number; skipped_count: number }> => {
   const response = await client.post(`/api/v1/settings/seed-from-env?overwrite=${overwrite}`)
   return response.data
+}
+
+// ========================================
+// Ontology API
+// ========================================
+
+export const createOntology = async (
+  orgId: string,
+  name: string,
+  description?: string,
+  actor: string = 'user'
+) => {
+  const response = await client.post('/api/v1/ontology/', {
+    org_id: orgId,
+    name,
+    description,
+    actor
+  })
+  return response.data
+}
+
+export const listOntologies = async (orgId: string = 'demo') => {
+  try {
+    const response = await client.get('/api/v1/ontology/', {
+      params: { org_id: orgId }
+    })
+    return response.data
+  } catch {
+    return []
+  }
+}
+
+export const getOntology = async (ontologyId: string) => {
+  const response = await client.get(`/api/v1/ontology/${ontologyId}`)
+  return response.data
+}
+
+export const addOntologyTerms = async (
+  ontologyId: string,
+  terms: Array<{term: string, definition?: string, metadata?: any}>,
+  actor: string = 'user'
+) => {
+  const response = await client.post(`/api/v1/ontology/${ontologyId}/terms`, {
+    items: terms,
+    actor
+  })
+  return response.data
+}
+
+export const addOntologyRelations = async (
+  ontologyId: string,
+  relations: Array<{src_term: string, rel_type: string, dst_term: string, metadata?: any}>,
+  actor: string = 'user'
+) => {
+  const response = await client.post(`/api/v1/ontology/${ontologyId}/relations`, {
+    items: relations,
+    actor
+  })
+  return response.data
+}
+
+export const publishOntologyVersion = async (
+  ontologyId: string,
+  changeSummary?: string,
+  actor: string = 'user'
+) => {
+  const response = await client.post(`/api/v1/ontology/${ontologyId}/publish`, {
+    change_summary: changeSummary,
+    actor
+  })
+  return response.data
+}
+
+export const getOntologyDiff = async (ontologyId: string) => {
+  const response = await client.get(`/api/v1/ontology/${ontologyId}/diff`)
+  return response.data
+}
+
+// AI-assisted ontology helpers (future integration with MCP tools)
+export const proposeOntologyTerms = async (prompt: string, count: number = 20) => {
+  // This will call the AI MCP tool when we integrate it
+  // For now, return mock data or call backend endpoint if available
+  return {
+    items: []
+  }
 }
