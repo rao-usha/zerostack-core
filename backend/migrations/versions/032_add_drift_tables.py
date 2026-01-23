@@ -15,7 +15,7 @@ from sqlalchemy.dialects.postgresql import UUID
 
 # revision identifiers
 revision = '032_add_drift_tables'
-down_revision = '031_add_contexts_tables'
+down_revision = '031_add_contexts'
 branch_labels = None
 depends_on = None
 
