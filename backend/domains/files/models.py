@@ -163,7 +163,8 @@ class FileTable(SQLModel, table=True):
     A logical table extracted from a file version (CSV = 1 table, Excel = N sheets)
     """
     __tablename__ = "file_tables"
-    
+    model_config = {"protected_namespaces": ()}  # Allow schema_json field name
+
     id: UUID = SQLField(default_factory=uuid4, primary_key=True)
     file_version_id: UUID = SQLField(foreign_key="file_versions.id", nullable=False, index=True)
     table_name: str = SQLField(nullable=False)  # Sheet name for Excel, file name for CSV

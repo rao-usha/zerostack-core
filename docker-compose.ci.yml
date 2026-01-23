@@ -1,0 +1,27 @@
+# NEX Platform - CI/Testing Docker Compose
+# Usage: docker compose -p nex -f docker-compose.ci.yml up -d
+#
+# Minimal setup for CI pipelines - just database
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: nex-db-ci
+    environment:
+      POSTGRES_USER: nex
+      POSTGRES_PASSWORD: nex
+      POSTGRES_DB: nex
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nex -d nex"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks:
+      - nex-network
+
+networks:
+  nex-network:
+    name: nex-network
+    driver: bridge

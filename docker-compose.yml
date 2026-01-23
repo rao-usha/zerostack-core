@@ -164,7 +164,8 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - VITE_API_URL=http://localhost:8000
+      # Empty so Vite proxy forwards /api to backend:8000
+      - VITE_API_URL=
       - DOCKER_ENV=true
     volumes:
       - ./frontend:/app

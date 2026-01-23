@@ -1,0 +1,11 @@
+product_id,product_name,category,price,in_stock
+P001,Wireless Mouse,Electronics,24.99,true
+P002,Mechanical Keyboard,Electronics,89.99,true
+P003,USB-C Cable,Accessories,12.99,true
+P004,Laptop Stand,Accessories,45.99,false
+P005,Webcam HD,Electronics,79.99,true
+P006,Desk Lamp,Furniture,34.99,true
+P007,Ergonomic Chair,Furniture,299.99,true
+P008,Monitor 27",Electronics,349.99,true
+P009,Headphones,Electronics,199.99,true
+P010,External SSD,Storage,119.99,true

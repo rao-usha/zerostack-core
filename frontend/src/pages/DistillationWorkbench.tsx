@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
+import { useToast } from '../contexts/ToastContext'
 import {
   FlaskConical,
   MessageSquare,
@@ -205,6 +206,7 @@ interface ReviewItem {
 type ViewMode = 'chat' | 'tasks' | 'bank' | 'compare' | 'structure' | 'datasets' | 'review' | 'stats'
 
 export default function DistillationWorkbench() {
+  const toast = useToast()
   const [viewMode, setViewMode] = useState<ViewMode>('chat')
   const [domains, setDomains] = useState<Domain[]>([])
   const [topics, setTopics] = useState<Topic[]>([])
@@ -409,7 +411,7 @@ export default function DistillationWorkbench() {
 
   const handleCreateTask = async () => {
     if (!newTask.name.trim() || !newTask.prompt_template.trim()) {
-      alert('Task name and prompt template are required')
+      toast.warning('Task name and prompt template are required')
       return
     }
     
@@ -447,11 +449,11 @@ export default function DistillationWorkbench() {
         loadTasks()
       } else {
         const err = await res.json()
-        alert(`Failed to create task: ${err.detail || 'Unknown error'}`)
+        toast.error(`Failed to create task: ${err.detail || 'Unknown error'}`)
       }
     } catch (err) {
       console.error('Failed to create task:', err)
-      alert('Failed to create task')
+      toast.error('Failed to create task')
     } finally {
       setTaskLoading(false)
     }
@@ -612,7 +614,7 @@ export default function DistillationWorkbench() {
           setReviewScore('')
         } else {
           setCurrentReviewItem(null)
-          alert('No more items to review!')
+          toast.info('No more items to review!')
         }
       }
     } catch (err) {
@@ -633,7 +635,7 @@ export default function DistillationWorkbench() {
         loadReviewQueues()
         setCreateQueueOpen(false)
         setNewQueue({ name: '', description: '' })
-        alert('Queue created!')
+        toast.success('Queue created!')
       }
     } catch (err) {
       console.error('Failed to create queue:', err)
@@ -648,7 +650,7 @@ export default function DistillationWorkbench() {
       if (res.ok) {
         const data = await res.json()
         loadReviewItems(queueId)
-        alert(`Added ${data.items_added} items to queue!`)
+        toast.success(`Added ${data.items_added} items to queue!`)
       }
     } catch (err) {
       console.error('Failed to auto-populate:', err)
@@ -664,7 +666,7 @@ export default function DistillationWorkbench() {
       })
       if (res.ok) {
         loadReviewItems(queueId)
-        alert('Added to review queue!')
+        toast.success('Added to review queue!')
       }
     } catch (err) {
       console.error('Failed to add to queue:', err)
@@ -880,7 +882,7 @@ export default function DistillationWorkbench() {
       if (res.ok) {
         loadStatistics()
         loadBanked()
-        alert('Response banked successfully!')
+        toast.success('Response banked successfully!')
       }
     } catch (err) {
       console.error('Failed to bank response:', err)
@@ -898,7 +900,7 @@ export default function DistillationWorkbench() {
         loadResponses()
         loadStatistics()
       } else {
-        alert('Failed to delete response')
+        toast.error('Failed to delete response')
       }
     } catch (err) {
       console.error('Failed to delete response:', err)
@@ -956,7 +958,7 @@ export default function DistillationWorkbench() {
       if (res.ok) {
         loadComparisonDetails(selectedComparison.comparison.id)
         loadModelPreferences()
-        alert('Vote submitted!')
+        toast.success('Vote submitted!')
       }
     } catch (err) {
       console.error('Failed to submit vote:', err)
@@ -972,9 +974,9 @@ export default function DistillationWorkbench() {
       })
       if (res.ok) {
         loadStructured()
-        alert('Extraction complete!')
+        toast.success('Extraction complete!')
       } else {
-        alert('Extraction failed')
+        toast.error('Extraction failed')
       }
     } catch (err) {
       console.error('Failed to extract:', err)
@@ -1001,7 +1003,7 @@ export default function DistillationWorkbench() {
         loadStructured()
         setStructureModalOpen(false)
         setStructuredData({})
-        alert('Structured data saved!')
+        toast.success('Structured data saved!')
       }
     } catch (err) {
       console.error('Failed to save structured:', err)
@@ -1020,7 +1022,7 @@ export default function DistillationWorkbench() {
         loadDatasets()
         setCreateDatasetOpen(false)
         setNewDataset({ name: '', version: '1.0', description: '', dataset_type: 'training' })
-        alert('Dataset created!')
+        toast.success('Dataset created!')
       }
     } catch (err) {
       console.error('Failed to create dataset:', err)
@@ -1043,7 +1045,7 @@ export default function DistillationWorkbench() {
         if (selectedDataset?.id === datasetId) {
           loadDatasetDetails(datasetId)
         }
-        alert('Added to dataset!')
+        toast.success('Added to dataset!')
       }
     } catch (err) {
       console.error('Failed to add to dataset:', err)

@@ -1,14 +1,32 @@
 import axios from 'axios'
 
-// In development, use relative URLs so Vite proxy handles routing to backend:8000
-// In production, VITE_API_URL can be set to the actual backend URL
-const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || ''
-
+// Always use empty string for baseURL - this makes requests relative to page origin
+// Vite proxy will handle forwarding /api/* requests to the backend
+// DO NOT use import.meta.env.VITE_API_URL - it must be empty for proxy to work
 const client = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: '',  // Empty string = relative URLs = works with Vite proxy
   headers: {
     'Content-Type': 'application/json',
   },
+})
+
+// Ensure baseURL stays empty - guard against any accidental modification
+if (client.defaults.baseURL !== '') {
+  console.error('[ERROR] axios baseURL was modified! Resetting to empty string.')
+  client.defaults.baseURL = ''
+}
+
+// Debug interceptor to verify requests use correct URLs
+client.interceptors.request.use((config) => {
+  // Force relative URLs by ensuring baseURL is empty
+  if (config.baseURL && config.baseURL !== '') {
+    console.warn('[WARN] Request had non-empty baseURL, clearing it:', config.baseURL)
+    config.baseURL = ''
+  }
+
+  console.log('[DEBUG] Request URL:', config.url)
+  console.log('[DEBUG] Page origin:', window.location.origin)
+  return config
 })
 
 export default client
@@ -733,14 +751,19 @@ export const fetchDictionaryEntries = async (
   if (databaseName) params.append('database_name', databaseName)
   if (schemaName) params.append('schema_name', schemaName)
   if (tableName) params.append('table_name', tableName)
-  
+
   const queryString = params.toString()
-  const url = queryString 
-    ? `/api/v1/data-dictionary?${queryString}` 
-    : '/api/v1/data-dictionary'
-  
-  const response = await client.get(url)
-  return response.data
+  const url = queryString
+    ? `/api/v1/data-dictionary/?${queryString}`
+    : '/api/v1/data-dictionary/'
+
+  // Use native fetch to bypass any axios configuration issues
+  console.log('[fetchDictionaryEntries] Fetching URL:', url)
+  const response = await fetch(url)
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`)
+  }
+  return response.json()
 }
 
 export const getDictionaryEntry = async (entryId: number): Promise<DictionaryEntry> => {

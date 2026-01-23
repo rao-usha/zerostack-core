@@ -1,0 +1,6 @@
+id,name,value,notes
+1,Item A,100,Has note
+2,Item B,,Missing value
+3,,150,Missing name
+4,Item D,200,
+5,Item E,,,

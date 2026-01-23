@@ -64,7 +64,7 @@ export default function Chat() {
   const loadDatabases = async () => {
     try {
       // Call the Data Explorer API to get available databases
-      const response = await fetch('http://localhost:8000/api/v1/data-explorer/databases')
+      const response = await fetch('/api/v1/data-explorer/databases')
       const data = await response.json()
       setAvailableDatabases(data)
       if (data.length > 0 && !connectionId) {
@@ -149,7 +149,7 @@ export default function Chat() {
 
     try {
       // Use EventSource for SSE streaming
-      const url = `http://localhost:8000/api/v1/chat/conversations/${selectedConversation}/messages`
+      const url = `/api/v1/chat/conversations/${selectedConversation}/messages`
       
       // First, send the POST request with fetch to initiate streaming
       const response = await fetch(url, {

@@ -1,18 +1,26 @@
-# NEX.AI
+# ZeroStack (NEX.AI)
 
 ## AI Native Data Platform
 
 A comprehensive, AI-powered data platform that serves as a one-stop solution for all data-related needs in large organizations. This platform eliminates data governance concerns while providing powerful analytics, predictive modeling, and data management capabilities.
 
-## 🚀 Quick Start (Docker)
+## 🚀 Quick Start (Docker - Recommended)
 
 ```bash
 # Clone and start everything
 git clone <repository-url>
 cd Nex
 
-# Start all services (database, backend, frontend)
-docker-compose -f docker-compose.dev.yml up -d
+# Copy environment file and add your API keys
+cp .env.example .env
+# Edit .env to add OPENAI_API_KEY, ANTHROPIC_API_KEY, etc.
+
+# Start all services (database, minio, backend, frontend)
+docker compose -p zerostack up -d
+
+# View logs (optional)
+docker compose -p zerostack logs -f
+```
 
 **Access:** http://localhost:3000
 
@@ -139,32 +147,143 @@ NEX.AI consists of interconnected services:
 git clone <repository-url>
 cd Nex
 
-# Start all services (database, backend, frontend)
-docker-compose -f docker-compose.dev.yml up -d
+# Copy environment file and configure API keys
+cp .env.example .env
+# Edit .env to add your API keys (OPENAI_API_KEY, etc.)
+
+# Start all services
+docker compose -p zerostack up -d
 
 # View logs (optional)
-docker-compose -f docker-compose.dev.yml logs -f
+docker compose -p zerostack logs -f
 ```
 
 ### Access Points
-- **Frontend UI**: http://localhost:3000
-- **Main API Docs**: http://localhost:8000/docs
-- **Health Checks**: All services include health endpoints
+| Service | URL | Description |
+|---------|-----|-------------|
+| Frontend UI | http://localhost:3000 | Main application |
+| Backend API | http://localhost:8000/docs | Swagger documentation |
+| MinIO Console | http://localhost:9001 | Object storage UI (minioadmin/minioadmin) |
+| PostgreSQL | localhost:5432 | Database (nex/nex) |
 
 ### Docker Commands
 
 ```bash
 # Stop services
-docker-compose -f docker-compose.dev.yml down
+docker compose -p zerostack down
 
 # Rebuild after code changes
-docker-compose -f docker-compose.dev.yml build --no-cache
+docker compose -p zerostack build --no-cache
+docker compose -p zerostack up -d
 
 # View container status
-docker-compose -f docker-compose.dev.yml ps
+docker compose -p zerostack ps
+
+# View logs for specific service
+docker compose -p zerostack logs -f backend
+docker compose -p zerostack logs -f frontend
 
 # Execute commands in containers
-docker-compose -f docker-compose.dev.yml exec backend bash
+docker compose -p zerostack exec backend bash
+docker compose -p zerostack exec frontend sh
+
+# Full restart (removes volumes - WARNING: deletes data)
+docker compose -p zerostack down -v
+docker compose -p zerostack up -d
+```
+
+## ⚠️ Troubleshooting
+
+### Common Issues
+
+#### 1. Frontend shows "ERR_NAME_NOT_RESOLVED" for `backend:8000`
+
+**Cause:** You're running the frontend outside Docker while the backend runs inside Docker.
+
+**Solution:** Always use Docker Compose to run all services together:
+```bash
+docker compose -p zerostack up -d
+```
+
+**DO NOT** run `npm run dev` locally if your backend is in Docker. The Vite dev server inside Docker is already configured to proxy API requests to the backend service.
+
+#### 2. Database connection errors
+
+**Cause:** Database container not ready or wrong connection string.
+
+**Solution:**
+```bash
+# Check if database is healthy
+docker compose -p zerostack ps
+
+# Wait for database to be ready, then restart backend
+docker compose -p zerostack restart backend
+```
+
+#### 3. Changes not reflecting in frontend
+
+**Cause:** Docker volume caching or browser cache.
+
+**Solution:**
+```bash
+# Rebuild frontend container
+docker compose -p zerostack build frontend
+docker compose -p zerostack up -d frontend
+
+# Or clear your browser cache (Ctrl+Shift+R)
+```
+
+#### 4. API requests returning 404
+
+**Cause:** Backend not running or proxy misconfigured.
+
+**Solution:**
+```bash
+# Check backend logs
+docker compose -p zerostack logs backend
+
+# Verify backend is responding
+curl http://localhost:8000/docs
+```
+
+### Development Modes
+
+| Mode | Command | When to Use |
+|------|---------|-------------|
+| **Full Docker** (Recommended) | `docker compose -p zerostack up -d` | Normal development |
+| **Local Frontend + Docker Backend** | See below | Frontend debugging |
+| **Full Local** | See below | Advanced debugging |
+
+#### Local Frontend + Docker Backend
+
+If you need to debug the frontend with hot reload outside Docker:
+
+```bash
+# 1. Start only backend services in Docker
+docker compose -p zerostack up -d db minio minio-init backend
+
+# 2. Run frontend locally (ensure DOCKER_ENV is NOT set)
+cd frontend
+unset DOCKER_ENV  # Important!
+npm install
+npm run dev
+```
+
+#### Full Local Development
+
+```bash
+# 1. Start PostgreSQL and MinIO
+docker compose -p zerostack up -d db minio minio-init
+
+# 2. Run backend locally
+cd backend
+pip install -r requirements.txt
+DATABASE_URL=postgresql+psycopg://nex:nex@localhost:5432/nex uvicorn main:app --reload --port 8000
+
+# 3. Run frontend locally (in another terminal)
+cd frontend
+npm install
+npm run dev
 ```
 
 ## Usage Guide
@@ -395,5 +514,5 @@ This is a prototype application for demonstration and research purposes.
 
 ---
 
-**🚀 Ready to explore AI-native data management? Start with `docker-compose -f docker-compose.dev.yml up -d` and visit http://localhost:3000**
+**🚀 Ready to explore AI-native data management? Start with `docker compose -p zerostack up -d` and visit http://localhost:3000**
 

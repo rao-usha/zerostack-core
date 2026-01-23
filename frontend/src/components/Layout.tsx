@@ -27,7 +27,8 @@ import {
   Cpu,
   DollarSign,
   Package,
-  Gauge
+  Gauge,
+  ScanLine
 } from 'lucide-react'
 import { LucideIcon } from 'lucide-react'
 import { checkBackendHealth } from '../api/health'
@@ -121,6 +122,7 @@ export default function Layout({ children }: LayoutProps) {
       defaultExpanded: true,
       items: [
         { path: '/upload', icon: Upload, label: 'Upload Data' },
+        { path: '/data-ingestion', icon: ScanLine, label: 'PE Due Diligence' },
         { path: '/data-sources', icon: PlugZap, label: 'Data Sources' },
         { path: '/datasets', icon: HardDrive, label: 'Datasets' },
         { path: '/files/locations', icon: FolderOpen, label: 'Files' },

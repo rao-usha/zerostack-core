@@ -62,6 +62,7 @@ from domains.data_ingestion.router import router as data_ingestion_router
 from domains.lp_collection.router import router as lp_collection_router
 from domains.fo_collection.router import router as fo_collection_router
 from domains.investor_ingestion.router import router as investor_ingestion_router
+from domains.connectors.codat.router import router as codat_router
 
 # New dataset system imports
 from domains.datasets.storage import DatasetStorage, get_dataset_storage
@@ -141,6 +142,7 @@ app.include_router(data_ingestion_router)
 app.include_router(lp_collection_router, prefix=settings.api_prefix)
 app.include_router(fo_collection_router, prefix=settings.api_prefix)
 app.include_router(investor_ingestion_router, prefix=settings.api_prefix)
+app.include_router(codat_router, prefix=settings.api_prefix)
 
 
 # ========================================

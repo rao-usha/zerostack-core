@@ -107,8 +107,16 @@ export default function DataDictionary() {
 
   useEffect(() => {
     if (selectedDbId) {
-      loadSchemas()
-      loadDictionary()
+      console.log('[DataDictionary] Database changed to:', selectedDbId)
+      // Clear cached data when database changes
+      setTablesBySchema({})
+      setSchemas([])
+      setEntries([])
+      setSelectedTable(null)
+
+      // Load new data for the selected database
+      loadSchemas(selectedDbId)
+      loadDictionary(selectedDbId)
     }
   }, [selectedDbId])
 
@@ -124,15 +132,16 @@ export default function DataDictionary() {
     }
   }
 
-  const loadSchemas = async () => {
+  const loadSchemas = async (dbId: string) => {
     try {
       setLoadingNav(true)
-      const schemasData = await getExplorerSchemas(selectedDbId)
+      console.log('[DataDictionary] Loading schemas for:', dbId)
+      const schemasData = await getExplorerSchemas(dbId)
       setSchemas(schemasData)
-      
+
       // Auto-load public schema tables if it exists
       if (schemasData.some((s: Schema) => s.name === 'public')) {
-        loadTables('public')
+        loadTables('public', dbId)
       }
     } catch (err) {
       console.error('Failed to load schemas:', err)
@@ -142,11 +151,12 @@ export default function DataDictionary() {
     }
   }
 
-  const loadTables = async (schema: string) => {
-    if (tablesBySchema[schema]) return // Already loaded
-    
+  const loadTables = async (schema: string, dbId?: string) => {
+    const effectiveDbId = dbId || selectedDbId
+
     try {
-      const tables = await getExplorerTables(schema, selectedDbId)
+      console.log('[DataDictionary] Loading tables for schema:', schema, 'db:', effectiveDbId)
+      const tables = await getExplorerTables(schema, effectiveDbId)
       setTablesBySchema(prev => ({ ...prev, [schema]: tables }))
     } catch (error) {
       console.error(`Failed to load tables for ${schema}:`, error)
@@ -154,19 +164,20 @@ export default function DataDictionary() {
     }
   }
 
-  const loadDictionary = async () => {
+  const loadDictionary = async (dbId: string) => {
     try {
       setLoading(true)
       setError(null)
-      const data = await fetchDictionaryEntries(selectedDbId)
-      
+      console.log('[DataDictionary] Loading dictionary for:', dbId)
+      const data = await fetchDictionaryEntries(dbId)
+
       // Validate data before setting
       if (!Array.isArray(data)) {
         throw new Error('Invalid response format: expected array')
       }
-      
+
       setEntries(data)
-      console.log(`Loaded ${data.length} dictionary entries`)
+      console.log(`[DataDictionary] Loaded ${data.length} dictionary entries for ${dbId}`)
     } catch (err: any) {
       console.error('Failed to load dictionary:', err)
       const errorMessage = err.response?.data?.detail || err.message || 'Failed to load data dictionary'
@@ -183,7 +194,10 @@ export default function DataDictionary() {
       newExpanded.delete(schemaName)
     } else {
       newExpanded.add(schemaName)
-      loadTables(schemaName) // Load tables when expanding
+      // Load tables when expanding (only if not already loaded)
+      if (!tablesBySchema[schemaName]) {
+        loadTables(schemaName, selectedDbId)
+      }
     }
     setExpandedSchemas(newExpanded)
   }
