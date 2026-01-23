@@ -334,5 +334,110 @@ class ReAnalyzeResponse(BaseModel):
     analysis_summary: str
 
 
+# --- Trend Analysis Models ---
+
+class TrendAnalysisRequest(BaseModel):
+    """Request for trend analysis"""
+    file_id: str
+    date_column: str
+    value_column: str
+    metric_type: str = "value"
+
+
+class GrowthMetricsResponse(BaseModel):
+    """Growth metrics from trend analysis"""
+    period_over_period: Optional[float] = None
+    mom_avg: Optional[float] = None
+    qoq_avg: Optional[float] = None
+    yoy_avg: Optional[float] = None
+    cagr: Optional[float] = None
+    trend_direction: str
+    acceleration: Optional[float] = None
+
+
+class TrendAnalysisResponse(BaseModel):
+    """Response from trend analysis"""
+    column_name: str
+    metric_type: str
+    growth_metrics: GrowthMetricsResponse
+    seasonality: str
+    seasonality_strength: float
+    trend_line_slope: float
+    trend_line_r_squared: float
+    forecast_next_period: Optional[float] = None
+    anomaly_periods: List[str] = Field(default_factory=list)
+    insights: List[str] = Field(default_factory=list)
+
+
+# --- Reconciliation Models ---
+
+class ReconciliationRequest(BaseModel):
+    """Request for reconciliation between two files"""
+    file_id_a: str
+    file_id_b: str
+    column_a: Optional[str] = None
+    column_b: Optional[str] = None
+    join_column_a: Optional[str] = None
+    join_column_b: Optional[str] = None
+    tolerance: float = 0.05
+
+
+class ReconciliationResultResponse(BaseModel):
+    """Single reconciliation result"""
+    reconciliation_type: str
+    source_a: str
+    source_b: str
+    field_a: str
+    field_b: str
+    matches: bool
+    discrepancy_count: int
+    discrepancy_percent: float
+    severity: str
+    total_variance: float
+    details: List[Dict[str, Any]] = Field(default_factory=list)
+    recommendation: str
+
+
+class ReconciliationSummaryResponse(BaseModel):
+    """Summary of reconciliation results"""
+    total_checks: int
+    passed: int
+    failed: int
+    critical_issues: int
+    overall_confidence: float
+    results: List[ReconciliationResultResponse] = Field(default_factory=list)
+
+
+# --- AI Insights Models ---
+
+class AIInsightsRequest(BaseModel):
+    """Request for AI-generated insights"""
+    file_id: str
+    include_summary: bool = True
+    include_explanations: bool = True
+    include_questions: bool = True
+    llm_provider: str = "openai"
+
+
+class AIInsightResponse(BaseModel):
+    """Single AI insight"""
+    category: str
+    title: str
+    content: str
+    confidence: float
+    supporting_data: Dict[str, Any] = Field(default_factory=dict)
+
+
+class AIAnalysisReportResponse(BaseModel):
+    """Full AI analysis report"""
+    executive_summary: str
+    key_findings: List[str] = Field(default_factory=list)
+    risk_assessment: str
+    recommendations: List[str] = Field(default_factory=list)
+    follow_up_questions: List[str] = Field(default_factory=list)
+    data_quality_assessment: str
+    generated: bool = True
+
+
 # Update forward references
 IngestedFileDetail.model_rebuild()

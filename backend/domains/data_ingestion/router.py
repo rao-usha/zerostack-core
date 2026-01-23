@@ -25,6 +25,13 @@ from domains.data_ingestion.models import (
     IssueSummary,
     ReAnalyzeRequest,
     ReAnalyzeResponse,
+    TrendAnalysisRequest,
+    TrendAnalysisResponse,
+    GrowthMetricsResponse,
+    ReconciliationRequest,
+    ReconciliationSummaryResponse,
+    AIInsightsRequest,
+    AIAnalysisReportResponse,
 )
 from domains.data_ingestion.service import DataIngestionService
 from domains.data_ingestion.persistence_service import IngestionPersistenceService
@@ -365,6 +372,236 @@ async def acknowledge_issue(
     if not result:
         raise HTTPException(status_code=404, detail="Issue not found")
     return result
+
+
+# --- Analysis Endpoints ---
+
+@router.post("/analysis/trends", response_model=TrendAnalysisResponse)
+async def analyze_trends(
+    request: TrendAnalysisRequest,
+    service: IngestionPersistenceService = Depends(get_persistence_service),
+):
+    """
+    Run trend analysis on a specific column in an uploaded file.
+
+    Analyzes growth rates (MoM, QoQ, YoY), seasonality, and generates insights.
+    """
+    from domains.data_ingestion.trend_analyzer import TrendAnalyzer
+    import pandas as pd
+
+    # Get file data
+    file_detail = service.get_file(UUID(request.file_id))
+    if not file_detail:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    if not file_detail.schema_analysis or 'sheets' not in file_detail.schema_analysis:
+        raise HTTPException(status_code=400, detail="File has no analysis data")
+
+    # Try to reconstruct DataFrame from sample data
+    # In production, would load from stored file
+    sheets = file_detail.schema_analysis.get('sheets', [])
+    if not sheets:
+        raise HTTPException(status_code=400, detail="No sheets found in analysis")
+
+    # Use first sheet
+    sheet = sheets[0]
+    columns = [c['name'] for c in sheet.get('columns', [])]
+    sample_data = sheet.get('sample_data', [])
+
+    if not sample_data:
+        raise HTTPException(status_code=400, detail="No sample data available")
+
+    df = pd.DataFrame(sample_data, columns=columns)
+
+    if request.date_column not in df.columns:
+        raise HTTPException(status_code=400, detail=f"Date column '{request.date_column}' not found")
+    if request.value_column not in df.columns:
+        raise HTTPException(status_code=400, detail=f"Value column '{request.value_column}' not found")
+
+    analyzer = TrendAnalyzer()
+    result = analyzer.analyze_time_series(
+        df, request.date_column, request.value_column, request.metric_type
+    )
+
+    if not result:
+        raise HTTPException(status_code=400, detail="Insufficient data for trend analysis")
+
+    return TrendAnalysisResponse(
+        column_name=result.column_name,
+        metric_type=result.metric_type,
+        growth_metrics=GrowthMetricsResponse(
+            period_over_period=result.growth_metrics.period_over_period,
+            mom_avg=result.growth_metrics.mom_avg,
+            qoq_avg=result.growth_metrics.qoq_avg,
+            yoy_avg=result.growth_metrics.yoy_avg,
+            cagr=result.growth_metrics.cagr,
+            trend_direction=result.growth_metrics.trend_direction.value,
+            acceleration=result.growth_metrics.acceleration,
+        ),
+        seasonality=result.seasonality.value,
+        seasonality_strength=result.seasonality_strength,
+        trend_line_slope=result.trend_line_slope,
+        trend_line_r_squared=result.trend_line_r_squared,
+        forecast_next_period=result.forecast_next_period,
+        anomaly_periods=result.anomaly_periods,
+        insights=result.insights,
+    )
+
+
+@router.post("/analysis/reconcile", response_model=ReconciliationSummaryResponse)
+async def reconcile_files(
+    request: ReconciliationRequest,
+    service: IngestionPersistenceService = Depends(get_persistence_service),
+):
+    """
+    Reconcile data between two uploaded files.
+
+    Compares matching columns and identifies discrepancies.
+    """
+    from domains.data_ingestion.reconciliation_service import ReconciliationService
+    import pandas as pd
+
+    # Get both files
+    file_a = service.get_file(UUID(request.file_id_a))
+    file_b = service.get_file(UUID(request.file_id_b))
+
+    if not file_a:
+        raise HTTPException(status_code=404, detail=f"File A not found: {request.file_id_a}")
+    if not file_b:
+        raise HTTPException(status_code=404, detail=f"File B not found: {request.file_id_b}")
+
+    # Extract DataFrames from sample data
+    def extract_df(file_detail):
+        if not file_detail.schema_analysis or 'sheets' not in file_detail.schema_analysis:
+            return None
+        sheets = file_detail.schema_analysis.get('sheets', [])
+        if not sheets:
+            return None
+        sheet = sheets[0]
+        columns = [c['name'] for c in sheet.get('columns', [])]
+        sample_data = sheet.get('sample_data', [])
+        if not sample_data:
+            return None
+        return pd.DataFrame(sample_data, columns=columns)
+
+    df_a = extract_df(file_a)
+    df_b = extract_df(file_b)
+
+    if df_a is None or df_b is None:
+        raise HTTPException(status_code=400, detail="Unable to extract data from files")
+
+    reconciler = ReconciliationService()
+
+    if request.column_a and request.column_b:
+        # Specific column reconciliation
+        result = reconciler.reconcile_specific(
+            df_a, df_b,
+            request.column_a, request.column_b,
+            request.join_column_a, request.join_column_b,
+            file_a.filename, file_b.filename,
+            request.tolerance,
+        )
+        summary = reconciler._create_summary([result])
+    else:
+        # Auto-detect reconciliation
+        summary = reconciler.reconcile_dataframes(
+            df_a, df_b,
+            file_a.filename, file_b.filename,
+        )
+
+    return ReconciliationSummaryResponse(
+        total_checks=summary.total_checks,
+        passed=summary.passed,
+        failed=summary.failed,
+        critical_issues=summary.critical_issues,
+        overall_confidence=summary.overall_confidence,
+        results=[
+            {
+                "reconciliation_type": r.reconciliation_type.value,
+                "source_a": r.source_a,
+                "source_b": r.source_b,
+                "field_a": r.field_a,
+                "field_b": r.field_b,
+                "matches": r.matches,
+                "discrepancy_count": r.discrepancy_count,
+                "discrepancy_percent": r.discrepancy_percent,
+                "severity": r.severity.value,
+                "total_variance": r.total_variance,
+                "details": r.details,
+                "recommendation": r.recommendation,
+            }
+            for r in summary.results
+        ],
+    )
+
+
+@router.post("/analysis/ai-insights", response_model=AIAnalysisReportResponse)
+async def generate_ai_insights(
+    request: AIInsightsRequest,
+    service: IngestionPersistenceService = Depends(get_persistence_service),
+):
+    """
+    Generate AI-powered insights for an uploaded file.
+
+    Uses LLM to provide executive summary, explain anomalies, and suggest follow-up questions.
+    """
+    from domains.data_ingestion.ai_insights_service import AIInsightsService
+
+    # Get file details
+    file_detail = service.get_file(UUID(request.file_id))
+    if not file_detail:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    # Compile analysis data
+    analysis_data = {
+        "filename": file_detail.filename,
+        "total_rows": file_detail.row_count or 0,
+        "overall_quality_score": file_detail.quality_score or 0,
+        "detected_categories": file_detail.detected_categories or [],
+        "potential_issues": [],
+        "anomalies": [],
+        "red_flags": [],
+    }
+
+    # Extract anomalies and red flags from schema analysis
+    if file_detail.schema_analysis and 'sheets' in file_detail.schema_analysis:
+        for sheet in file_detail.schema_analysis['sheets']:
+            analysis_data['anomalies'].extend(sheet.get('anomalies', []))
+            analysis_data['red_flags'].extend(sheet.get('red_flags', []))
+            analysis_data['potential_issues'].extend(sheet.get('quality_issues', []))
+
+    try:
+        ai_service = AIInsightsService(provider=request.llm_provider)
+        report = await ai_service.generate_full_report(
+            file_analysis=analysis_data,
+            anomalies=analysis_data['anomalies'],
+            red_flags=analysis_data['red_flags'],
+        )
+
+        return AIAnalysisReportResponse(
+            executive_summary=report.executive_summary,
+            key_findings=report.key_findings,
+            risk_assessment=report.risk_assessment,
+            recommendations=report.recommendations,
+            follow_up_questions=report.follow_up_questions,
+            data_quality_assessment=report.data_quality_assessment,
+            generated=True,
+        )
+    except Exception as e:
+        # Return fallback response on error
+        return AIAnalysisReportResponse(
+            executive_summary=f"AI analysis unavailable: {str(e)}",
+            key_findings=[
+                f"Data quality score: {analysis_data['overall_quality_score']}/100",
+                f"Anomalies detected: {len(analysis_data['anomalies'])}",
+                f"Red flags detected: {len(analysis_data['red_flags'])}",
+            ],
+            risk_assessment="Manual review required",
+            recommendations=["Review detected anomalies", "Investigate red flags"],
+            follow_up_questions=["Request supporting documentation for flagged items"],
+            data_quality_assessment=f"Quality score: {analysis_data['overall_quality_score']}/100",
+            generated=False,
+        )
 
 
 # --- Health Check ---
