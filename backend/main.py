@@ -58,6 +58,10 @@ from domains.settings.router import router as settings_router
 from domains.feature_store.router import router as feature_store_router
 from domains.ontology.router import router as ontology_router
 from domains.model_monitoring.router import router as model_monitoring_router
+from domains.data_ingestion.router import router as data_ingestion_router
+from domains.lp_collection.router import router as lp_collection_router
+from domains.fo_collection.router import router as fo_collection_router
+from domains.investor_ingestion.router import router as investor_ingestion_router
 
 # New dataset system imports
 from domains.datasets.storage import DatasetStorage, get_dataset_storage
@@ -133,6 +137,10 @@ app.include_router(settings_router, prefix=settings.api_prefix)
 app.include_router(feature_store_router, prefix=settings.api_prefix)
 app.include_router(ontology_router, prefix=settings.api_prefix)
 app.include_router(model_monitoring_router)
+app.include_router(data_ingestion_router)
+app.include_router(lp_collection_router, prefix=settings.api_prefix)
+app.include_router(fo_collection_router, prefix=settings.api_prefix)
+app.include_router(investor_ingestion_router, prefix=settings.api_prefix)
 
 
 # ========================================

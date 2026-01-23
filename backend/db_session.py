@@ -31,11 +31,21 @@ def get_session() -> Generator[Session, None, None]:
 def get_session_context():
     """
     Get database session as context manager.
-    
+
     Usage:
         with get_session_context() as session:
             ...
     """
     with Session(engine) as session:
         yield session
+
+
+def get_sync_engine():
+    """
+    Get the synchronous database engine.
+
+    Returns:
+        The SQLAlchemy engine for direct access.
+    """
+    return engine
 
