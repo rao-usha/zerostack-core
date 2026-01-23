@@ -20,6 +20,9 @@ from domains.ml_development.service import (
     MLRecipeService, MLRecipeVersionService, MLModelService,
     MLRunService, MLMonitorService, MLSyntheticExampleService
 )
+from domains.ml_development.promotion_service import get_promotion_service
+from pydantic import BaseModel, Field
+from datetime import datetime
 
 router = APIRouter(prefix="/ml-development", tags=["ml-development"])
 
@@ -490,3 +493,209 @@ Be concise but thorough. Use technical terminology where appropriate."""
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ========================================
+# Model Promotion Endpoints
+# ========================================
+
+class PromoteModelRequest(BaseModel):
+    """Request to promote a model."""
+    target_status: str = Field(pattern="^(staging|production)$")
+    notes: str = Field(min_length=1)
+    promoted_by: Optional[str] = None
+
+
+class DemoteModelRequest(BaseModel):
+    """Request to demote a model."""
+    target_status: str = Field(pattern="^(draft|staging)$")
+    notes: str = Field(min_length=1)
+    demoted_by: Optional[str] = None
+
+
+class RollbackModelRequest(BaseModel):
+    """Request to rollback a model."""
+    to_promotion_id: str
+    rolled_back_by: Optional[str] = None
+
+
+class ValidationRequirementResponse(BaseModel):
+    """Response for a validation requirement."""
+    name: str
+    description: str
+    passed: bool
+    details: Optional[str] = None
+
+
+class ValidationResultResponse(BaseModel):
+    """Response for validation result."""
+    can_promote: bool
+    requirements: List[ValidationRequirementResponse]
+    message: str
+
+
+class PromotionRecordResponse(BaseModel):
+    """Response for a promotion record."""
+    id: str
+    model_id: str
+    from_status: str
+    to_status: str
+    promoted_by: Optional[str]
+    promotion_notes: Optional[str]
+    validation_results: Optional[dict]
+    promoted_at: datetime
+
+
+@router.post("/models/{model_id}/promote", response_model=PromotionRecordResponse)
+async def promote_model(model_id: str, request: PromoteModelRequest):
+    """
+    Promote a model to a higher status level.
+
+    Validates requirements before promotion:
+    - draft -> staging: Requires completed run with metrics
+    - staging -> production: Requires recent run, no critical drift
+    """
+    service = get_promotion_service()
+
+    # Validate first
+    validation = service.validate_promotion(model_id, request.target_status)
+    if not validation.can_promote:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                'message': validation.message,
+                'validation': validation.to_dict()
+            }
+        )
+
+    # Execute promotion
+    record = service.execute_promotion(
+        model_id=model_id,
+        target_status=request.target_status,
+        notes=request.notes,
+        user=request.promoted_by
+    )
+
+    if not record:
+        raise HTTPException(status_code=400, detail="Promotion failed")
+
+    return PromotionRecordResponse(
+        id=record.id,
+        model_id=record.model_id,
+        from_status=record.from_status,
+        to_status=record.to_status,
+        promoted_by=record.promoted_by,
+        promotion_notes=record.promotion_notes,
+        validation_results=record.validation_results,
+        promoted_at=record.promoted_at
+    )
+
+
+@router.post("/models/{model_id}/demote", response_model=PromotionRecordResponse)
+async def demote_model(model_id: str, request: DemoteModelRequest):
+    """
+    Demote a model to a lower status level.
+
+    Demotions are always allowed but require notes explaining the reason.
+    """
+    service = get_promotion_service()
+
+    # Execute demotion
+    record = service.execute_promotion(
+        model_id=model_id,
+        target_status=request.target_status,
+        notes=request.notes,
+        user=request.demoted_by
+    )
+
+    if not record:
+        raise HTTPException(status_code=400, detail="Demotion failed")
+
+    return PromotionRecordResponse(
+        id=record.id,
+        model_id=record.model_id,
+        from_status=record.from_status,
+        to_status=record.to_status,
+        promoted_by=record.promoted_by,
+        promotion_notes=record.promotion_notes,
+        validation_results=record.validation_results,
+        promoted_at=record.promoted_at
+    )
+
+
+@router.post("/models/{model_id}/rollback", response_model=PromotionRecordResponse)
+async def rollback_model(model_id: str, request: RollbackModelRequest):
+    """
+    Rollback a model to a previous promotion state.
+
+    Restores the model to the status it had before the specified promotion.
+    """
+    service = get_promotion_service()
+
+    record = service.rollback_promotion(
+        model_id=model_id,
+        to_promotion_id=request.to_promotion_id,
+        user=request.rolled_back_by
+    )
+
+    if not record:
+        raise HTTPException(status_code=404, detail="Promotion record not found or rollback failed")
+
+    return PromotionRecordResponse(
+        id=record.id,
+        model_id=record.model_id,
+        from_status=record.from_status,
+        to_status=record.to_status,
+        promoted_by=record.promoted_by,
+        promotion_notes=record.promotion_notes,
+        validation_results=record.validation_results,
+        promoted_at=record.promoted_at
+    )
+
+
+@router.get("/models/{model_id}/promotion-history", response_model=List[PromotionRecordResponse])
+async def get_promotion_history(model_id: str):
+    """
+    Get promotion history for a model.
+
+    Returns all promotions and demotions, most recent first.
+    """
+    service = get_promotion_service()
+    records = service.get_promotion_history(model_id)
+
+    return [
+        PromotionRecordResponse(
+            id=r.id,
+            model_id=r.model_id,
+            from_status=r.from_status,
+            to_status=r.to_status,
+            promoted_by=r.promoted_by,
+            promotion_notes=r.promotion_notes,
+            validation_results=r.validation_results,
+            promoted_at=r.promoted_at
+        )
+        for r in records
+    ]
+
+
+@router.get("/models/{model_id}/validate-promotion", response_model=ValidationResultResponse)
+async def validate_promotion(model_id: str, target_status: str = Query(...)):
+    """
+    Validate whether a model can be promoted to a target status.
+
+    Returns validation requirements and their pass/fail status.
+    """
+    service = get_promotion_service()
+    result = service.validate_promotion(model_id, target_status)
+
+    return ValidationResultResponse(
+        can_promote=result.can_promote,
+        requirements=[
+            ValidationRequirementResponse(
+                name=r.name,
+                description=r.description,
+                passed=r.passed,
+                details=r.details
+            )
+            for r in result.requirements
+        ],
+        message=result.message
+    )

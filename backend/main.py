@@ -47,6 +47,7 @@ from domains.distillation.router import router as distillation_router
 from domains.highlighted_datasets.router import router as highlighted_datasets_router
 from domains.interactions.router import router as interactions_router
 from domains.drift.router import router as drift_router
+from domains.cost_analytics.router import router as cost_analytics_router
 from domains.schedules.router import router as schedules_router
 from domains.data_connections.router import router as data_connections_router
 from domains.notebooks.router import router as notebooks_router
@@ -56,6 +57,7 @@ from domains.synthetic.router import router as synthetic_router
 from domains.settings.router import router as settings_router
 from domains.feature_store.router import router as feature_store_router
 from domains.ontology.router import router as ontology_router
+from domains.model_monitoring.router import router as model_monitoring_router
 
 # New dataset system imports
 from domains.datasets.storage import DatasetStorage, get_dataset_storage
@@ -72,7 +74,11 @@ from slowapi.errors import RateLimitExceeded
 # Setup logging
 setup_logging()
 
-app = FastAPI(title=settings.app_name, version=settings.app_version)
+app = FastAPI(
+    title=settings.app_name,
+    version=settings.app_version,
+    redirect_slashes=False  # Prevent 307 redirects that break Docker networking
+)
 
 # CORS middleware
 app.add_middleware(
@@ -116,6 +122,7 @@ app.include_router(distillation_router, prefix=settings.api_prefix)
 app.include_router(highlighted_datasets_router, prefix=settings.api_prefix)
 app.include_router(interactions_router, prefix=settings.api_prefix)
 app.include_router(drift_router, prefix=settings.api_prefix)
+app.include_router(cost_analytics_router, prefix=settings.api_prefix)
 app.include_router(schedules_router, prefix=settings.api_prefix)
 app.include_router(data_connections_router, prefix=settings.api_prefix)
 app.include_router(notebooks_router, prefix=settings.api_prefix)
@@ -125,6 +132,7 @@ app.include_router(synthetic_router, prefix=settings.api_prefix)
 app.include_router(settings_router, prefix=settings.api_prefix)
 app.include_router(feature_store_router, prefix=settings.api_prefix)
 app.include_router(ontology_router, prefix=settings.api_prefix)
+app.include_router(model_monitoring_router)
 
 
 # ========================================

@@ -7,6 +7,7 @@ import {
   MessageCircle,
   CheckCircle2,
   AlertCircle,
+  AlertTriangle,
   TrendingUp,
   Database,
   Layers,
@@ -21,9 +22,16 @@ import {
   HardDrive,
   WifiOff,
   Settings,
-  Network
+  Network,
+  FolderInput,
+  Cpu,
+  DollarSign,
+  Package,
+  Gauge
 } from 'lucide-react'
+import { LucideIcon } from 'lucide-react'
 import { checkBackendHealth } from '../api/health'
+import NavGroup from './NavGroup'
 
 function HealthIndicator() {
   const [healthy, setHealthy] = useState(true)
@@ -68,31 +76,154 @@ interface LayoutProps {
   children: ReactNode
 }
 
+interface NavItem {
+  path: string
+  icon: LucideIcon
+  label: string
+}
+
+interface NavGroupConfig {
+  type: 'group'
+  label: string
+  icon: LucideIcon
+  storageKey: string
+  defaultExpanded?: boolean
+  items: NavItem[]
+}
+
+interface NavStandaloneItem {
+  type: 'item'
+  path: string
+  icon: LucideIcon
+  label: string
+}
+
+interface NavDivider {
+  type: 'divider'
+}
+
+type NavStructureItem = NavGroupConfig | NavStandaloneItem | NavDivider
+
 export default function Layout({ children }: LayoutProps) {
   const location = useLocation()
 
-  const navItems = [
-    { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
-    { path: '/upload', icon: Upload, label: 'Upload Data' },
-    { path: '/ontology', icon: Network, label: 'Ontology' },
-    { path: '/contexts', icon: Layers, label: 'Contexts' },
-    { path: '/data-sources', icon: PlugZap, label: 'Data Sources' },
-    { path: '/notebooks', icon: FileCode2, label: 'SQL Notebooks' },
-    { path: '/datasets', icon: HardDrive, label: 'Datasets' },
-    { path: '/explorer', icon: Table, label: 'Data Explorer' },
-    { path: '/analysis', icon: Brain, label: 'Data Analysis' },
-    { path: '/dictionary', icon: Book, label: 'Data Dictionary' },
-    { path: '/files/locations', icon: FolderOpen, label: 'Files' },
-    { path: '/model-development', icon: Activity, label: 'Model Development' },
-    { path: '/distillation', icon: FlaskConical, label: 'Distillation' },
-    { path: '/chat', icon: MessageCircle, label: 'Chat with Data' },
-    { path: '/insights', icon: Sparkles, label: 'Insights' },
-    { path: '/quality', icon: CheckCircle2, label: 'Data Quality' },
-    { path: '/gaps', icon: AlertCircle, label: 'Knowledge Gaps' },
-    { path: '/models', icon: TrendingUp, label: 'Predictive Models' },
-    { path: '/synthetic', icon: Database, label: 'Synthetic Data' },
-    { path: '/settings', icon: Settings, label: 'Settings' },
+  const navStructure: NavStructureItem[] = [
+    // Dashboard (standalone - always visible)
+    { type: 'item', path: '/', icon: LayoutDashboard, label: 'Dashboard' },
+    { type: 'divider' },
+
+    // Data group
+    {
+      type: 'group',
+      label: 'Data',
+      icon: FolderInput,
+      storageKey: 'data',
+      defaultExpanded: true,
+      items: [
+        { path: '/upload', icon: Upload, label: 'Upload Data' },
+        { path: '/data-sources', icon: PlugZap, label: 'Data Sources' },
+        { path: '/datasets', icon: HardDrive, label: 'Datasets' },
+        { path: '/files/locations', icon: FolderOpen, label: 'Files' },
+        { path: '/explorer', icon: Table, label: 'Data Explorer' },
+      ]
+    },
+    { type: 'divider' },
+
+    // Analysis & Documentation group
+    {
+      type: 'group',
+      label: 'Analysis & Docs',
+      icon: Brain,
+      storageKey: 'analysis',
+      defaultExpanded: false,
+      items: [
+        { path: '/analysis', icon: Brain, label: 'Data Analysis' },
+        { path: '/dictionary', icon: Book, label: 'Data Dictionary' },
+        { path: '/quality', icon: CheckCircle2, label: 'Data Quality' },
+        { path: '/gaps', icon: AlertCircle, label: 'Knowledge Gaps' },
+      ]
+    },
+    { type: 'divider' },
+
+    // Development group
+    {
+      type: 'group',
+      label: 'Development',
+      icon: FileCode2,
+      storageKey: 'development',
+      defaultExpanded: false,
+      items: [
+        { path: '/notebooks', icon: FileCode2, label: 'SQL Notebooks' },
+        { path: '/contexts', icon: Layers, label: 'Contexts' },
+        { path: '/ontology', icon: Network, label: 'Ontology' },
+      ]
+    },
+    { type: 'divider' },
+
+    // AI & Models group
+    {
+      type: 'group',
+      label: 'AI & Models',
+      icon: Cpu,
+      storageKey: 'ai-models',
+      defaultExpanded: false,
+      items: [
+        { path: '/model-development', icon: Activity, label: 'Model Development' },
+        { path: '/model-development/registry', icon: Package, label: 'Model Registry' },
+        { path: '/model-development/monitoring', icon: Gauge, label: 'Model Monitoring' },
+        { path: '/model-development/drift', icon: AlertTriangle, label: 'Drift Detection' },
+        { path: '/model-development/costs', icon: DollarSign, label: 'Cost Analytics' },
+        { path: '/distillation', icon: FlaskConical, label: 'Distillation' },
+        { path: '/models', icon: TrendingUp, label: 'Predictive Models' },
+        { path: '/synthetic', icon: Database, label: 'Synthetic Data' },
+        { path: '/insights', icon: Sparkles, label: 'Insights' },
+      ]
+    },
+    { type: 'divider' },
+
+    // Chat with Data (standalone)
+    { type: 'item', path: '/chat', icon: MessageCircle, label: 'Chat with Data' },
+    { type: 'divider' },
+
+    // Settings (standalone - bottom)
+    { type: 'item', path: '/settings', icon: Settings, label: 'Settings' },
   ]
+
+  // Helper to check if a path is active
+  const isPathActive = (path: string) => {
+    if (path === '/files/locations') {
+      return location.pathname.startsWith('/files')
+    }
+    return location.pathname === path
+  }
+
+  // Helper to check if any item in a group is active
+  const isGroupActive = (items: NavItem[]) => {
+    return items.some(item => isPathActive(item.path))
+  }
+
+  // Render a single nav item
+  const renderNavItem = (item: NavItem, indent: boolean = false) => {
+    const Icon = item.icon
+    const isActive = isPathActive(item.path)
+    return (
+      <Link
+        key={item.path}
+        to={item.path}
+        className={`flex items-center space-x-3 px-4 py-2.5 rounded-lg transition-all duration-200 ${indent ? 'text-sm' : ''}`}
+        style={isActive ? {
+          background: 'linear-gradient(90deg, rgba(168, 216, 255, 0.15), rgba(196, 181, 253, 0.15))',
+          color: '#a8d8ff',
+          border: '1px solid rgba(168, 216, 255, 0.4)'
+        } : {
+          color: '#f0f0f5'
+        }}
+      >
+        <Icon className={indent ? 'h-4 w-4' : 'h-5 w-5'} />
+        <span className="font-medium">{item.label}</span>
+      </Link>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-dark-bg">
@@ -123,30 +254,38 @@ export default function Layout({ children }: LayoutProps) {
             </div>
           </div>
           
-          <nav className="p-4 space-y-2 flex-1">
-            {navItems.map((item) => {
-              const Icon = item.icon
-              // Special handling for Files menu - highlight on any /files/* route
-              const isActive = item.path === '/files/locations' 
-                ? location.pathname.startsWith('/files')
-                : location.pathname === item.path
-              return (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  className="flex items-center space-x-3 px-4 py-3 rounded-lg transition-all duration-200"
-                  style={isActive ? {
-                    background: 'linear-gradient(90deg, rgba(168, 216, 255, 0.15), rgba(196, 181, 253, 0.15))',
-                    color: '#a8d8ff',
-                    border: '1px solid rgba(168, 216, 255, 0.4)'
-                  } : {
-                    color: '#f0f0f5'
-                  }}
-                >
-                  <Icon className="h-5 w-5" />
-                  <span className="font-medium">{item.label}</span>
-                </Link>
-              )
+          <nav className="p-4 space-y-1 flex-1 overflow-y-auto">
+            {navStructure.map((entry, index) => {
+              if (entry.type === 'divider') {
+                return (
+                  <div
+                    key={`divider-${index}`}
+                    className="my-2 border-t border-dark-border/50"
+                  />
+                )
+              }
+
+              if (entry.type === 'item') {
+                return renderNavItem(entry, false)
+              }
+
+              if (entry.type === 'group') {
+                const groupActive = isGroupActive(entry.items)
+                return (
+                  <NavGroup
+                    key={entry.storageKey}
+                    title={entry.label}
+                    icon={entry.icon}
+                    storageKey={entry.storageKey}
+                    defaultExpanded={entry.defaultExpanded}
+                    isActive={groupActive}
+                  >
+                    {entry.items.map(item => renderNavItem(item, true))}
+                  </NavGroup>
+                )
+              }
+
+              return null
             })}
           </nav>
         </aside>

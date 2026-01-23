@@ -548,3 +548,161 @@ run_schedules = Table(
     Column("created_at", TIMESTAMP(timezone=True), server_default=func.now()),
     Column("updated_at", TIMESTAMP(timezone=True), server_default=func.now()),
 )
+
+
+# ============================================================================
+# Drift Detection Tables
+# ============================================================================
+
+drift_checks = Table(
+    "drift_checks",
+    METADATA,
+    Column("id", UUID, primary_key=True, server_default=func.gen_random_uuid()),
+    Column("name", String(255), nullable=False),
+    Column("description", Text, nullable=True),
+    Column("metric", String(255), nullable=False),
+    Column("threshold", Numeric(10, 6), nullable=False),
+    Column("comparison", String(50), nullable=False, server_default="percentage_both"),
+
+    # Scope - what this check applies to
+    Column("recipe_id", String(255), ForeignKey("ml_recipe.id", ondelete="SET NULL"), nullable=True),
+    Column("asset_id", UUID, ForeignKey("ml_derived_assets.id", ondelete="SET NULL"), nullable=True),
+
+    # Current state
+    Column("baseline_value", Numeric(20, 6), nullable=True),
+    Column("latest_value", Numeric(20, 6), nullable=True),
+    Column("is_breached", Boolean, nullable=False, server_default="false"),
+    Column("is_active", Boolean, nullable=False, server_default="true"),
+
+    # Scheduling
+    Column("check_frequency", String(50), nullable=False, server_default="on_run"),
+    Column("last_checked_at", TIMESTAMP(timezone=True), nullable=True),
+
+    # Notification config
+    Column("notification_channels", JSON, nullable=True),
+
+    # Timestamps
+    Column("created_at", TIMESTAMP(timezone=True), server_default=func.now()),
+    Column("updated_at", TIMESTAMP(timezone=True), server_default=func.now()),
+)
+
+
+drift_alerts = Table(
+    "drift_alerts",
+    METADATA,
+    Column("id", UUID, primary_key=True, server_default=func.gen_random_uuid()),
+    Column("drift_check_id", UUID, ForeignKey("drift_checks.id", ondelete="CASCADE"), nullable=False),
+    Column("run_id", String(255), nullable=True),
+
+    # Alert details
+    Column("severity", String(20), nullable=False),  # warning, critical
+    Column("baseline_value", Numeric(20, 6), nullable=True),
+    Column("current_value", Numeric(20, 6), nullable=True),
+    Column("change_percent", Numeric(10, 4), nullable=True),
+    Column("message", Text, nullable=True),
+
+    # Acknowledgment
+    Column("acknowledged", Boolean, nullable=False, server_default="false"),
+    Column("acknowledged_at", TIMESTAMP(timezone=True), nullable=True),
+    Column("acknowledged_by", String(255), nullable=True),
+
+    # Timestamps
+    Column("triggered_at", TIMESTAMP(timezone=True), server_default=func.now()),
+)
+
+
+# ============================================================================
+# Cost Budget Tables
+# ============================================================================
+
+cost_budgets = Table(
+    "cost_budgets",
+    METADATA,
+    Column("id", UUID, primary_key=True, server_default=func.gen_random_uuid()),
+    Column("name", String(255), nullable=False),
+    Column("budget_amount_usd", Numeric(12, 4), nullable=False),
+    Column("period", String(20), nullable=False),  # daily, weekly, monthly
+    Column("alert_threshold_percent", Integer, nullable=False, server_default="80"),
+
+    # Scope - what the budget applies to
+    Column("scope_type", String(20), nullable=False, server_default="global"),  # global, provider, model
+    Column("scope_id", String(255), nullable=True),  # Provider name or model ID
+
+    # Status
+    Column("is_active", Boolean, nullable=False, server_default="true"),
+
+    # Timestamps
+    Column("created_at", TIMESTAMP(timezone=True), server_default=func.now()),
+    Column("updated_at", TIMESTAMP(timezone=True), server_default=func.now()),
+)
+
+
+cost_budget_alerts = Table(
+    "cost_budget_alerts",
+    METADATA,
+    Column("id", UUID, primary_key=True, server_default=func.gen_random_uuid()),
+    Column("budget_id", UUID, ForeignKey("cost_budgets.id", ondelete="CASCADE"), nullable=False),
+    Column("triggered_at", TIMESTAMP(timezone=True), server_default=func.now()),
+    Column("current_spend_usd", Numeric(12, 4), nullable=False),
+    Column("budget_amount_usd", Numeric(12, 4), nullable=False),
+    Column("percent_used", Integer, nullable=False),
+)
+
+
+# ============================================================================
+# Model Monitoring Tables
+# ============================================================================
+
+model_latency_metrics = Table(
+    "model_latency_metrics",
+    METADATA,
+    Column("id", UUID, primary_key=True, server_default=func.gen_random_uuid()),
+    Column("model_id", String(255), ForeignKey("ml_model.id", ondelete="CASCADE"), nullable=False),
+    Column("recorded_at", TIMESTAMP(timezone=True), server_default=func.now()),
+    Column("p50_ms", Numeric(10, 2), nullable=False),
+    Column("p95_ms", Numeric(10, 2), nullable=False),
+    Column("p99_ms", Numeric(10, 2), nullable=False),
+    Column("request_count", Integer, nullable=False),
+    Column("window_minutes", Integer, nullable=False, server_default="5"),
+)
+
+
+model_error_rates = Table(
+    "model_error_rates",
+    METADATA,
+    Column("id", UUID, primary_key=True, server_default=func.gen_random_uuid()),
+    Column("model_id", String(255), ForeignKey("ml_model.id", ondelete="CASCADE"), nullable=False),
+    Column("recorded_at", TIMESTAMP(timezone=True), server_default=func.now()),
+    Column("total_requests", Integer, nullable=False),
+    Column("error_count", Integer, nullable=False),
+    Column("error_types", JSON, nullable=True),  # {"timeout": 5, "validation": 2}
+    Column("window_minutes", Integer, nullable=False, server_default="5"),
+)
+
+
+model_sla_config = Table(
+    "model_sla_config",
+    METADATA,
+    Column("id", UUID, primary_key=True, server_default=func.gen_random_uuid()),
+    Column("model_id", String(255), ForeignKey("ml_model.id", ondelete="CASCADE"), nullable=False, unique=True),
+    Column("max_latency_p95_ms", Integer, nullable=False, server_default="500"),
+    Column("max_error_rate_percent", Numeric(5, 2), nullable=False, server_default="1.0"),
+    Column("alerting_enabled", Boolean, nullable=False, server_default="true"),
+    Column("created_at", TIMESTAMP(timezone=True), server_default=func.now()),
+    Column("updated_at", TIMESTAMP(timezone=True), server_default=func.now()),
+)
+
+
+model_sla_alerts = Table(
+    "model_sla_alerts",
+    METADATA,
+    Column("id", UUID, primary_key=True, server_default=func.gen_random_uuid()),
+    Column("model_id", String(255), ForeignKey("ml_model.id", ondelete="CASCADE"), nullable=False),
+    Column("alert_type", String(32), nullable=False),  # 'latency' or 'error_rate'
+    Column("threshold_value", Numeric(10, 2), nullable=False),
+    Column("actual_value", Numeric(10, 2), nullable=False),
+    Column("triggered_at", TIMESTAMP(timezone=True), server_default=func.now()),
+    Column("resolved_at", TIMESTAMP(timezone=True), nullable=True),
+    Column("acknowledged", Boolean, nullable=False, server_default="false"),
+    Column("acknowledged_by", String(255), nullable=True),
+)

@@ -38,6 +38,10 @@ import LineageDemo from './pages/LineageDemo'
 import LineageFullDemo from './pages/LineageFullDemo'
 import Settings from './pages/Settings'
 import Ontology from './pages/Ontology'
+import DriftDashboard from './pages/DriftDashboard'
+import CostAnalytics from './pages/CostAnalytics'
+import ModelRegistry from './pages/ModelRegistry'
+import ModelMonitoring from './pages/ModelMonitoring'
 
 function App() {
   return (
@@ -64,6 +68,10 @@ function App() {
           <Route path="/model-development/evaluation-packs/:packId" element={<EvaluationPackDetail />} />
           <Route path="/model-development/chat" element={<MLChat />} />
           <Route path="/model-development/runpod-jobs" element={<RunPodJobs />} />
+          <Route path="/model-development/drift" element={<DriftDashboard />} />
+          <Route path="/model-development/costs" element={<CostAnalytics />} />
+          <Route path="/model-development/registry" element={<ModelRegistry />} />
+          <Route path="/model-development/monitoring" element={<ModelMonitoring />} />
           <Route path="/data-sources" element={<DataSourcesPage />} />
           <Route path="/data-sources/tables/:scanId" element={<TableExplorerPage />} />
           <Route path="/notebooks" element={<NotebooksListPage />} />
