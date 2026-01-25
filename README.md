@@ -4,6 +4,13 @@
 
 A comprehensive, AI-powered data platform that serves as a one-stop solution for all data-related needs in large organizations. This platform eliminates data governance concerns while providing powerful analytics, predictive modeling, and data management capabilities.
 
+> **Note: Nex vs Nexdata**
+>
+> This is **Nex** (ZeroStack) - a data *consumption* and *analysis* platform.
+>
+> For external data *gathering* (Census, BLS, SEC, FRED, etc.), see the separate **[Nexdata](../Nexdata)** project.
+> These are independent platforms. Nexdata supplies data; Nex consumes and analyzes it.
+
 ## 🚀 Quick Start (Docker - Recommended)
 
 ```bash

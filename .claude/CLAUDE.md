@@ -8,6 +8,44 @@ This file provides Claude Code with project-specific context and conventions.
 - **Stack**: Python (FastAPI) backend + TypeScript (React/Vite) frontend + PostgreSQL
 - **Purpose**: ML/Data platform with data dictionary, distillation workbench, lineage tracking, and ML development features
 
+---
+
+## CRITICAL: Nex vs Nexdata - READ THIS FIRST
+
+**Nex and Nexdata are COMPLETELY SEPARATE projects. Never confuse them.**
+
+| Project | Location | Purpose |
+|---------|----------|---------|
+| **Nex** (this repo) | `C:\Users\awron\projects\Nex` | ML/Data platform for analysis, visualization, ML development |
+| **Nexdata** | `C:\Users\awron\projects\Nexdata` | Standalone data gathering platform (24+ external sources) |
+
+### What Nexdata Does (NOT this project)
+Nexdata is a **data gathering platform** that collects from external APIs:
+- US Economic: Census, BLS, BEA, FRED, Treasury
+- Financial: SEC EDGAR, FDIC, CFTC COT
+- International: World Bank, IMF, OECD
+- Alternative: NOAA, EIA, USDA, CMS, FBI Crime
+- LP/FO: Public pension strategies, family office tracking
+- See: `C:\Users\awron\projects\Nexdata\docs\data-sources\EXTERNAL_DATA_SOURCES.md`
+
+### What Nex Does (THIS project)
+Nex is a **data consumption and analysis platform**:
+- Query and visualize data (from Nexdata or other sources)
+- Data dictionary and metadata management
+- Lineage tracking
+- ML model development and distillation
+- NOT responsible for gathering external data
+
+### Rules for Agents
+1. **NEVER build data gathering agents in Nex** - That's Nexdata's job
+2. **NEVER merge Nexdata into Nex** - They remain separate forever
+3. **Nex can consume data FROM Nexdata** - Via API or shared database
+4. **If asked to "gather data"** - Clarify whether user means:
+   - Query existing data (Nex's job)
+   - Build collection pipelines (Nexdata's job - wrong repo)
+
+---
+
 ## Key Directories
 
 ```
@@ -142,3 +180,4 @@ Every feature implementation MUST follow this sequence:
 3. **Follow existing patterns** - Check similar domains before implementing
 4. **Update docs** - Keep feature docs in sync with implementation
 5. **Archive completed work** - Move implementation notes to `docs/archive/`
+6. **Nex ≠ Nexdata** - This is NOT a data gathering platform. See "CRITICAL" section above.
