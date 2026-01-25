@@ -997,7 +997,7 @@ async def generate_synthetic_legacy(
     num_rows: int = 1000,
 ):
     """Legacy endpoint for backward compatibility.
-    
+
     This mimics the old /api/synthetic/generate endpoint.
     Deprecated - use /generate-from-csv instead.
     """
@@ -1005,3 +1005,209 @@ async def generate_synthetic_legacy(
         status_code=501,
         detail="Legacy endpoint not implemented. Use /api/v1/synthetic/generate-from-csv instead."
     )
+
+
+# ============================================================================
+# TABDIT ENDPOINTS
+# ============================================================================
+
+@router.post("/tabdit/models", status_code=201)
+async def create_tabdit_model(
+    request: Request,
+    name: str = Query(..., description="Model name"),
+    description: Optional[str] = Query(None, description="Model description"),
+    source_table_ref: Optional[str] = Query(None, description="Source table reference (schema.table)"),
+    vae_latent_dim: int = Query(128, ge=32, le=512, description="VAE latent dimension"),
+    vae_epochs: int = Query(100, ge=10, le=500, description="VAE training epochs"),
+    diffusion_layers: int = Query(6, ge=2, le=12, description="Diffusion transformer layers"),
+    diffusion_epochs: int = Query(200, ge=50, le=1000, description="Diffusion training epochs"),
+    inference_steps: int = Query(50, ge=10, le=200, description="Generation inference steps"),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """Create a new TabDiT model for training.
+
+    TabDiT is a diffusion-based synthesizer that produces high-quality synthetic data.
+    Training happens in two phases:
+    1. VAE training - learns to compress data to latent space
+    2. Diffusion training - learns to generate latent vectors
+
+    After creation, training must be initiated separately (e.g., via GPU job queue).
+    """
+    from .service import TabDiTService
+
+    vae_config = {
+        "latent_dim": vae_latent_dim,
+        "epochs": vae_epochs,
+    }
+    diffusion_config = {
+        "num_layers": diffusion_layers,
+        "epochs": diffusion_epochs,
+        "num_inference_steps": inference_steps,
+    }
+
+    service = TabDiTService(session)
+    model_id = await service.create_model(
+        name=name,
+        description=description,
+        source_table_ref=source_table_ref,
+        vae_config=vae_config,
+        diffusion_config=diffusion_config,
+    )
+
+    return {
+        "model_id": str(model_id),
+        "name": name,
+        "status": "pending",
+        "message": "TabDiT model created. Training must be initiated separately.",
+    }
+
+
+@router.get("/tabdit/models")
+async def list_tabdit_models(
+    limit: int = Query(50, le=100),
+    offset: int = Query(0, ge=0),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """List all TabDiT models."""
+    from .service import TabDiTService
+
+    service = TabDiTService(session)
+    models, total = await service.list_models(limit=limit, offset=offset)
+
+    return {
+        "models": models,
+        "total": total,
+    }
+
+
+@router.get("/tabdit/models/{model_id}")
+async def get_tabdit_model(
+    model_id: UUID,
+    session: AsyncSession = Depends(get_async_session),
+):
+    """Get TabDiT model details and training status."""
+    from .service import TabDiTService
+
+    service = TabDiTService(session)
+    model = await service.get_model(model_id)
+
+    if not model:
+        raise HTTPException(status_code=404, detail="TabDiT model not found")
+
+    return model
+
+
+@router.delete("/tabdit/models/{model_id}")
+async def delete_tabdit_model(
+    model_id: UUID,
+    session: AsyncSession = Depends(get_async_session),
+):
+    """Delete a TabDiT model and its checkpoints."""
+    from .service import TabDiTService
+
+    service = TabDiTService(session)
+    model = await service.get_model(model_id)
+
+    if not model:
+        raise HTTPException(status_code=404, detail="TabDiT model not found")
+
+    await service.delete_model(model_id)
+
+    return {
+        "message": f"TabDiT model {model_id} deleted",
+        "model_id": str(model_id),
+    }
+
+
+@router.post("/tabdit/models/{model_id}/generate")
+@limiter.limit("5/minute")
+async def generate_from_tabdit(
+    request_obj: Request,
+    model_id: UUID,
+    num_rows: int = Query(1000, ge=10, le=100000, description="Number of rows to generate"),
+    output_name: Optional[str] = Query(None, description="Name for output dataset"),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """Generate synthetic data using a trained TabDiT model.
+
+    The model must be in 'completed' status (both VAE and diffusion trained).
+    Generation uses DDIM sampling with configurable inference steps.
+    """
+    from .service import TabDiTService
+
+    service = TabDiTService(session)
+    model = await service.get_model(model_id)
+
+    if not model:
+        raise HTTPException(status_code=404, detail="TabDiT model not found")
+
+    if model["status"] != "completed":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Model is not ready for generation. Status: {model['status']}"
+        )
+
+    # Check checkpoints exist
+    if not model.get("vae_checkpoint_uri") or not model.get("diffusion_checkpoint_uri"):
+        raise HTTPException(
+            status_code=400,
+            detail="Model checkpoints not found. Training may not have completed properly."
+        )
+
+    # Note: Actual generation would be done asynchronously or via a job queue
+    # This endpoint returns information about how to trigger generation
+    return {
+        "model_id": str(model_id),
+        "num_rows": num_rows,
+        "status": "queued",
+        "message": (
+            "Generation request received. In production, this would be processed "
+            "by a GPU worker. For local testing, use the TabDiTSynthesizer directly."
+        ),
+        "vae_checkpoint": model["vae_checkpoint_uri"],
+        "diffusion_checkpoint": model["diffusion_checkpoint_uri"],
+    }
+
+
+@router.get("/tabdit/models/{model_id}/sample-preview")
+async def tabdit_sample_preview(
+    model_id: UUID,
+    num_rows: int = Query(10, ge=1, le=100, description="Number of preview rows"),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """Generate a small preview sample from a TabDiT model.
+
+    Quick preview of generated data (limited to 100 rows).
+    For larger generations, use the /generate endpoint.
+    """
+    from .service import TabDiTService
+
+    service = TabDiTService(session)
+    model = await service.get_model(model_id)
+
+    if not model:
+        raise HTTPException(status_code=404, detail="TabDiT model not found")
+
+    if model["status"] != "completed":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Model is not ready for generation. Status: {model['status']}"
+        )
+
+    return {
+        "model_id": str(model_id),
+        "preview_rows": num_rows,
+        "status": "preview_not_implemented",
+        "message": (
+            "Preview generation requires loading models to GPU. "
+            "In production, use the job queue for generation."
+        ),
+    }
+
+
+@router.get("/tabdit/info")
+async def get_tabdit_info():
+    """Get information about the TabDiT synthesizer."""
+    from .synthesizers import TabDiTSynthesizer
+
+    return TabDiTSynthesizer.get_info()

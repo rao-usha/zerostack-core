@@ -1,0 +1,51 @@
+# Dockerfile for TabDiT GPU training
+# Designed for RunPod or similar GPU cloud providers
+#
+# Build:
+#   docker build -f docker/Dockerfile.tabdit -t nex-tabdit:latest .
+#
+# Run locally:
+#   docker run --gpus all -v ./data:/data nex-tabdit:latest \
+#       python /app/ml_models/tabdit/train_vae.py --help
+
+# Use RunPod's optimized PyTorch base image
+FROM runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /app
+
+# Copy requirements first for caching
+COPY backend/ml_models/tabdit/requirements.txt /tmp/tabdit_requirements.txt
+
+# Install Python dependencies
+RUN pip install --upgrade pip && \
+    pip install -r /tmp/tabdit_requirements.txt
+
+# Copy the backend code
+COPY backend/ /app/
+
+# Create directories for data and models
+RUN mkdir -p /data /models /outputs
+
+# Set PYTHONPATH to include the app directory
+ENV PYTHONPATH=/app:$PYTHONPATH
+
+# Default command shows help
+CMD ["python", "/app/ml_models/tabdit/train_vae.py", "--help"]
+
+# Labels
+LABEL maintainer="nex-team" \
+      description="TabDiT GPU training container for synthetic data generation" \
+      version="1.0.0"

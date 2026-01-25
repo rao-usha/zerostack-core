@@ -12,6 +12,7 @@ class SynthesizerType(str, Enum):
     GAUSSIAN_COPULA = "gaussian_copula"
     CTGAN = "ctgan"
     TVAE = "tvae"
+    TABDIT = "tabdit"
 
 
 class JobStatus(str, Enum):
@@ -111,6 +112,97 @@ class TVAEConfig(BaseModel):
     decoder_dim: List[int] = Field(default=[128, 128])
     l2_scale: float = Field(default=1e-5, ge=0, le=1)
     loss_factor: float = Field(default=2, ge=0.1, le=10)
+
+
+class TabDiTVAEConfig(BaseModel):
+    """Configuration for TabDiT VAE phase."""
+    latent_dim: int = Field(default=128, ge=32, le=512)
+    encoder_layers: List[int] = Field(default=[512, 256, 128])
+    decoder_layers: List[int] = Field(default=[128, 256, 512])
+    epochs: int = Field(default=100, ge=10, le=500)
+    batch_size: int = Field(default=512, ge=32, le=4096)
+    learning_rate: float = Field(default=1e-3, ge=1e-6, le=1e-1)
+    kl_weight: float = Field(default=0.1, ge=0.0, le=1.0)
+
+
+class TabDiTDiffusionConfig(BaseModel):
+    """Configuration for TabDiT diffusion phase."""
+    num_layers: int = Field(default=6, ge=2, le=12)
+    hidden_dim: int = Field(default=256, ge=64, le=1024)
+    num_heads: int = Field(default=8, ge=2, le=16)
+    epochs: int = Field(default=200, ge=50, le=1000)
+    batch_size: int = Field(default=256, ge=32, le=2048)
+    learning_rate: float = Field(default=1e-4, ge=1e-6, le=1e-2)
+    num_inference_steps: int = Field(default=50, ge=10, le=200)
+    beta_schedule: str = Field(default="cosine", pattern="^(linear|cosine)$")
+
+
+class TabDiTConfig(BaseModel):
+    """Configuration for TabDiT synthesizer."""
+    vae: Optional[TabDiTVAEConfig] = None
+    diffusion: Optional[TabDiTDiffusionConfig] = None
+    random_seed: Optional[int] = None
+    device: str = Field(default="auto", pattern="^(auto|cuda|cpu)$")
+
+
+class TabDiTModelStatus(str, Enum):
+    """Status values for TabDiT models."""
+    PENDING = "pending"
+    TRAINING_VAE = "training_vae"
+    TRAINING_DIFFUSION = "training_diffusion"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class TabDiTModelCreateRequest(BaseModel):
+    """Request to create a new TabDiT model."""
+    name: str = Field(..., min_length=1, max_length=255)
+    description: Optional[str] = None
+    source_table_ref: Optional[str] = None  # "schema.table" for DB tables
+    source_dataset_id: Optional[UUID] = None  # For uploaded datasets
+    config: Optional[TabDiTConfig] = None
+
+
+class TabDiTModelResponse(BaseModel):
+    """Response with TabDiT model details."""
+    id: UUID
+    name: str
+    description: Optional[str] = None
+    status: TabDiTModelStatus
+    current_phase: Optional[str] = None
+
+    # VAE training info
+    vae_epochs_completed: int = 0
+    vae_metrics: Optional[Dict[str, Any]] = None
+
+    # Diffusion training info
+    diffusion_epochs_completed: int = 0
+    diffusion_metrics: Optional[Dict[str, Any]] = None
+
+    # Quality
+    overall_quality_score: Optional[float] = None
+
+    # Timing
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    created_at: datetime
+
+    # Config
+    vae_config: Optional[Dict[str, Any]] = None
+    diffusion_config: Optional[Dict[str, Any]] = None
+
+
+class TabDiTModelListResponse(BaseModel):
+    """List of TabDiT models."""
+    models: List[TabDiTModelResponse]
+    total: int
+
+
+class TabDiTGenerateRequest(BaseModel):
+    """Request to generate synthetic data from a TabDiT model."""
+    num_rows: int = Field(default=1000, ge=10, le=1000000)
+    output_name: Optional[str] = None
+    output_format: str = Field(default="parquet", pattern="^(parquet|csv)$")
 
 
 # ============================================================================

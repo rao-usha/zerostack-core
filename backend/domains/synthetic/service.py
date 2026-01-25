@@ -15,7 +15,7 @@ from .models import (
     SyntheticGenerateRequest, JobStatus, SynthesizerType, PrivacyLevel,
     JobStatusResponse, SyntheticDatasetResponse, QualityReportResponse, QualityColumnScore
 )
-from .synthesizers import GaussianCopulaSynthesizer, CTGANSynthesizer, TVAESynthesizer
+from .synthesizers import GaussianCopulaSynthesizer, CTGANSynthesizer, TVAESynthesizer, TabDiTSynthesizer
 from .evaluator import SyntheticDataEvaluator
 from .privacy import PIIDetector, PIIType, FakerPIIGenerator, PrivacyRiskScorer
 
@@ -613,17 +613,17 @@ class SyntheticDataService:
         pii_columns: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """Assess privacy risk of synthetic data.
-        
+
         Args:
             real_data: Original real data
             synthetic_data: Generated synthetic data
             pii_columns: List of PII columns (already handled)
-            
+
         Returns:
             Dict with risk assessment
         """
         report = self.risk_scorer.score(real_data, synthetic_data, pii_columns)
-        
+
         return {
             "risk_level": report.overall_risk,
             "risk_score": report.risk_score,
@@ -638,3 +638,236 @@ class SyntheticDataService:
             "recommendations": report.recommendations,
             "warnings": report.warnings,
         }
+
+
+class TabDiTService:
+    """Service for TabDiT model management."""
+
+    def __init__(self, session: AsyncSession):
+        self.session = session
+
+    async def create_model(
+        self,
+        name: str,
+        description: Optional[str] = None,
+        source_table_ref: Optional[str] = None,
+        source_dataset_id: Optional[UUID] = None,
+        vae_config: Optional[Dict[str, Any]] = None,
+        diffusion_config: Optional[Dict[str, Any]] = None,
+        created_by: str = "user",
+    ) -> UUID:
+        """Create a new TabDiT model.
+
+        Args:
+            name: Model name
+            description: Model description
+            source_table_ref: Source table reference
+            source_dataset_id: Source dataset ID
+            vae_config: VAE configuration
+            diffusion_config: Diffusion configuration
+            created_by: User creating the model
+
+        Returns:
+            Model ID
+        """
+        from .db_models import tabdit_models
+
+        model_id = uuid4()
+
+        await self.session.execute(
+            tabdit_models.insert().values(
+                id=model_id,
+                name=name,
+                description=description,
+                source_table_ref=source_table_ref,
+                source_dataset_id=source_dataset_id,
+                vae_config=vae_config or {},
+                diffusion_config=diffusion_config or {},
+                status="pending",
+                created_by=created_by,
+            )
+        )
+        await self.session.commit()
+
+        logger.info(f"Created TabDiT model {model_id}: {name}")
+        return model_id
+
+    async def get_model(self, model_id: UUID) -> Optional[Dict[str, Any]]:
+        """Get TabDiT model by ID.
+
+        Args:
+            model_id: Model ID
+
+        Returns:
+            Model dict or None
+        """
+        from .db_models import tabdit_models
+
+        result = await self.session.execute(
+            select(tabdit_models).where(tabdit_models.c.id == model_id)
+        )
+        row = result.fetchone()
+
+        if not row:
+            return None
+
+        return {
+            "id": row.id,
+            "name": row.name,
+            "description": row.description,
+            "status": row.status,
+            "current_phase": row.current_phase,
+            "vae_config": row.vae_config,
+            "diffusion_config": row.diffusion_config,
+            "vae_epochs_completed": row.vae_epochs_completed or 0,
+            "vae_metrics": row.vae_metrics,
+            "vae_checkpoint_uri": row.vae_checkpoint_uri,
+            "diffusion_epochs_completed": row.diffusion_epochs_completed or 0,
+            "diffusion_metrics": row.diffusion_metrics,
+            "diffusion_checkpoint_uri": row.diffusion_checkpoint_uri,
+            "overall_quality_score": float(row.overall_quality_score) if row.overall_quality_score else None,
+            "started_at": row.started_at,
+            "completed_at": row.completed_at,
+            "created_at": row.created_at,
+            "created_by": row.created_by,
+        }
+
+    async def list_models(
+        self,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> Tuple[List[Dict[str, Any]], int]:
+        """List TabDiT models.
+
+        Args:
+            limit: Max results
+            offset: Pagination offset
+
+        Returns:
+            Tuple of (models list, total count)
+        """
+        from sqlalchemy import func
+        from .db_models import tabdit_models
+
+        # Get models
+        result = await self.session.execute(
+            select(tabdit_models)
+            .order_by(tabdit_models.c.created_at.desc())
+            .offset(offset)
+            .limit(limit)
+        )
+        rows = result.fetchall()
+
+        # Get total count
+        count_result = await self.session.execute(
+            select(func.count(tabdit_models.c.id))
+        )
+        total = count_result.scalar() or 0
+
+        models = [
+            {
+                "id": row.id,
+                "name": row.name,
+                "description": row.description,
+                "status": row.status,
+                "current_phase": row.current_phase,
+                "vae_epochs_completed": row.vae_epochs_completed or 0,
+                "diffusion_epochs_completed": row.diffusion_epochs_completed or 0,
+                "overall_quality_score": float(row.overall_quality_score) if row.overall_quality_score else None,
+                "started_at": row.started_at,
+                "completed_at": row.completed_at,
+                "created_at": row.created_at,
+            }
+            for row in rows
+        ]
+
+        return models, total
+
+    async def update_model_status(
+        self,
+        model_id: UUID,
+        status: str,
+        current_phase: Optional[str] = None,
+        vae_metrics: Optional[Dict[str, Any]] = None,
+        vae_epochs_completed: Optional[int] = None,
+        vae_checkpoint_uri: Optional[str] = None,
+        diffusion_metrics: Optional[Dict[str, Any]] = None,
+        diffusion_epochs_completed: Optional[int] = None,
+        diffusion_checkpoint_uri: Optional[str] = None,
+        overall_quality_score: Optional[float] = None,
+        started_at: Optional[datetime] = None,
+        completed_at: Optional[datetime] = None,
+    ) -> None:
+        """Update TabDiT model status.
+
+        Args:
+            model_id: Model ID
+            status: New status
+            current_phase: Current training phase
+            vae_metrics: VAE training metrics
+            vae_epochs_completed: VAE epochs completed
+            vae_checkpoint_uri: VAE checkpoint URI
+            diffusion_metrics: Diffusion training metrics
+            diffusion_epochs_completed: Diffusion epochs completed
+            diffusion_checkpoint_uri: Diffusion checkpoint URI
+            overall_quality_score: Quality score
+            started_at: Training start time
+            completed_at: Training completion time
+        """
+        from .db_models import tabdit_models
+
+        values = {"status": status}
+
+        if current_phase is not None:
+            values["current_phase"] = current_phase
+        if vae_metrics is not None:
+            values["vae_metrics"] = vae_metrics
+        if vae_epochs_completed is not None:
+            values["vae_epochs_completed"] = vae_epochs_completed
+        if vae_checkpoint_uri is not None:
+            values["vae_checkpoint_uri"] = vae_checkpoint_uri
+        if diffusion_metrics is not None:
+            values["diffusion_metrics"] = diffusion_metrics
+        if diffusion_epochs_completed is not None:
+            values["diffusion_epochs_completed"] = diffusion_epochs_completed
+        if diffusion_checkpoint_uri is not None:
+            values["diffusion_checkpoint_uri"] = diffusion_checkpoint_uri
+        if overall_quality_score is not None:
+            values["overall_quality_score"] = Decimal(str(overall_quality_score))
+        if started_at is not None:
+            values["started_at"] = started_at
+        if completed_at is not None:
+            values["completed_at"] = completed_at
+
+        await self.session.execute(
+            update(tabdit_models)
+            .where(tabdit_models.c.id == model_id)
+            .values(**values)
+        )
+        await self.session.commit()
+
+        logger.info(f"Updated TabDiT model {model_id} status to {status}")
+
+    async def delete_model(self, model_id: UUID) -> bool:
+        """Delete a TabDiT model.
+
+        Args:
+            model_id: Model ID to delete
+
+        Returns:
+            True if deleted
+        """
+        from .db_models import tabdit_models
+
+        await self.session.execute(
+            tabdit_models.delete().where(tabdit_models.c.id == model_id)
+        )
+        await self.session.commit()
+
+        logger.info(f"Deleted TabDiT model {model_id}")
+        return True
+
+    @staticmethod
+    def get_synthesizer_info() -> Dict[str, Any]:
+        """Get TabDiT synthesizer info."""
+        return TabDiTSynthesizer.get_info()

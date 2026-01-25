@@ -111,21 +111,68 @@ synthetic_column_configs = Table(
     METADATA,
     Column("id", UUID, primary_key=True),
     Column("job_id", UUID, ForeignKey("synthetic_jobs.id", ondelete="CASCADE"), nullable=False),
-    
+
     # Column identification
     Column("column_name", String(255), nullable=False),
     Column("column_dtype", String(50), nullable=True),
-    
+
     # PII settings
     Column("is_pii", Integer, server_default="0"),  # Boolean as int
     Column("pii_type", String(50), nullable=True),  # email, name, ssn, phone, address, etc.
     Column("faker_provider", String(100), nullable=True),  # Faker method to use
-    
+
     # Constraints
     Column("constraints", JSON, server_default="{}"),  # min, max, regex, etc.
-    
+
     # SDV metadata override
     Column("sdtype", String(50), nullable=True),  # SDV semantic data type
-    
+
     Column("created_at", TIMESTAMP(timezone=True), server_default=func.now()),
+)
+
+
+# TabDiT models for diffusion-based synthetic data generation
+tabdit_models = Table(
+    "tabdit_models",
+    METADATA,
+    Column("id", UUID, primary_key=True),
+    Column("name", String(255), nullable=False),
+    Column("description", Text, nullable=True),
+
+    # Source data
+    Column("source_dataset_id", UUID, nullable=True),
+    Column("source_table_ref", String(255), nullable=True),
+
+    # Configuration (JSON)
+    Column("vae_config", JSON, nullable=False, server_default="{}"),
+    Column("diffusion_config", JSON, nullable=False, server_default="{}"),
+    Column("tokenizer_config", JSON, server_default="{}"),
+
+    # Status
+    Column("status", String(32), server_default="pending"),  # pending/training_vae/training_diffusion/completed/failed
+    Column("current_phase", String(32), nullable=True),
+
+    # VAE training
+    Column("vae_run_id", String(64), nullable=True),
+    Column("vae_checkpoint_uri", String(500), nullable=True),
+    Column("vae_metrics", JSON, nullable=True),
+    Column("vae_epochs_completed", Integer, server_default="0"),
+
+    # Diffusion training
+    Column("diffusion_run_id", String(64), nullable=True),
+    Column("diffusion_checkpoint_uri", String(500), nullable=True),
+    Column("diffusion_metrics", JSON, nullable=True),
+    Column("diffusion_epochs_completed", Integer, server_default="0"),
+
+    # Quality
+    Column("overall_quality_score", Numeric(4, 3), nullable=True),
+
+    # Timing
+    Column("started_at", TIMESTAMP(timezone=True), nullable=True),
+    Column("completed_at", TIMESTAMP(timezone=True), nullable=True),
+
+    # Metadata
+    Column("created_by", String(100), nullable=True),
+    Column("created_at", TIMESTAMP(timezone=True), server_default=func.now()),
+    Column("updated_at", TIMESTAMP(timezone=True), server_default=func.now()),
 )
