@@ -608,3 +608,133 @@ def publish_entry_directly(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+
+# ============================================================================
+# Data Sources Endpoints
+# ============================================================================
+
+class DataSourceSummary(BaseModel):
+    """Summary of a data source (database)."""
+    source_name: str
+    table_count: int
+    column_count: int
+    documented_columns: int
+    documentation_percentage: float
+    schemas: List[str]
+    sample_tables: List[str]
+    last_updated: Optional[str] = None
+    description: Optional[str] = None
+
+
+@router.get("/sources", response_model=List[DataSourceSummary])
+def list_data_sources(
+    database_name: Optional[str] = Query(None),
+    session: Session = Depends(get_session)
+):
+    """
+    List all data sources (databases) with summary statistics.
+
+    Returns aggregated information about each database including:
+    - Number of tables and columns
+    - Documentation coverage percentage
+    - List of schemas
+    - Sample table names
+    """
+    from sqlmodel import func, distinct
+
+    # Build query to aggregate by database_name
+    if database_name:
+        statement = select(DataDictionaryEntry).where(
+            DataDictionaryEntry.database_name == database_name,
+            DataDictionaryEntry.is_active == True
+        )
+    else:
+        statement = select(DataDictionaryEntry).where(
+            DataDictionaryEntry.is_active == True
+        )
+
+    entries = session.exec(statement).all()
+
+    # Aggregate by database
+    databases = {}
+    for entry in entries:
+        db_name = entry.database_name
+        if db_name not in databases:
+            databases[db_name] = {
+                'tables': set(),
+                'columns': 0,
+                'documented': 0,
+                'schemas': set(),
+                'last_updated': None,
+            }
+
+        databases[db_name]['tables'].add(f"{entry.schema_name}.{entry.table_name}")
+        databases[db_name]['columns'] += 1
+        databases[db_name]['schemas'].add(entry.schema_name)
+
+        # Count as documented if has business_name or business_description
+        if entry.business_name or entry.business_description:
+            databases[db_name]['documented'] += 1
+
+        # Track last updated
+        if databases[db_name]['last_updated'] is None or entry.updated_at > databases[db_name]['last_updated']:
+            databases[db_name]['last_updated'] = entry.updated_at
+
+    # Convert to response format
+    result = []
+    for db_name, stats in databases.items():
+        table_list = list(stats['tables'])
+        result.append(DataSourceSummary(
+            source_name=db_name,
+            table_count=len(stats['tables']),
+            column_count=stats['columns'],
+            documented_columns=stats['documented'],
+            documentation_percentage=round(stats['documented'] / stats['columns'] * 100, 1) if stats['columns'] > 0 else 0,
+            schemas=sorted(list(stats['schemas'])),
+            sample_tables=sorted(table_list)[:5],  # First 5 tables as sample
+            last_updated=stats['last_updated'].isoformat() if stats['last_updated'] else None,
+        ))
+
+    return result
+
+
+@router.post("/sources/{source_name}/quick-analysis")
+def quick_analyze_source(
+    source_name: str,
+    database_name: Optional[str] = Query(None),
+    session: Session = Depends(get_session)
+):
+    """
+    Perform quick analysis on a data source schema.
+    Returns a text description of the source.
+    """
+    # Get entries for the source
+    statement = select(DataDictionaryEntry).where(
+        DataDictionaryEntry.database_name == (database_name or source_name),
+        DataDictionaryEntry.is_active == True
+    )
+    entries = session.exec(statement).all()
+
+    if not entries:
+        return {
+            "source_name": source_name,
+            "description": f"No documented tables found for source '{source_name}'.",
+            "table_count": 0
+        }
+
+    # Build simple description
+    tables = set()
+    schemas = set()
+    for entry in entries:
+        tables.add(f"{entry.schema_name}.{entry.table_name}")
+        schemas.add(entry.schema_name)
+
+    description = f"Database '{source_name}' contains {len(tables)} tables across {len(schemas)} schema(s): {', '.join(sorted(schemas))}."
+
+    return {
+        "source_name": source_name,
+        "description": description,
+        "table_count": len(tables),
+        "schema_count": len(schemas)
+    }
+
