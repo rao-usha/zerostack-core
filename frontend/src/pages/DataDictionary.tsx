@@ -475,7 +475,7 @@ export default function DataDictionary() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#0a0a0f', color: '#f0f0f5', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ height: '100vh', overflow: 'hidden', backgroundColor: '#0a0a0f', color: '#f0f0f5', display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
       <div style={{ borderBottom: '1px solid rgba(168, 216, 255, 0.2)', padding: '1.5rem 2rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
