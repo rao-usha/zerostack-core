@@ -137,48 +137,73 @@ export default function DataExplorer() {
   const checkConnection = async () => {
     setLoading(true)
     setConnected(false)
+    setConnectionError('')
     setSchemas([])
     setTablesBySchema({})
     setSelectedTable(null)
-    
+
+    // Capture the current db_id to detect if it changes mid-request
+    const currentDbId = selectedDbId
+
     try {
-      const health = await getExplorerHealth(selectedDbId)
+      const health = await getExplorerHealth(currentDbId)
+
+      // Abort if database was switched while waiting
+      if (currentDbId !== selectedDbId) return
+
       setConnected(health.connected)
       if (!health.connected) {
         setConnectionError(health.error || 'Unknown connection error')
       } else {
-        loadSchemas()
+        await loadSchemas(currentDbId)
       }
     } catch (error: any) {
-      setConnected(false)
-      setConnectionError(error.message || 'Failed to connect to database')
+      // Only update state if we're still on the same database
+      if (currentDbId === selectedDbId) {
+        setConnected(false)
+        setConnectionError(error.message || 'Failed to connect to database')
+      }
     } finally {
-      setLoading(false)
+      // Only clear loading if we're still on the same database
+      if (currentDbId === selectedDbId) {
+        setLoading(false)
+      }
     }
   }
 
-  const loadSchemas = async () => {
+  const loadSchemas = async (dbId: string) => {
     try {
-      const data = await getExplorerSchemas(selectedDbId)
+      const data = await getExplorerSchemas(dbId)
+
+      // Abort if database was switched while waiting
+      if (dbId !== selectedDbId) return
+
       setSchemas(data)
       // Auto-load public schema tables
       if (data.some((s: Schema) => s.name === 'public')) {
-        loadTables('public')
+        await loadTablesForDb('public', dbId)
       }
     } catch (error) {
       console.error('Failed to load schemas:', error)
     }
   }
 
-  const loadTables = async (schema: string) => {
-    if (tablesBySchema[schema]) return // Already loaded
-    
+  const loadTablesForDb = async (schema: string, dbId: string) => {
     try {
-      const tables = await getExplorerTables(schema, selectedDbId)
+      const tables = await getExplorerTables(schema, dbId)
+
+      // Abort if database was switched while waiting
+      if (dbId !== selectedDbId) return
+
       setTablesBySchema(prev => ({ ...prev, [schema]: tables }))
     } catch (error) {
       console.error(`Failed to load tables for ${schema}:`, error)
     }
+  }
+
+  const loadTables = async (schema: string) => {
+    if (tablesBySchema[schema]) return // Already loaded
+    await loadTablesForDb(schema, selectedDbId)
   }
 
   const toggleSchema = (schemaName: string) => {

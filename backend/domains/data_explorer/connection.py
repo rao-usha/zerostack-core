@@ -35,22 +35,23 @@ config = ExplorerDBConfig()
 
 
 @contextmanager
-def get_explorer_connection(db_id: str = "default"):
+def get_explorer_connection(db_id: str = "default", timeout_seconds: int = 10):
     """
     Context manager for getting a read-only database connection.
-    
+
     Args:
         db_id: Database configuration ID (default: "default")
-    
+        timeout_seconds: Connection timeout in seconds (default: 10)
+
     Usage:
         with get_explorer_connection("db2") as conn:
             with conn.cursor() as cur:
                 cur.execute("SELECT * FROM table")
                 results = cur.fetchall()
-    
+
     Yields:
         psycopg.Connection: Database connection
-    
+
     Raises:
         psycopg.Error: If connection fails
     """
@@ -58,10 +59,10 @@ def get_explorer_connection(db_id: str = "default"):
     try:
         # Get the database configuration
         db_config = get_database_config_by_id(db_id)
-        
-        # Build connection string
-        conn_string = f"host={db_config.host} port={db_config.port} user={db_config.user} password={db_config.password} dbname={db_config.database}"
-        
+
+        # Build connection string with timeout
+        conn_string = f"host={db_config.host} port={db_config.port} user={db_config.user} password={db_config.password} dbname={db_config.database} connect_timeout={timeout_seconds}"
+
         conn = psycopg.connect(conn_string)
         # Set session to read-only for safety
         with conn.cursor() as cur:
@@ -72,20 +73,21 @@ def get_explorer_connection(db_id: str = "default"):
             conn.close()
 
 
-def get_db_connection(db_id: str = "default"):
+def get_db_connection(db_id: str = "default", timeout_seconds: int = 10):
     """
     Get a database connection (non-context-manager version).
-    
+
     Args:
         db_id: Database configuration ID (default: "default")
-    
+        timeout_seconds: Connection timeout in seconds (default: 10)
+
     Returns:
         psycopg.Connection: Database connection
-    
+
     Note: Caller is responsible for closing the connection.
     """
     db_config = get_database_config_by_id(db_id)
-    conn_string = f"host={db_config.host} port={db_config.port} user={db_config.user} password={db_config.password} dbname={db_config.database}"
+    conn_string = f"host={db_config.host} port={db_config.port} user={db_config.user} password={db_config.password} dbname={db_config.database} connect_timeout={timeout_seconds}"
     conn = psycopg.connect(conn_string)
     return conn
 
