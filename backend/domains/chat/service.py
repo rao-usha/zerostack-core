@@ -233,6 +233,91 @@ DATA_EXPLORER_TOOLS = [
                 "required": ["export_id"]
             }
         }
+    },
+    # MATERIALIZED VIEW TOOLS
+    {
+        "type": "function",
+        "function": {
+            "name": "create_materialized_view",
+            "description": "Create a materialized view from a SQL query. Materialized views store query results physically for faster access. Use for frequently-run expensive queries.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Name for the materialized view (letters, numbers, underscores only)"},
+                    "source_query": {"type": "string", "description": "SELECT query defining the view contents"},
+                    "schema_name": {"type": "string", "description": "Schema to create view in", "default": "public", "enum": ["public", "analytics", "reports", "views"]},
+                    "description": {"type": "string", "description": "Description of what this view contains"},
+                    "connection_id": {"type": "string", "default": "default"},
+                    "with_data": {"type": "boolean", "description": "Populate view immediately (true) or create empty (false)", "default": True}
+                },
+                "required": ["name", "source_query"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "refresh_materialized_view",
+            "description": "Refresh a materialized view to update its data from the source query. Use when underlying data has changed.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "view_id": {"type": "string", "description": "View ID (UUID) or use name with schema"},
+                    "name": {"type": "string", "description": "View name (alternative to view_id)"},
+                    "schema_name": {"type": "string", "description": "Schema name if using name", "default": "public"},
+                    "concurrently": {"type": "boolean", "description": "Refresh without locking reads (requires unique index)", "default": False}
+                },
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "drop_materialized_view",
+            "description": "Drop (delete) a materialized view. This cannot be undone.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "view_id": {"type": "string", "description": "View ID (UUID) or use name with schema"},
+                    "name": {"type": "string", "description": "View name (alternative to view_id)"},
+                    "schema_name": {"type": "string", "description": "Schema name if using name", "default": "public"}
+                },
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_materialized_views",
+            "description": "List all managed materialized views with their status, size, and last refresh time.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "schema_name": {"type": "string", "description": "Filter by schema"},
+                    "status": {"type": "string", "enum": ["active", "refreshing", "failed", "creating"], "description": "Filter by status"},
+                    "limit": {"type": "integer", "description": "Max results", "default": 25}
+                },
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_materialized_view_info",
+            "description": "Get detailed information about a specific materialized view including source query, refresh history, and errors.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "view_id": {"type": "string", "description": "View ID (UUID) or use name with schema"},
+                    "name": {"type": "string", "description": "View name (alternative to view_id)"},
+                    "schema_name": {"type": "string", "description": "Schema name if using name", "default": "public"}
+                },
+                "required": []
+            }
+        }
     }
 ]
 
@@ -1090,6 +1175,25 @@ class ChatService:
                 return ChatService._execute_get_export_download_url(session, tool_input)
 
             # =================================================================
+            # MATERIALIZED VIEW TOOLS
+            # =================================================================
+
+            elif tool_name == "create_materialized_view":
+                return ChatService._execute_create_materialized_view(session, tool_input)
+
+            elif tool_name == "refresh_materialized_view":
+                return ChatService._execute_refresh_materialized_view(session, tool_input)
+
+            elif tool_name == "drop_materialized_view":
+                return ChatService._execute_drop_materialized_view(session, tool_input)
+
+            elif tool_name == "list_materialized_views":
+                return ChatService._execute_list_materialized_views(session, tool_input)
+
+            elif tool_name == "get_materialized_view_info":
+                return ChatService._execute_get_materialized_view_info(session, tool_input)
+
+            # =================================================================
             # DATA DICTIONARY TOOLS
             # =================================================================
             
@@ -1754,6 +1858,274 @@ class ChatService:
         except Exception as e:
             logger.error(f"Get download URL error: {e}")
             return {"success": False, "error": f"Failed to generate download URL: {str(e)}"}
+
+    # =========================================================================
+    # MATERIALIZED VIEW TOOL HANDLERS
+    # =========================================================================
+
+    @staticmethod
+    def _execute_create_materialized_view(session: Session, tool_input: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute create_materialized_view tool - creates a new materialized view."""
+        import asyncio
+
+        name = tool_input.get("name")
+        source_query = tool_input.get("source_query")
+
+        if not name:
+            return {"success": False, "error": "name is required"}
+        if not source_query:
+            return {"success": False, "error": "source_query is required"}
+
+        async def _run_create():
+            from ..data_explorer.materialized_view_service import MaterializedViewService
+            from db import async_session_maker
+
+            schema_name = tool_input.get("schema_name", "public")
+            description = tool_input.get("description")
+            connection_id = tool_input.get("connection_id", "default")
+            with_data = tool_input.get("with_data", True)
+
+            async with async_session_maker() as async_session:
+                mv_service = MaterializedViewService(async_session)
+                result = await mv_service.create_materialized_view(
+                    name=name,
+                    source_query=source_query,
+                    schema_name=schema_name,
+                    description=description,
+                    connection_id=connection_id,
+                    with_data=with_data,
+                )
+
+            return {
+                "success": True,
+                "data": {
+                    **result,
+                    "message": f"Created materialized view {schema_name}.{name} with {result.get('row_count', 0)} rows"
+                }
+            }
+
+        try:
+            try:
+                loop = asyncio.get_running_loop()
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, _run_create())
+                    return future.result(timeout=300)
+            except RuntimeError:
+                return asyncio.run(_run_create())
+        except ValueError as e:
+            return {"success": False, "error": str(e)}
+        except Exception as e:
+            logger.error(f"Create materialized view error: {e}")
+            return {"success": False, "error": f"Failed to create view: {str(e)}"}
+
+    @staticmethod
+    def _execute_refresh_materialized_view(session: Session, tool_input: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute refresh_materialized_view tool - refreshes a materialized view."""
+        import asyncio
+        from uuid import UUID as PyUUID
+
+        view_id = tool_input.get("view_id")
+        name = tool_input.get("name")
+        schema_name = tool_input.get("schema_name", "public")
+        concurrently = tool_input.get("concurrently", False)
+
+        if not view_id and not name:
+            return {"success": False, "error": "Either view_id or name is required"}
+
+        async def _run_refresh():
+            from ..data_explorer.materialized_view_service import MaterializedViewService
+            from db import async_session_maker
+
+            async with async_session_maker() as async_session:
+                mv_service = MaterializedViewService(async_session)
+
+                # Get view by ID or name
+                if view_id:
+                    try:
+                        uuid = PyUUID(view_id)
+                    except ValueError:
+                        return {"success": False, "error": "Invalid view_id format"}
+                else:
+                    view = await mv_service.get_view_by_name(name, schema_name)
+                    if not view:
+                        return {"success": False, "error": f"View {schema_name}.{name} not found"}
+                    uuid = PyUUID(view["id"])
+
+                result = await mv_service.refresh_materialized_view(
+                    view_id=uuid,
+                    concurrently=concurrently,
+                )
+
+            return {
+                "success": True,
+                "data": {
+                    **result,
+                    "message": f"Refreshed view {result['schema_name']}.{result['name']} ({result['row_count']} rows in {result['duration_ms']}ms)"
+                }
+            }
+
+        try:
+            try:
+                loop = asyncio.get_running_loop()
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, _run_refresh())
+                    return future.result(timeout=600)
+            except RuntimeError:
+                return asyncio.run(_run_refresh())
+        except ValueError as e:
+            return {"success": False, "error": str(e)}
+        except Exception as e:
+            logger.error(f"Refresh materialized view error: {e}")
+            return {"success": False, "error": f"Failed to refresh view: {str(e)}"}
+
+    @staticmethod
+    def _execute_drop_materialized_view(session: Session, tool_input: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute drop_materialized_view tool - drops a materialized view."""
+        import asyncio
+        from uuid import UUID as PyUUID
+
+        view_id = tool_input.get("view_id")
+        name = tool_input.get("name")
+        schema_name = tool_input.get("schema_name", "public")
+
+        if not view_id and not name:
+            return {"success": False, "error": "Either view_id or name is required"}
+
+        async def _run_drop():
+            from ..data_explorer.materialized_view_service import MaterializedViewService
+            from db import async_session_maker
+
+            async with async_session_maker() as async_session:
+                mv_service = MaterializedViewService(async_session)
+
+                # Get view by ID or name
+                if view_id:
+                    try:
+                        uuid = PyUUID(view_id)
+                    except ValueError:
+                        return {"success": False, "error": "Invalid view_id format"}
+                else:
+                    view = await mv_service.get_view_by_name(name, schema_name)
+                    if not view:
+                        return {"success": False, "error": f"View {schema_name}.{name} not found"}
+                    uuid = PyUUID(view["id"])
+
+                result = await mv_service.drop_materialized_view(view_id=uuid)
+
+            return {
+                "success": True,
+                "data": {
+                    **result,
+                    "message": f"Dropped materialized view {result['schema_name']}.{result['name']}"
+                }
+            }
+
+        try:
+            try:
+                loop = asyncio.get_running_loop()
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, _run_drop())
+                    return future.result(timeout=60)
+            except RuntimeError:
+                return asyncio.run(_run_drop())
+        except ValueError as e:
+            return {"success": False, "error": str(e)}
+        except Exception as e:
+            logger.error(f"Drop materialized view error: {e}")
+            return {"success": False, "error": f"Failed to drop view: {str(e)}"}
+
+    @staticmethod
+    def _execute_list_materialized_views(session: Session, tool_input: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute list_materialized_views tool - lists all managed materialized views."""
+        import asyncio
+
+        async def _run_list():
+            from ..data_explorer.materialized_view_service import MaterializedViewService
+            from db import async_session_maker
+
+            schema_name = tool_input.get("schema_name")
+            status = tool_input.get("status")
+            limit = tool_input.get("limit", 25)
+
+            async with async_session_maker() as async_session:
+                mv_service = MaterializedViewService(async_session)
+                views, total = await mv_service.list_views(
+                    limit=limit,
+                    schema_name=schema_name,
+                    status=status,
+                )
+
+            return {
+                "success": True,
+                "data": {
+                    "views": views,
+                    "total": total,
+                    "message": f"Found {total} materialized view(s)"
+                }
+            }
+
+        try:
+            try:
+                loop = asyncio.get_running_loop()
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, _run_list())
+                    return future.result(timeout=60)
+            except RuntimeError:
+                return asyncio.run(_run_list())
+        except Exception as e:
+            logger.error(f"List materialized views error: {e}")
+            return {"success": False, "error": f"Failed to list views: {str(e)}"}
+
+    @staticmethod
+    def _execute_get_materialized_view_info(session: Session, tool_input: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute get_materialized_view_info tool - gets detailed view information."""
+        import asyncio
+        from uuid import UUID as PyUUID
+
+        view_id = tool_input.get("view_id")
+        name = tool_input.get("name")
+        schema_name = tool_input.get("schema_name", "public")
+
+        if not view_id and not name:
+            return {"success": False, "error": "Either view_id or name is required"}
+
+        async def _run_get():
+            from ..data_explorer.materialized_view_service import MaterializedViewService
+            from db import async_session_maker
+
+            async with async_session_maker() as async_session:
+                mv_service = MaterializedViewService(async_session)
+
+                if view_id:
+                    try:
+                        uuid = PyUUID(view_id)
+                    except ValueError:
+                        return {"success": False, "error": "Invalid view_id format"}
+                    view = await mv_service.get_view(uuid)
+                else:
+                    view = await mv_service.get_view_by_name(name, schema_name)
+
+                if not view:
+                    return {"success": False, "error": f"View not found"}
+
+            return {"success": True, "data": view}
+
+        try:
+            try:
+                loop = asyncio.get_running_loop()
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, _run_get())
+                    return future.result(timeout=30)
+            except RuntimeError:
+                return asyncio.run(_run_get())
+        except Exception as e:
+            logger.error(f"Get materialized view info error: {e}")
+            return {"success": False, "error": f"Failed to get view info: {str(e)}"}
 
     # =========================================================================
     # DATA DICTIONARY TOOL HANDLERS
