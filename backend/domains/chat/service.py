@@ -424,6 +424,105 @@ DATA_EXPLORER_TOOLS = [
                 "required": []
             }
         }
+    },
+    # APPROVAL WORKFLOW TOOLS
+    {
+        "type": "function",
+        "function": {
+            "name": "request_approval",
+            "description": "Request approval for a dangerous operation (creating materialized views, stored procedures). Creates a pending approval request that must be approved before execution.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "operation_type": {"type": "string", "description": "Type of operation", "enum": ["materialized_view", "stored_procedure"]},
+                    "operation_params": {
+                        "type": "object",
+                        "description": "Parameters for the operation (same as create_materialized_view or create_stored_procedure)",
+                        "additionalProperties": True
+                    },
+                    "title": {"type": "string", "description": "Custom title for the request"},
+                    "description": {"type": "string", "description": "Description of why this is needed"},
+                    "connection_id": {"type": "string", "default": "default"}
+                },
+                "required": ["operation_type", "operation_params"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_pending_approvals",
+            "description": "List pending approval requests waiting for review. Shows risk level, requestor, and expiration time.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "status": {"type": "string", "enum": ["pending", "approved", "rejected", "expired", "executed"], "description": "Filter by status"},
+                    "operation_type": {"type": "string", "enum": ["materialized_view", "stored_procedure"], "description": "Filter by operation type"},
+                    "requested_by": {"type": "string", "description": "Filter by requestor"},
+                    "limit": {"type": "integer", "description": "Max results", "default": 25}
+                },
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "approve_request",
+            "description": "Approve a pending approval request. Once approved, the operation will be executed.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "request_id": {"type": "string", "description": "Approval request ID (UUID)"},
+                    "reason": {"type": "string", "description": "Optional reason for approval"},
+                    "execute_immediately": {"type": "boolean", "description": "Execute the operation now (default: true)", "default": True}
+                },
+                "required": ["request_id"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "reject_request",
+            "description": "Reject a pending approval request. The operation will not be executed.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "request_id": {"type": "string", "description": "Approval request ID (UUID)"},
+                    "reason": {"type": "string", "description": "Reason for rejection (required)"}
+                },
+                "required": ["request_id", "reason"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_approval_request",
+            "description": "Get detailed information about an approval request including risk assessment and execution status.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "request_id": {"type": "string", "description": "Approval request ID (UUID)"}
+                },
+                "required": ["request_id"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "cancel_approval_request",
+            "description": "Cancel your own pending approval request.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "request_id": {"type": "string", "description": "Approval request ID (UUID)"}
+                },
+                "required": ["request_id"]
+            }
+        }
     }
 ]
 
@@ -1317,6 +1416,28 @@ class ChatService:
 
             elif tool_name == "get_stored_procedure_info":
                 return ChatService._execute_get_stored_procedure_info(session, tool_input)
+
+            # =================================================================
+            # APPROVAL WORKFLOW TOOLS
+            # =================================================================
+
+            elif tool_name == "request_approval":
+                return ChatService._execute_request_approval(session, tool_input)
+
+            elif tool_name == "list_pending_approvals":
+                return ChatService._execute_list_pending_approvals_workflow(session, tool_input)
+
+            elif tool_name == "approve_request":
+                return ChatService._execute_approve_request(session, tool_input)
+
+            elif tool_name == "reject_request":
+                return ChatService._execute_reject_request(session, tool_input)
+
+            elif tool_name == "get_approval_request":
+                return ChatService._execute_get_approval_request(session, tool_input)
+
+            elif tool_name == "cancel_approval_request":
+                return ChatService._execute_cancel_approval_request(session, tool_input)
 
             # =================================================================
             # DATA DICTIONARY TOOLS
@@ -2529,6 +2650,328 @@ class ChatService:
         except Exception as e:
             logger.error(f"Get stored procedure info error: {e}")
             return {"success": False, "error": f"Failed to get procedure info: {str(e)}"}
+
+    # =========================================================================
+    # APPROVAL WORKFLOW TOOL HANDLERS
+    # =========================================================================
+
+    @staticmethod
+    def _execute_request_approval(session: Session, tool_input: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute request_approval tool - creates an approval request."""
+        import asyncio
+
+        operation_type = tool_input.get("operation_type")
+        operation_params = tool_input.get("operation_params", {})
+
+        if not operation_type:
+            return {"success": False, "error": "operation_type is required"}
+        if not operation_params:
+            return {"success": False, "error": "operation_params is required"}
+
+        async def _run_request():
+            from ..data_explorer.approval_service import ApprovalService
+            from db import async_session_maker
+
+            title = tool_input.get("title")
+            description = tool_input.get("description")
+            connection_id = tool_input.get("connection_id", "default")
+
+            # Use a default requestor (in real system, would come from auth)
+            requested_by = tool_input.get("requested_by", "chat_user")
+
+            async with async_session_maker() as async_session:
+                approval_service = ApprovalService(async_session)
+                result = await approval_service.create_request(
+                    operation_type=operation_type,
+                    operation_params=operation_params,
+                    requested_by=requested_by,
+                    title=title,
+                    description=description,
+                    connection_id=connection_id,
+                )
+
+            return {
+                "success": True,
+                "data": {
+                    **result,
+                    "message": f"Approval request created. Risk level: {result['risk_level']}. Expires at: {result['expires_at']}"
+                }
+            }
+
+        try:
+            try:
+                loop = asyncio.get_running_loop()
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, _run_request())
+                    return future.result(timeout=30)
+            except RuntimeError:
+                return asyncio.run(_run_request())
+        except ValueError as e:
+            return {"success": False, "error": str(e)}
+        except Exception as e:
+            logger.error(f"Request approval error: {e}")
+            return {"success": False, "error": f"Failed to create approval request: {str(e)}"}
+
+    @staticmethod
+    def _execute_list_pending_approvals_workflow(session: Session, tool_input: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute list_pending_approvals tool - lists approval requests."""
+        import asyncio
+
+        async def _run_list():
+            from ..data_explorer.approval_service import ApprovalService
+            from db import async_session_maker
+
+            status = tool_input.get("status")
+            operation_type = tool_input.get("operation_type")
+            requested_by = tool_input.get("requested_by")
+            limit = tool_input.get("limit", 25)
+
+            async with async_session_maker() as async_session:
+                approval_service = ApprovalService(async_session)
+                requests, total = await approval_service.list_requests(
+                    limit=limit,
+                    status=status,
+                    operation_type=operation_type,
+                    requested_by=requested_by,
+                )
+
+            return {
+                "success": True,
+                "data": {
+                    "requests": requests,
+                    "total": total,
+                    "message": f"Found {total} approval request(s)"
+                }
+            }
+
+        try:
+            try:
+                loop = asyncio.get_running_loop()
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, _run_list())
+                    return future.result(timeout=60)
+            except RuntimeError:
+                return asyncio.run(_run_list())
+        except Exception as e:
+            logger.error(f"List pending approvals error: {e}")
+            return {"success": False, "error": f"Failed to list approvals: {str(e)}"}
+
+    @staticmethod
+    def _execute_approve_request(session: Session, tool_input: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute approve_request tool - approves a pending request."""
+        import asyncio
+        from uuid import UUID as PyUUID
+
+        request_id = tool_input.get("request_id")
+        if not request_id:
+            return {"success": False, "error": "request_id is required"}
+
+        try:
+            request_uuid = PyUUID(request_id)
+        except ValueError:
+            return {"success": False, "error": "Invalid request_id format"}
+
+        async def _run_approve():
+            from ..data_explorer.approval_service import ApprovalService
+            from db import async_session_maker
+
+            reason = tool_input.get("reason")
+            execute_immediately = tool_input.get("execute_immediately", True)
+
+            # Use a default approver (in real system, would come from auth)
+            decided_by = tool_input.get("decided_by", "admin_user")
+
+            async with async_session_maker() as async_session:
+                approval_service = ApprovalService(async_session)
+                result = await approval_service.approve_request(
+                    request_id=request_uuid,
+                    decided_by=decided_by,
+                    reason=reason,
+                    execute_immediately=execute_immediately,
+                )
+
+            message = f"Request approved by {decided_by}"
+            if execute_immediately and result.get("execution"):
+                exec_result = result["execution"]
+                if exec_result.get("success"):
+                    message += ". Operation executed successfully."
+                else:
+                    message += f". Execution failed: {exec_result.get('error')}"
+
+            return {
+                "success": True,
+                "data": {
+                    **result,
+                    "message": message
+                }
+            }
+
+        try:
+            try:
+                loop = asyncio.get_running_loop()
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, _run_approve())
+                    return future.result(timeout=300)
+            except RuntimeError:
+                return asyncio.run(_run_approve())
+        except ValueError as e:
+            return {"success": False, "error": str(e)}
+        except Exception as e:
+            logger.error(f"Approve request error: {e}")
+            return {"success": False, "error": f"Failed to approve request: {str(e)}"}
+
+    @staticmethod
+    def _execute_reject_request(session: Session, tool_input: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute reject_request tool - rejects a pending request."""
+        import asyncio
+        from uuid import UUID as PyUUID
+
+        request_id = tool_input.get("request_id")
+        reason = tool_input.get("reason")
+
+        if not request_id:
+            return {"success": False, "error": "request_id is required"}
+        if not reason:
+            return {"success": False, "error": "reason is required for rejection"}
+
+        try:
+            request_uuid = PyUUID(request_id)
+        except ValueError:
+            return {"success": False, "error": "Invalid request_id format"}
+
+        async def _run_reject():
+            from ..data_explorer.approval_service import ApprovalService
+            from db import async_session_maker
+
+            # Use a default rejector (in real system, would come from auth)
+            decided_by = tool_input.get("decided_by", "admin_user")
+
+            async with async_session_maker() as async_session:
+                approval_service = ApprovalService(async_session)
+                result = await approval_service.reject_request(
+                    request_id=request_uuid,
+                    decided_by=decided_by,
+                    reason=reason,
+                )
+
+            return {
+                "success": True,
+                "data": {
+                    **result,
+                    "message": f"Request rejected: {reason}"
+                }
+            }
+
+        try:
+            try:
+                loop = asyncio.get_running_loop()
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, _run_reject())
+                    return future.result(timeout=30)
+            except RuntimeError:
+                return asyncio.run(_run_reject())
+        except ValueError as e:
+            return {"success": False, "error": str(e)}
+        except Exception as e:
+            logger.error(f"Reject request error: {e}")
+            return {"success": False, "error": f"Failed to reject request: {str(e)}"}
+
+    @staticmethod
+    def _execute_get_approval_request(session: Session, tool_input: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute get_approval_request tool - gets detailed request info."""
+        import asyncio
+        from uuid import UUID as PyUUID
+
+        request_id = tool_input.get("request_id")
+        if not request_id:
+            return {"success": False, "error": "request_id is required"}
+
+        try:
+            request_uuid = PyUUID(request_id)
+        except ValueError:
+            return {"success": False, "error": "Invalid request_id format"}
+
+        async def _run_get():
+            from ..data_explorer.approval_service import ApprovalService
+            from db import async_session_maker
+
+            async with async_session_maker() as async_session:
+                approval_service = ApprovalService(async_session)
+                request = await approval_service.get_request(request_uuid)
+
+            if not request:
+                return {"success": False, "error": "Request not found"}
+
+            return {"success": True, "data": request}
+
+        try:
+            try:
+                loop = asyncio.get_running_loop()
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, _run_get())
+                    return future.result(timeout=30)
+            except RuntimeError:
+                return asyncio.run(_run_get())
+        except Exception as e:
+            logger.error(f"Get approval request error: {e}")
+            return {"success": False, "error": f"Failed to get request: {str(e)}"}
+
+    @staticmethod
+    def _execute_cancel_approval_request(session: Session, tool_input: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute cancel_approval_request tool - cancels own pending request."""
+        import asyncio
+        from uuid import UUID as PyUUID
+
+        request_id = tool_input.get("request_id")
+        if not request_id:
+            return {"success": False, "error": "request_id is required"}
+
+        try:
+            request_uuid = PyUUID(request_id)
+        except ValueError:
+            return {"success": False, "error": "Invalid request_id format"}
+
+        async def _run_cancel():
+            from ..data_explorer.approval_service import ApprovalService
+            from db import async_session_maker
+
+            # Use a default user (in real system, would come from auth)
+            cancelled_by = tool_input.get("cancelled_by", "chat_user")
+
+            async with async_session_maker() as async_session:
+                approval_service = ApprovalService(async_session)
+                result = await approval_service.cancel_request(
+                    request_id=request_uuid,
+                    cancelled_by=cancelled_by,
+                )
+
+            return {
+                "success": True,
+                "data": {
+                    **result,
+                    "message": "Approval request cancelled"
+                }
+            }
+
+        try:
+            try:
+                loop = asyncio.get_running_loop()
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, _run_cancel())
+                    return future.result(timeout=30)
+            except RuntimeError:
+                return asyncio.run(_run_cancel())
+        except ValueError as e:
+            return {"success": False, "error": str(e)}
+        except Exception as e:
+            logger.error(f"Cancel approval request error: {e}")
+            return {"success": False, "error": f"Failed to cancel request: {str(e)}"}
 
     # =========================================================================
     # DATA DICTIONARY TOOL HANDLERS
