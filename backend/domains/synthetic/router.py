@@ -1122,7 +1122,7 @@ async def delete_tabdit_model(
 @router.post("/tabdit/models/{model_id}/generate")
 @limiter.limit("5/minute")
 async def generate_from_tabdit(
-    request_obj: Request,
+    request: Request,
     model_id: UUID,
     num_rows: int = Query(1000, ge=10, le=100000, description="Number of rows to generate"),
     output_name: Optional[str] = Query(None, description="Name for output dataset"),
