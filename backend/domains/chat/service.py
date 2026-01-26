@@ -150,6 +150,89 @@ DATA_EXPLORER_TOOLS = [
                 "required": ["sql"]
             }
         }
+    },
+    # EXPORT TOOLS
+    {
+        "type": "function",
+        "function": {
+            "name": "export_query_to_s3",
+            "description": "Export SQL query results to S3 as parquet or CSV. Use this to save query results for later use, sharing, or analysis in other tools.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "sql": {"type": "string", "description": "SQL query to export (SELECT only)"},
+                    "name": {"type": "string", "description": "Name for the export (used in filename)"},
+                    "format": {"type": "string", "enum": ["parquet", "csv"], "description": "Output format", "default": "parquet"},
+                    "connection_id": {"type": "string", "default": "default"},
+                    "description": {"type": "string", "description": "Optional description of what this export contains"},
+                    "compression": {"type": "string", "enum": ["snappy", "gzip", "none"], "description": "Compression type", "default": "snappy"}
+                },
+                "required": ["sql", "name"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "export_table_to_s3",
+            "description": "Export an entire table to S3 as parquet or CSV. Optionally limit rows for large tables.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "schema": {"type": "string", "description": "Schema name"},
+                    "table": {"type": "string", "description": "Table name"},
+                    "name": {"type": "string", "description": "Name for the export"},
+                    "format": {"type": "string", "enum": ["parquet", "csv"], "description": "Output format", "default": "parquet"},
+                    "connection_id": {"type": "string", "default": "default"},
+                    "limit": {"type": "integer", "description": "Max rows to export (omit for all rows)"},
+                    "compression": {"type": "string", "enum": ["snappy", "gzip", "none"], "description": "Compression type", "default": "snappy"}
+                },
+                "required": ["schema", "table", "name"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_exports",
+            "description": "List all data exports with their status, size, and download availability.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "status": {"type": "string", "enum": ["pending", "running", "completed", "failed"], "description": "Filter by status"},
+                    "limit": {"type": "integer", "description": "Max results", "default": 25}
+                },
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_export_status",
+            "description": "Get detailed status and metadata for a specific export by ID.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "export_id": {"type": "string", "description": "Export ID (UUID)"}
+                },
+                "required": ["export_id"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_export_download_url",
+            "description": "Get a temporary download URL for a completed export. URL expires in 1 hour.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "export_id": {"type": "string", "description": "Export ID (UUID)"}
+                },
+                "required": ["export_id"]
+            }
+        }
     }
 ]
 
@@ -966,7 +1049,7 @@ class ChatService:
                     page_size=tool_input.get("page_size", 100),
                     db_id=connection_id
                 )
-                
+
                 response_data = {
                     "columns": result.columns,
                     "rows": result.rows,
@@ -974,19 +1057,38 @@ class ChatService:
                     "execution_time_ms": result.execution_time_ms,
                     "error": result.error
                 }
-                
+
                 if not result.error:
                     row_count = len(result.rows)
                     response_data["summary"] = (
                         f"Query returned {row_count} row(s) "
                         f"in {result.execution_time_ms:.2f}ms"
                     )
-                
+
                 return {
                     "success": not bool(result.error),
                     "data": response_data
                 }
-            
+
+            # =================================================================
+            # DATA EXPORT TOOLS
+            # =================================================================
+
+            elif tool_name == "export_query_to_s3":
+                return ChatService._execute_export_query_to_s3(session, tool_input)
+
+            elif tool_name == "export_table_to_s3":
+                return ChatService._execute_export_table_to_s3(session, tool_input)
+
+            elif tool_name == "list_exports":
+                return ChatService._execute_list_exports(session, tool_input)
+
+            elif tool_name == "get_export_status":
+                return ChatService._execute_get_export_status(session, tool_input)
+
+            elif tool_name == "get_export_download_url":
+                return ChatService._execute_get_export_download_url(session, tool_input)
+
             # =================================================================
             # DATA DICTIONARY TOOLS
             # =================================================================
@@ -1372,7 +1474,287 @@ class ChatService:
         except Exception as e:
             logger.error(f"Chat streaming error: {e}", exc_info=True)
             yield {"event": "error", "data": {"error": str(e)}}
-    
+
+    # =========================================================================
+    # DATA EXPORT TOOL HANDLERS
+    # =========================================================================
+
+    @staticmethod
+    def _execute_export_query_to_s3(session: Session, tool_input: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute export_query_to_s3 tool - exports query results to S3."""
+        import asyncio
+
+        async def _run_export():
+            from ..data_explorer.export_service import DataExportService
+            from db import async_session_maker
+
+            sql = tool_input.get("sql")
+            name = tool_input.get("name")
+            format_type = tool_input.get("format", "parquet")
+            connection_id = tool_input.get("connection_id", "default")
+            description = tool_input.get("description")
+            compression = tool_input.get("compression", "snappy")
+
+            if not sql or not name:
+                return {"success": False, "error": "sql and name are required"}
+
+            # Sanitize name for filename
+            safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in name)
+            output_path = f"exports/{safe_name}.{format_type}"
+
+            async with async_session_maker() as async_session:
+                export_service = DataExportService(async_session)
+                result = await export_service.export_query(
+                    sql=sql,
+                    name=name,
+                    output_path=output_path,
+                    format=format_type,
+                    connection_id=connection_id,
+                    description=description,
+                    compression=compression if compression != "none" else None,
+                )
+
+            return {
+                "success": True,
+                "data": {
+                    "export_id": result["export_id"],
+                    "status": result["status"],
+                    "destination_uri": result["destination_uri"],
+                    "row_count": result["row_count"],
+                    "column_count": result["column_count"],
+                    "file_size_bytes": result["file_size_bytes"],
+                    "format": result["format"],
+                    "duration_seconds": result["duration_seconds"],
+                    "message": f"Successfully exported {result['row_count']} rows to {result['destination_uri']}"
+                }
+            }
+
+        try:
+            # Run async code in event loop
+            try:
+                loop = asyncio.get_running_loop()
+                # Already in async context, create task
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, _run_export())
+                    return future.result(timeout=300)
+            except RuntimeError:
+                # No running loop, safe to use asyncio.run
+                return asyncio.run(_run_export())
+        except ValueError as e:
+            return {"success": False, "error": str(e)}
+        except Exception as e:
+            logger.error(f"Export query error: {e}")
+            return {"success": False, "error": f"Export failed: {str(e)}"}
+
+    @staticmethod
+    def _execute_export_table_to_s3(session: Session, tool_input: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute export_table_to_s3 tool - exports entire table to S3."""
+        import asyncio
+
+        async def _run_export():
+            from ..data_explorer.export_service import DataExportService
+            from db import async_session_maker
+
+            schema = tool_input.get("schema")
+            table = tool_input.get("table")
+            name = tool_input.get("name")
+            format_type = tool_input.get("format", "parquet")
+            connection_id = tool_input.get("connection_id", "default")
+            limit = tool_input.get("limit")
+            compression = tool_input.get("compression", "snappy")
+
+            if not schema or not table or not name:
+                return {"success": False, "error": "schema, table, and name are required"}
+
+            # Sanitize name for filename
+            safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in name)
+            output_path = f"exports/{safe_name}.{format_type}"
+
+            async with async_session_maker() as async_session:
+                export_service = DataExportService(async_session)
+                result = await export_service.export_table(
+                    schema=schema,
+                    table=table,
+                    name=name,
+                    output_path=output_path,
+                    format=format_type,
+                    connection_id=connection_id,
+                    compression=compression if compression != "none" else None,
+                    limit=limit,
+                )
+
+            return {
+                "success": True,
+                "data": {
+                    "export_id": result["export_id"],
+                    "status": result["status"],
+                    "destination_uri": result["destination_uri"],
+                    "row_count": result["row_count"],
+                    "column_count": result["column_count"],
+                    "file_size_bytes": result["file_size_bytes"],
+                    "format": result["format"],
+                    "duration_seconds": result["duration_seconds"],
+                    "message": f"Successfully exported {result['row_count']} rows from {schema}.{table} to {result['destination_uri']}"
+                }
+            }
+
+        try:
+            try:
+                loop = asyncio.get_running_loop()
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, _run_export())
+                    return future.result(timeout=300)
+            except RuntimeError:
+                return asyncio.run(_run_export())
+        except ValueError as e:
+            return {"success": False, "error": str(e)}
+        except Exception as e:
+            logger.error(f"Export table error: {e}")
+            return {"success": False, "error": f"Export failed: {str(e)}"}
+
+    @staticmethod
+    def _execute_list_exports(session: Session, tool_input: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute list_exports tool - lists all exports."""
+        import asyncio
+
+        async def _run_list():
+            from ..data_explorer.export_service import DataExportService
+            from db import async_session_maker
+
+            status_filter = tool_input.get("status")
+            limit = tool_input.get("limit", 25)
+
+            async with async_session_maker() as async_session:
+                export_service = DataExportService(async_session)
+                exports, total = await export_service.list_exports(
+                    limit=limit,
+                    status=status_filter,
+                )
+
+            return {
+                "success": True,
+                "data": {
+                    "exports": exports,
+                    "total": total,
+                    "message": f"Found {total} export(s)"
+                }
+            }
+
+        try:
+            try:
+                loop = asyncio.get_running_loop()
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, _run_list())
+                    return future.result(timeout=60)
+            except RuntimeError:
+                return asyncio.run(_run_list())
+        except Exception as e:
+            logger.error(f"List exports error: {e}")
+            return {"success": False, "error": f"Failed to list exports: {str(e)}"}
+
+    @staticmethod
+    def _execute_get_export_status(session: Session, tool_input: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute get_export_status tool - gets detailed export status."""
+        import asyncio
+        from uuid import UUID as PyUUID
+
+        export_id = tool_input.get("export_id")
+        if not export_id:
+            return {"success": False, "error": "export_id is required"}
+
+        try:
+            export_uuid = PyUUID(export_id)
+        except ValueError:
+            return {"success": False, "error": "Invalid export_id format"}
+
+        async def _run_get():
+            from ..data_explorer.export_service import DataExportService
+            from db import async_session_maker
+
+            async with async_session_maker() as async_session:
+                export_service = DataExportService(async_session)
+                export = await export_service.get_export(export_uuid)
+
+            if not export:
+                return {"success": False, "error": f"Export {export_id} not found"}
+
+            return {"success": True, "data": export}
+
+        try:
+            try:
+                loop = asyncio.get_running_loop()
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, _run_get())
+                    return future.result(timeout=30)
+            except RuntimeError:
+                return asyncio.run(_run_get())
+        except Exception as e:
+            logger.error(f"Get export status error: {e}")
+            return {"success": False, "error": f"Failed to get export: {str(e)}"}
+
+    @staticmethod
+    def _execute_get_export_download_url(session: Session, tool_input: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute get_export_download_url tool - gets presigned download URL."""
+        import asyncio
+        from uuid import UUID as PyUUID
+
+        export_id = tool_input.get("export_id")
+        if not export_id:
+            return {"success": False, "error": "export_id is required"}
+
+        try:
+            export_uuid = PyUUID(export_id)
+        except ValueError:
+            return {"success": False, "error": "Invalid export_id format"}
+
+        async def _run_get_url():
+            from ..data_explorer.export_service import DataExportService
+            from db import async_session_maker
+
+            async with async_session_maker() as async_session:
+                export_service = DataExportService(async_session)
+
+                # Check export exists and is completed
+                export = await export_service.get_export(export_uuid)
+                if not export:
+                    return {"success": False, "error": f"Export {export_id} not found"}
+
+                if export["status"] != "completed":
+                    return {"success": False, "error": f"Export is not completed (status: {export['status']})"}
+
+                # Generate presigned URL
+                download_url = await export_service.generate_download_url(export_uuid)
+
+            if not download_url:
+                return {"success": False, "error": "Could not generate download URL"}
+
+            return {
+                "success": True,
+                "data": {
+                    "export_id": export_id,
+                    "download_url": download_url,
+                    "expires_in_seconds": 3600,
+                    "message": "Download URL valid for 1 hour"
+                }
+            }
+
+        try:
+            try:
+                loop = asyncio.get_running_loop()
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, _run_get_url())
+                    return future.result(timeout=30)
+            except RuntimeError:
+                return asyncio.run(_run_get_url())
+        except Exception as e:
+            logger.error(f"Get download URL error: {e}")
+            return {"success": False, "error": f"Failed to generate download URL: {str(e)}"}
+
     # =========================================================================
     # DATA DICTIONARY TOOL HANDLERS
     # =========================================================================
