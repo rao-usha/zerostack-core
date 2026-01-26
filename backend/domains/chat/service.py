@@ -318,6 +318,112 @@ DATA_EXPLORER_TOOLS = [
                 "required": []
             }
         }
+    },
+    # STORED PROCEDURE TOOLS
+    {
+        "type": "function",
+        "function": {
+            "name": "create_stored_procedure",
+            "description": "Create a stored procedure (function) in the database. Use for reusable business logic, data transformations, or complex operations.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Name for the procedure (letters, numbers, underscores only)"},
+                    "source_code": {"type": "string", "description": "Function body (the code inside the function, not CREATE FUNCTION wrapper)"},
+                    "schema_name": {"type": "string", "description": "Schema to create procedure in", "default": "public", "enum": ["public", "analytics", "reports", "procedures"]},
+                    "description": {"type": "string", "description": "Description of what this procedure does"},
+                    "language": {"type": "string", "description": "Procedure language", "default": "plpgsql", "enum": ["plpgsql", "sql"]},
+                    "parameters": {
+                        "type": "array",
+                        "description": "Function parameters as [{name, type, default?, mode?}]",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {"type": "string"},
+                                "type": {"type": "string"},
+                                "default": {"type": "string"},
+                                "mode": {"type": "string", "enum": ["IN", "OUT", "INOUT"]}
+                            }
+                        }
+                    },
+                    "return_type": {"type": "string", "description": "Return type (omit for void)"},
+                    "returns_set": {"type": "boolean", "description": "Whether function returns multiple rows", "default": False},
+                    "volatility": {"type": "string", "description": "Function volatility", "default": "volatile", "enum": ["volatile", "stable", "immutable"]},
+                    "connection_id": {"type": "string", "default": "default"}
+                },
+                "required": ["name", "source_code"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "execute_stored_procedure",
+            "description": "Execute a stored procedure with optional arguments. Returns the result set.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "procedure_id": {"type": "string", "description": "Procedure ID (UUID) or use name with schema"},
+                    "name": {"type": "string", "description": "Procedure name (alternative to procedure_id)"},
+                    "schema_name": {"type": "string", "description": "Schema name if using name", "default": "public"},
+                    "arguments": {
+                        "type": "object",
+                        "description": "Named arguments to pass to the procedure",
+                        "additionalProperties": True
+                    }
+                },
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "drop_stored_procedure",
+            "description": "Drop (delete) a stored procedure. This cannot be undone.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "procedure_id": {"type": "string", "description": "Procedure ID (UUID) or use name with schema"},
+                    "name": {"type": "string", "description": "Procedure name (alternative to procedure_id)"},
+                    "schema_name": {"type": "string", "description": "Schema name if using name", "default": "public"}
+                },
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_stored_procedures",
+            "description": "List all managed stored procedures with their status and execution stats.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "schema_name": {"type": "string", "description": "Filter by schema"},
+                    "language": {"type": "string", "description": "Filter by language", "enum": ["plpgsql", "sql"]},
+                    "status": {"type": "string", "enum": ["active", "failed", "creating"], "description": "Filter by status"},
+                    "limit": {"type": "integer", "description": "Max results", "default": 25}
+                },
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_stored_procedure_info",
+            "description": "Get detailed information about a specific stored procedure including source code, parameters, and execution history.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "procedure_id": {"type": "string", "description": "Procedure ID (UUID) or use name with schema"},
+                    "name": {"type": "string", "description": "Procedure name (alternative to procedure_id)"},
+                    "schema_name": {"type": "string", "description": "Schema name if using name", "default": "public"}
+                },
+                "required": []
+            }
+        }
     }
 ]
 
@@ -1194,9 +1300,28 @@ class ChatService:
                 return ChatService._execute_get_materialized_view_info(session, tool_input)
 
             # =================================================================
+            # STORED PROCEDURE TOOLS
+            # =================================================================
+
+            elif tool_name == "create_stored_procedure":
+                return ChatService._execute_create_stored_procedure(session, tool_input)
+
+            elif tool_name == "execute_stored_procedure":
+                return ChatService._execute_execute_stored_procedure(session, tool_input)
+
+            elif tool_name == "drop_stored_procedure":
+                return ChatService._execute_drop_stored_procedure(session, tool_input)
+
+            elif tool_name == "list_stored_procedures":
+                return ChatService._execute_list_stored_procedures(session, tool_input)
+
+            elif tool_name == "get_stored_procedure_info":
+                return ChatService._execute_get_stored_procedure_info(session, tool_input)
+
+            # =================================================================
             # DATA DICTIONARY TOOLS
             # =================================================================
-            
+
             elif tool_name == "discover_assets":
                 return ChatService._execute_discover_assets(session, tool_input)
             
@@ -2126,6 +2251,284 @@ class ChatService:
         except Exception as e:
             logger.error(f"Get materialized view info error: {e}")
             return {"success": False, "error": f"Failed to get view info: {str(e)}"}
+
+    # =========================================================================
+    # STORED PROCEDURE TOOL HANDLERS
+    # =========================================================================
+
+    @staticmethod
+    def _execute_create_stored_procedure(session: Session, tool_input: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute create_stored_procedure tool - creates a new stored procedure."""
+        import asyncio
+
+        name = tool_input.get("name")
+        source_code = tool_input.get("source_code")
+
+        if not name:
+            return {"success": False, "error": "name is required"}
+        if not source_code:
+            return {"success": False, "error": "source_code is required"}
+
+        async def _run_create():
+            from ..data_explorer.stored_procedure_service import StoredProcedureService
+            from db import async_session_maker
+
+            schema_name = tool_input.get("schema_name", "public")
+            description = tool_input.get("description")
+            language = tool_input.get("language", "plpgsql")
+            parameters = tool_input.get("parameters", [])
+            return_type = tool_input.get("return_type")
+            returns_set = tool_input.get("returns_set", False)
+            volatility = tool_input.get("volatility", "volatile")
+            connection_id = tool_input.get("connection_id", "default")
+
+            async with async_session_maker() as async_session:
+                proc_service = StoredProcedureService(async_session)
+                result = await proc_service.create_procedure(
+                    name=name,
+                    source_code=source_code,
+                    schema_name=schema_name,
+                    description=description,
+                    language=language,
+                    parameters=parameters,
+                    return_type=return_type,
+                    returns_set=returns_set,
+                    volatility=volatility,
+                    connection_id=connection_id,
+                )
+
+            return {
+                "success": True,
+                "data": {
+                    **result,
+                    "message": f"Created procedure {schema_name}.{name}"
+                }
+            }
+
+        try:
+            try:
+                loop = asyncio.get_running_loop()
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, _run_create())
+                    return future.result(timeout=60)
+            except RuntimeError:
+                return asyncio.run(_run_create())
+        except ValueError as e:
+            return {"success": False, "error": str(e)}
+        except Exception as e:
+            logger.error(f"Create stored procedure error: {e}")
+            return {"success": False, "error": f"Failed to create procedure: {str(e)}"}
+
+    @staticmethod
+    def _execute_execute_stored_procedure(session: Session, tool_input: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute execute_stored_procedure tool - runs a stored procedure."""
+        import asyncio
+        from uuid import UUID as PyUUID
+
+        procedure_id = tool_input.get("procedure_id")
+        name = tool_input.get("name")
+        schema_name = tool_input.get("schema_name", "public")
+        arguments = tool_input.get("arguments", {})
+
+        if not procedure_id and not name:
+            return {"success": False, "error": "Either procedure_id or name is required"}
+
+        async def _run_execute():
+            from ..data_explorer.stored_procedure_service import StoredProcedureService
+            from db import async_session_maker
+
+            async with async_session_maker() as async_session:
+                proc_service = StoredProcedureService(async_session)
+
+                # Get procedure by ID or name
+                if procedure_id:
+                    try:
+                        uuid = PyUUID(procedure_id)
+                    except ValueError:
+                        return {"success": False, "error": "Invalid procedure_id format"}
+                else:
+                    proc = await proc_service.get_procedure_by_name(name, schema_name)
+                    if not proc:
+                        return {"success": False, "error": f"Procedure {schema_name}.{name} not found"}
+                    uuid = PyUUID(proc["id"])
+
+                result = await proc_service.execute_procedure(
+                    proc_id=uuid,
+                    arguments=arguments,
+                )
+
+            return {
+                "success": True,
+                "data": {
+                    **result,
+                    "message": f"Executed {result['schema_name']}.{result['name']} - {result['row_count']} row(s) in {result['duration_ms']}ms"
+                }
+            }
+
+        try:
+            try:
+                loop = asyncio.get_running_loop()
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, _run_execute())
+                    return future.result(timeout=300)
+            except RuntimeError:
+                return asyncio.run(_run_execute())
+        except ValueError as e:
+            return {"success": False, "error": str(e)}
+        except Exception as e:
+            logger.error(f"Execute stored procedure error: {e}")
+            return {"success": False, "error": f"Failed to execute procedure: {str(e)}"}
+
+    @staticmethod
+    def _execute_drop_stored_procedure(session: Session, tool_input: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute drop_stored_procedure tool - drops a stored procedure."""
+        import asyncio
+        from uuid import UUID as PyUUID
+
+        procedure_id = tool_input.get("procedure_id")
+        name = tool_input.get("name")
+        schema_name = tool_input.get("schema_name", "public")
+
+        if not procedure_id and not name:
+            return {"success": False, "error": "Either procedure_id or name is required"}
+
+        async def _run_drop():
+            from ..data_explorer.stored_procedure_service import StoredProcedureService
+            from db import async_session_maker
+
+            async with async_session_maker() as async_session:
+                proc_service = StoredProcedureService(async_session)
+
+                # Get procedure by ID or name
+                if procedure_id:
+                    try:
+                        uuid = PyUUID(procedure_id)
+                    except ValueError:
+                        return {"success": False, "error": "Invalid procedure_id format"}
+                else:
+                    proc = await proc_service.get_procedure_by_name(name, schema_name)
+                    if not proc:
+                        return {"success": False, "error": f"Procedure {schema_name}.{name} not found"}
+                    uuid = PyUUID(proc["id"])
+
+                result = await proc_service.drop_procedure(proc_id=uuid)
+
+            return {
+                "success": True,
+                "data": {
+                    **result,
+                    "message": f"Dropped procedure {result['schema_name']}.{result['name']}"
+                }
+            }
+
+        try:
+            try:
+                loop = asyncio.get_running_loop()
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, _run_drop())
+                    return future.result(timeout=60)
+            except RuntimeError:
+                return asyncio.run(_run_drop())
+        except ValueError as e:
+            return {"success": False, "error": str(e)}
+        except Exception as e:
+            logger.error(f"Drop stored procedure error: {e}")
+            return {"success": False, "error": f"Failed to drop procedure: {str(e)}"}
+
+    @staticmethod
+    def _execute_list_stored_procedures(session: Session, tool_input: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute list_stored_procedures tool - lists all managed procedures."""
+        import asyncio
+
+        async def _run_list():
+            from ..data_explorer.stored_procedure_service import StoredProcedureService
+            from db import async_session_maker
+
+            schema_name = tool_input.get("schema_name")
+            language = tool_input.get("language")
+            status = tool_input.get("status")
+            limit = tool_input.get("limit", 25)
+
+            async with async_session_maker() as async_session:
+                proc_service = StoredProcedureService(async_session)
+                procedures, total = await proc_service.list_procedures(
+                    limit=limit,
+                    schema_name=schema_name,
+                    language=language,
+                    status=status,
+                )
+
+            return {
+                "success": True,
+                "data": {
+                    "procedures": procedures,
+                    "total": total,
+                    "message": f"Found {total} stored procedure(s)"
+                }
+            }
+
+        try:
+            try:
+                loop = asyncio.get_running_loop()
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, _run_list())
+                    return future.result(timeout=60)
+            except RuntimeError:
+                return asyncio.run(_run_list())
+        except Exception as e:
+            logger.error(f"List stored procedures error: {e}")
+            return {"success": False, "error": f"Failed to list procedures: {str(e)}"}
+
+    @staticmethod
+    def _execute_get_stored_procedure_info(session: Session, tool_input: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute get_stored_procedure_info tool - gets detailed procedure information."""
+        import asyncio
+        from uuid import UUID as PyUUID
+
+        procedure_id = tool_input.get("procedure_id")
+        name = tool_input.get("name")
+        schema_name = tool_input.get("schema_name", "public")
+
+        if not procedure_id and not name:
+            return {"success": False, "error": "Either procedure_id or name is required"}
+
+        async def _run_get():
+            from ..data_explorer.stored_procedure_service import StoredProcedureService
+            from db import async_session_maker
+
+            async with async_session_maker() as async_session:
+                proc_service = StoredProcedureService(async_session)
+
+                if procedure_id:
+                    try:
+                        uuid = PyUUID(procedure_id)
+                    except ValueError:
+                        return {"success": False, "error": "Invalid procedure_id format"}
+                    proc = await proc_service.get_procedure(uuid)
+                else:
+                    proc = await proc_service.get_procedure_by_name(name, schema_name)
+
+                if not proc:
+                    return {"success": False, "error": "Procedure not found"}
+
+            return {"success": True, "data": proc}
+
+        try:
+            try:
+                loop = asyncio.get_running_loop()
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, _run_get())
+                    return future.result(timeout=30)
+            except RuntimeError:
+                return asyncio.run(_run_get())
+        except Exception as e:
+            logger.error(f"Get stored procedure info error: {e}")
+            return {"success": False, "error": f"Failed to get procedure info: {str(e)}"}
 
     # =========================================================================
     # DATA DICTIONARY TOOL HANDLERS
