@@ -1,7 +1,7 @@
 """Add Codat integration tables.
 
 Revision ID: 038_add_codat_tables
-Revises: 037_add_investor_ingestion
+Revises: 036_add_ingestion_tables
 Create Date: 2026-01-23
 
 Adds tables for Codat accounting system integration:
@@ -21,7 +21,7 @@ from sqlalchemy.dialects.postgresql import UUID, JSONB
 
 # revision identifiers
 revision = '038_add_codat_tables'
-down_revision = '037_add_investor_ingestion'
+down_revision = '036_add_ingestion_tables'
 branch_labels = None
 depends_on = None
 
