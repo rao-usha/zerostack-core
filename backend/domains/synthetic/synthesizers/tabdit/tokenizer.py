@@ -118,7 +118,7 @@ class TabularTokenizer:
     def _analyze_column(self, name: str, col: pd.Series) -> ColumnInfo:
         """Analyze a single column and create ColumnInfo."""
         original_dtype = str(col.dtype)
-        has_missing = col.isna().any()
+        has_missing = bool(col.isna().any())  # Convert numpy bool to Python bool
 
         # Detect column type
         if pd.api.types.is_numeric_dtype(col):
@@ -465,11 +465,11 @@ class TabularTokenizer:
                     "n_categories": c.n_categories,
                     "categories": c.categories,
                     "bin_edges": c.bin_edges.tolist() if c.bin_edges is not None else None,
-                    "mean": c.mean,
-                    "std": c.std,
-                    "min_val": c.min_val,
-                    "max_val": c.max_val,
-                    "has_missing": c.has_missing,
+                    "mean": float(c.mean) if c.mean is not None else None,
+                    "std": float(c.std) if c.std is not None else None,
+                    "min_val": float(c.min_val) if c.min_val is not None else None,
+                    "max_val": float(c.max_val) if c.max_val is not None else None,
+                    "has_missing": bool(c.has_missing),
                 }
                 for c in self._columns
             ],
