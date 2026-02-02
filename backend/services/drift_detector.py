@@ -137,7 +137,18 @@ class DriftDetector:
         
         # Update check status
         self._update_check_status(check_id, current_value, is_breached)
-        
+
+        # Record history
+        self._record_history(
+            check_id=check_id,
+            value=current_value,
+            baseline_value=baseline_value,
+            change_percent=change_percent,
+            is_breached=is_breached,
+            severity=severity,
+            source='manual'
+        )
+
         return DriftCheckResult(
             check_id=check_id,
             check_name=check['name'],
@@ -178,16 +189,34 @@ class DriftDetector:
         for check in checks:
             metric_name = check['metric']
             if metric_name in metrics:
+                current_value = metrics[metric_name]
+                check_id = str(check['id'])
+
+                # Get baseline for history recording
+                baseline_value = float(check['baseline_value']) if check.get('baseline_value') else None
+
                 result = self.check_drift(
-                    check_id=str(check['id']),
-                    current_value=metrics[metric_name]
+                    check_id=check_id,
+                    current_value=current_value
                 )
                 results.append(result)
-                
+
+                # Record history with run context (overwrite the manual source from check_drift)
+                self._record_history(
+                    check_id=check_id,
+                    value=current_value,
+                    baseline_value=result.baseline_value,
+                    change_percent=result.change_percent,
+                    is_breached=result.is_breached,
+                    severity=result.severity,
+                    run_id=run_id,
+                    source='run'
+                )
+
                 # Create alert if breached
                 if result.is_breached:
                     self._create_alert(check, result, run_id)
-        
+
         return results
     
     def create_check(
@@ -413,6 +442,212 @@ class DriftDetector:
         self._send_alert_notification(check, result)
 
         return alert_id
+
+    def _record_history(
+        self,
+        check_id: str,
+        value: float,
+        baseline_value: Optional[float],
+        change_percent: Optional[float],
+        is_breached: bool,
+        severity: Optional[Severity],
+        run_id: Optional[str] = None,
+        source: str = 'manual'
+    ):
+        """Record a drift check value in history for trending."""
+        query = """
+            INSERT INTO drift_history (
+                drift_check_id, value, baseline_value, change_percent,
+                is_breached, severity, run_id, source
+            )
+            VALUES (
+                :check_id, :value, :baseline, :change_percent,
+                :is_breached, :severity, :run_id, :source
+            )
+        """
+
+        try:
+            with self.engine.begin() as conn:
+                conn.execute(text(query), {
+                    'check_id': check_id,
+                    'value': value,
+                    'baseline': baseline_value,
+                    'change_percent': change_percent,
+                    'is_breached': is_breached,
+                    'severity': severity.value if severity else None,
+                    'run_id': run_id,
+                    'source': source
+                })
+        except Exception as e:
+            # Don't fail the drift check if history recording fails
+            logger.error(f"Failed to record drift history: {e}")
+
+    def get_history(
+        self,
+        check_id: str,
+        limit: int = 100,
+        start_time: Optional[datetime] = None,
+        end_time: Optional[datetime] = None
+    ) -> List[dict]:
+        """
+        Get drift history for a check.
+
+        Args:
+            check_id: The drift check ID
+            limit: Maximum number of records to return
+            start_time: Filter records after this time
+            end_time: Filter records before this time
+
+        Returns:
+            List of history records, newest first
+        """
+        query = "SELECT * FROM drift_history WHERE drift_check_id = :check_id"
+        params = {'check_id': check_id}
+
+        if start_time:
+            query += " AND recorded_at >= :start_time"
+            params['start_time'] = start_time
+
+        if end_time:
+            query += " AND recorded_at <= :end_time"
+            params['end_time'] = end_time
+
+        query += " ORDER BY recorded_at DESC LIMIT :limit"
+        params['limit'] = limit
+
+        with self.engine.connect() as conn:
+            result = conn.execute(text(query), params)
+            return [dict(row._mapping) for row in result]
+
+    def get_trend_stats(self, check_id: str, days: int = 30) -> dict:
+        """
+        Get trend statistics for a drift check over a time period.
+
+        Args:
+            check_id: The drift check ID
+            days: Number of days to analyze
+
+        Returns:
+            Dictionary with trend statistics
+        """
+        query = """
+            SELECT
+                COUNT(*) as total_checks,
+                COUNT(*) FILTER (WHERE is_breached = true) as breach_count,
+                AVG(value) as avg_value,
+                MIN(value) as min_value,
+                MAX(value) as max_value,
+                STDDEV(value) as stddev_value,
+                AVG(change_percent) as avg_change_percent,
+                MIN(recorded_at) as first_check,
+                MAX(recorded_at) as last_check
+            FROM drift_history
+            WHERE drift_check_id = :check_id
+              AND recorded_at >= NOW() - INTERVAL ':days days'
+        """
+
+        # Note: Can't parameterize INTERVAL directly, so we use a workaround
+        query = f"""
+            SELECT
+                COUNT(*) as total_checks,
+                COUNT(*) FILTER (WHERE is_breached = true) as breach_count,
+                AVG(value) as avg_value,
+                MIN(value) as min_value,
+                MAX(value) as max_value,
+                STDDEV(value) as stddev_value,
+                AVG(change_percent) as avg_change_percent,
+                MIN(recorded_at) as first_check,
+                MAX(recorded_at) as last_check
+            FROM drift_history
+            WHERE drift_check_id = :check_id
+              AND recorded_at >= NOW() - INTERVAL '{days} days'
+        """
+
+        with self.engine.connect() as conn:
+            result = conn.execute(text(query), {'check_id': check_id}).fetchone()
+
+            if not result or result[0] == 0:
+                return {
+                    'total_checks': 0,
+                    'breach_count': 0,
+                    'breach_rate': 0.0,
+                    'avg_value': None,
+                    'min_value': None,
+                    'max_value': None,
+                    'stddev_value': None,
+                    'avg_change_percent': None,
+                    'first_check': None,
+                    'last_check': None,
+                    'days_analyzed': days
+                }
+
+            total = result[0]
+            breaches = result[1] or 0
+
+            return {
+                'total_checks': total,
+                'breach_count': breaches,
+                'breach_rate': round(breaches / total * 100, 2) if total > 0 else 0.0,
+                'avg_value': float(result[2]) if result[2] else None,
+                'min_value': float(result[3]) if result[3] else None,
+                'max_value': float(result[4]) if result[4] else None,
+                'stddev_value': float(result[5]) if result[5] else None,
+                'avg_change_percent': float(result[6]) if result[6] else None,
+                'first_check': result[7].isoformat() if result[7] else None,
+                'last_check': result[8].isoformat() if result[8] else None,
+                'days_analyzed': days
+            }
+
+    def get_trend_data(
+        self,
+        check_id: str,
+        days: int = 30,
+        bucket_hours: int = 24
+    ) -> List[dict]:
+        """
+        Get time-bucketed trend data for visualization.
+
+        Args:
+            check_id: The drift check ID
+            days: Number of days to analyze
+            bucket_hours: Hours per bucket (default 24 = daily)
+
+        Returns:
+            List of time buckets with aggregated values
+        """
+        query = f"""
+            SELECT
+                date_trunc('hour', recorded_at) -
+                    (EXTRACT(hour FROM recorded_at)::int % {bucket_hours}) * INTERVAL '1 hour'
+                    as bucket,
+                COUNT(*) as check_count,
+                COUNT(*) FILTER (WHERE is_breached = true) as breach_count,
+                AVG(value) as avg_value,
+                MIN(value) as min_value,
+                MAX(value) as max_value,
+                AVG(change_percent) as avg_change_percent
+            FROM drift_history
+            WHERE drift_check_id = :check_id
+              AND recorded_at >= NOW() - INTERVAL '{days} days'
+            GROUP BY bucket
+            ORDER BY bucket ASC
+        """
+
+        with self.engine.connect() as conn:
+            result = conn.execute(text(query), {'check_id': check_id})
+
+            return [
+                {
+                    'timestamp': row[0].isoformat() if row[0] else None,
+                    'check_count': row[1],
+                    'breach_count': row[2] or 0,
+                    'avg_value': float(row[3]) if row[3] else None,
+                    'min_value': float(row[4]) if row[4] else None,
+                    'max_value': float(row[5]) if row[5] else None,
+                    'avg_change_percent': float(row[6]) if row[6] else None
+                }
+                for row in result
+            ]
 
     def _send_alert_notification(self, check: dict, result: DriftCheckResult):
         """Send notification for drift alert (fire and forget)."""

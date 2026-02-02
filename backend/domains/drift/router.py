@@ -454,6 +454,176 @@ async def get_drift_summary():
 
 
 # ========================================
+# History & Trending Endpoints
+# ========================================
+
+class DriftHistoryRecord(BaseModel):
+    """A single drift history record."""
+    id: str
+    drift_check_id: str
+    value: float
+    baseline_value: Optional[float]
+    change_percent: Optional[float]
+    is_breached: bool
+    severity: Optional[str]
+    run_id: Optional[str]
+    source: str
+    recorded_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class TrendStatsResponse(BaseModel):
+    """Trend statistics for a drift check."""
+    total_checks: int
+    breach_count: int
+    breach_rate: float
+    avg_value: Optional[float]
+    min_value: Optional[float]
+    max_value: Optional[float]
+    stddev_value: Optional[float]
+    avg_change_percent: Optional[float]
+    first_check: Optional[str]
+    last_check: Optional[str]
+    days_analyzed: int
+
+
+class TrendBucket(BaseModel):
+    """A time bucket for trend visualization."""
+    timestamp: Optional[str]
+    check_count: int
+    breach_count: int
+    avg_value: Optional[float]
+    min_value: Optional[float]
+    max_value: Optional[float]
+    avg_change_percent: Optional[float]
+
+
+@router.get("/checks/{check_id}/history", response_model=List[DriftHistoryRecord])
+async def get_drift_history(
+    check_id: str,
+    limit: int = Query(100, le=1000, description="Maximum records to return"),
+    start_time: Optional[datetime] = Query(None, description="Filter records after this time"),
+    end_time: Optional[datetime] = Query(None, description="Filter records before this time")
+):
+    """
+    Get drift history for a specific check.
+
+    Returns historical values recorded for the drift check, useful for
+    understanding how a metric has changed over time.
+    """
+    detector = get_drift_detector()
+    history = detector.get_history(
+        check_id=check_id,
+        limit=limit,
+        start_time=start_time,
+        end_time=end_time
+    )
+
+    return [
+        DriftHistoryRecord(
+            id=str(h['id']),
+            drift_check_id=str(h['drift_check_id']),
+            value=float(h['value']),
+            baseline_value=float(h['baseline_value']) if h.get('baseline_value') else None,
+            change_percent=float(h['change_percent']) if h.get('change_percent') else None,
+            is_breached=h['is_breached'],
+            severity=h.get('severity'),
+            run_id=h.get('run_id'),
+            source=h['source'],
+            recorded_at=h['recorded_at']
+        )
+        for h in history
+    ]
+
+
+@router.get("/checks/{check_id}/trend-stats", response_model=TrendStatsResponse)
+async def get_drift_trend_stats(
+    check_id: str,
+    days: int = Query(30, ge=1, le=365, description="Number of days to analyze")
+):
+    """
+    Get trend statistics for a drift check.
+
+    Returns aggregated statistics over the specified time period including:
+    - Total checks and breach count/rate
+    - Value statistics (avg, min, max, stddev)
+    - Time range of data
+    """
+    detector = get_drift_detector()
+    stats = detector.get_trend_stats(check_id, days)
+
+    return TrendStatsResponse(**stats)
+
+
+@router.get("/checks/{check_id}/trend-data", response_model=List[TrendBucket])
+async def get_drift_trend_data(
+    check_id: str,
+    days: int = Query(30, ge=1, le=365, description="Number of days to analyze"),
+    bucket_hours: int = Query(24, ge=1, le=168, description="Hours per bucket (1-168)")
+):
+    """
+    Get time-bucketed trend data for visualization.
+
+    Returns data aggregated into time buckets for charting. Each bucket contains:
+    - Timestamp of the bucket start
+    - Number of checks in the bucket
+    - Number of breaches
+    - Value statistics (avg, min, max)
+
+    Common bucket sizes:
+    - 1 hour: Detailed view for recent data
+    - 24 hours: Daily aggregation
+    - 168 hours (7 days): Weekly aggregation
+    """
+    detector = get_drift_detector()
+    data = detector.get_trend_data(check_id, days, bucket_hours)
+
+    return [TrendBucket(**bucket) for bucket in data]
+
+
+@router.get("/history/recent")
+async def get_recent_drift_history(
+    limit: int = Query(50, le=500, description="Maximum records to return"),
+    breached_only: bool = Query(False, description="Only show breached records")
+):
+    """
+    Get recent drift history across all checks.
+
+    Useful for a global view of drift activity.
+    """
+    query = "SELECT * FROM drift_history WHERE 1=1"
+    params = {}
+
+    if breached_only:
+        query += " AND is_breached = true"
+
+    query += " ORDER BY recorded_at DESC LIMIT :limit"
+    params['limit'] = limit
+
+    with engine.connect() as conn:
+        result = conn.execute(text(query), params)
+        history = [dict(row._mapping) for row in result]
+
+    return [
+        {
+            'id': str(h['id']),
+            'drift_check_id': str(h['drift_check_id']),
+            'value': float(h['value']),
+            'baseline_value': float(h['baseline_value']) if h.get('baseline_value') else None,
+            'change_percent': float(h['change_percent']) if h.get('change_percent') else None,
+            'is_breached': h['is_breached'],
+            'severity': h.get('severity'),
+            'run_id': h.get('run_id'),
+            'source': h['source'],
+            'recorded_at': h['recorded_at'].isoformat()
+        }
+        for h in history
+    ]
+
+
+# ========================================
 # Statistical Drift Detection Endpoints
 # ========================================
 
