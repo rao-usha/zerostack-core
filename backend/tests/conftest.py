@@ -10,7 +10,7 @@ sys.path.insert(0, str(backend_dir))
 
 # Set test environment variables
 os.environ["ENVIRONMENT"] = "test"
-os.environ["DATABASE_URL"] = "sqlite:///:memory:"
+os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
 os.environ["SECRET_KEY"] = "test-secret-key-for-testing-only"
 os.environ["ENCRYPTION_KEY"] = "test-encryption-key-for-testing"
 

@@ -17,7 +17,7 @@ from .models import (
     SyntheticGenerateRequest, JobResponse, JobStatus, JobStatusResponse,
     SyntheticDatasetResponse, SyntheticDatasetListResponse,
     QualityReportResponse, SynthesizersListResponse, SynthesizerInfo,
-    PrivacyLevel,
+    PrivacyLevel, ConditionalGenerateRequest, GenerationCondition,
 )
 from .service import SyntheticDataService
 from .storage import SyntheticDataStorage, get_synthetic_storage
@@ -340,6 +340,241 @@ async def generate_from_csv(
     except Exception as e:
         logger.error(f"Generation failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/generate-conditional", response_model=JobResponse, status_code=202)
+@limiter.limit("5/minute")
+async def generate_conditional(
+    request: Request,
+    file: UploadFile = File(..., description="CSV file to synthesize"),
+    num_rows: int = Query(1000, ge=10, le=100000, description="Number of synthetic rows"),
+    synthesizer: str = Query("gaussian_copula", description="Synthesizer type"),
+    conditions_json: str = Query(
+        ...,
+        description='JSON array of conditions, e.g. [{"column":"region","operator":"eq","value":"US"}]'
+    ),
+    privacy_level: str = Query("standard", description="Privacy level: standard, enhanced, strict"),
+    auto_detect_pii: bool = Query(True, description="Auto-detect PII columns"),
+    anonymize_pii: bool = Query(True, description="Replace detected PII with fake data"),
+    output_name: Optional[str] = Query(None, description="Name for output dataset"),
+    max_tries_per_batch: int = Query(100, ge=10, le=1000, description="Max sampling attempts per batch"),
+    oversample_factor: float = Query(2.0, ge=1.1, le=10.0, description="Oversample factor for range conditions"),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """Generate synthetic data with conditions from an uploaded CSV file.
+
+    This endpoint allows generating synthetic data that matches specified conditions.
+
+    **Example conditions:**
+    ```json
+    [
+      {"column": "region", "operator": "eq", "value": "US"},
+      {"column": "age", "operator": "gte", "value": 25},
+      {"column": "status", "operator": "in", "value": ["active", "premium"]}
+    ]
+    ```
+
+    **Supported operators:**
+    - `eq`: Equal to value
+    - `ne`: Not equal to value
+    - `gt`, `gte`: Greater than (or equal)
+    - `lt`, `lte`: Less than (or equal)
+    - `in`: Value in list
+    - `not_in`: Value not in list
+    - `between`: Between [min, max]
+
+    **Synthesizer recommendations:**
+    - `gaussian_copula`: Best for conditional generation (native support)
+    - `ctgan`/`tvae`: Use reject sampling (slower but works)
+    """
+    import json
+    from .models import SourceConfig, SynthesizerType, PrivacyConfig, ConditionOperator
+    from .conditions import ConditionProcessor, ConditionValidationError
+
+    # Read CSV
+    try:
+        contents = await file.read()
+        df = pd.read_csv(io.BytesIO(contents))
+        logger.info(f"Loaded CSV with {len(df)} rows, {len(df.columns)} columns")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to read CSV: {str(e)}")
+
+    if len(df) < 10:
+        raise HTTPException(status_code=400, detail="Source data must have at least 10 rows")
+
+    # Parse conditions
+    try:
+        conditions_raw = json.loads(conditions_json)
+        if not isinstance(conditions_raw, list):
+            raise ValueError("Conditions must be a JSON array")
+
+        conditions = [
+            GenerationCondition(
+                column=c["column"],
+                operator=ConditionOperator(c["operator"]),
+                value=c["value"],
+            )
+            for c in conditions_raw
+        ]
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid JSON in conditions: {str(e)}")
+    except (KeyError, ValueError) as e:
+        raise HTTPException(status_code=400, detail=f"Invalid condition format: {str(e)}")
+
+    # Validate conditions
+    processor = ConditionProcessor()
+    try:
+        warnings = processor.validate_conditions(conditions, df)
+    except ConditionValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # Validate synthesizer type
+    try:
+        synth_type = SynthesizerType(synthesizer)
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid synthesizer: {synthesizer}. Must be one of: gaussian_copula, ctgan, tvae"
+        )
+
+    # Validate privacy level
+    try:
+        priv_level = PrivacyLevel(privacy_level)
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid privacy level: {privacy_level}. Must be one of: standard, enhanced, strict"
+        )
+
+    # Create privacy config
+    privacy_config = PrivacyConfig(
+        level=priv_level,
+        auto_detect_pii=auto_detect_pii,
+        anonymize_pii=anonymize_pii,
+    )
+
+    # Create request
+    gen_request = SyntheticGenerateRequest(
+        source=SourceConfig(type="dataset", dataset_id=None),
+        num_rows=num_rows,
+        synthesizer=synth_type,
+        privacy=privacy_config,
+        output_name=output_name,
+    )
+
+    service = SyntheticDataService(session)
+    storage = _get_storage()
+
+    # Create job
+    job_id = await service.create_job(gen_request)
+
+    # Run job with conditions
+    try:
+        dataset_id, synthetic_df = await service.run_job(
+            job_id,
+            source_data=df,
+            output_name=output_name,
+            privacy_level=priv_level,
+            auto_detect_pii=auto_detect_pii,
+            conditions=conditions,
+            max_tries_per_batch=max_tries_per_batch,
+            oversample_factor=oversample_factor,
+        )
+
+        # Get column info
+        columns_info = [
+            {"name": col, "dtype": str(synthetic_df[col].dtype)}
+            for col in synthetic_df.columns
+        ]
+
+        # Save to persistent storage
+        storage_uri = None
+        if storage:
+            try:
+                storage_uri, file_size = storage.save_dataset(
+                    dataset_id=dataset_id,
+                    df=synthetic_df,
+                    job_id=job_id,
+                    synthesizer_type=synth_type.value,
+                    columns_info=columns_info,
+                    quality_score=None,
+                )
+
+                # Save source sample for quality comparisons
+                storage.save_source_sample(dataset_id, df)
+
+                # Update database with storage URI
+                await service.update_dataset_storage(dataset_id, storage_uri, file_size)
+
+                logger.info(f"Saved conditional synthetic dataset to {storage_uri}")
+            except Exception as e:
+                logger.warning(f"Failed to save to object store: {e}")
+
+        # Cache for quick access
+        _synthetic_cache.put(dataset_id, synthetic_df)
+        _source_cache.put(dataset_id, df)
+
+        # Get job status
+        job_status = await service.get_job_status(job_id)
+
+        # Build response message
+        quality_str = f"Quality: {job_status.quality_score:.2f}" if job_status.quality_score else ""
+        storage_str = " Saved to storage." if storage_uri else ""
+        cond_str = f" ({len(conditions)} conditions applied)"
+
+        return JobResponse(
+            job_id=job_id,
+            status=job_status.status,
+            message=f"Generated {len(synthetic_df)} conditional synthetic rows.{cond_str} {quality_str}{storage_str}",
+            estimated_seconds=0,
+        )
+    except Exception as e:
+        logger.error(f"Conditional generation failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/generate-conditional-json", response_model=JobResponse, status_code=202)
+@limiter.limit("5/minute")
+async def generate_conditional_json(
+    request: Request,
+    body: ConditionalGenerateRequest,
+    session: AsyncSession = Depends(get_async_session),
+):
+    """Generate conditional synthetic data (JSON body version).
+
+    This endpoint accepts the full request as JSON body. Use this when you have
+    the source data already loaded or are calling from a programmatic client.
+
+    Note: This endpoint requires source data to be available via dataset_id or table_ref.
+    For CSV upload, use /generate-conditional instead.
+    """
+    from .conditions import ConditionProcessor, ConditionValidationError
+
+    service = SyntheticDataService(session)
+
+    # For now, we need the source data to be provided
+    if body.source.type == "dataset":
+        if not body.source.dataset_id:
+            raise HTTPException(
+                status_code=400,
+                detail="dataset_id required for dataset source type"
+            )
+        raise HTTPException(
+            status_code=501,
+            detail="Dataset source not yet implemented. Use /generate-conditional endpoint with CSV upload."
+        )
+    elif body.source.type == "table":
+        if not body.source.connection_id or not body.source.table_ref:
+            raise HTTPException(
+                status_code=400,
+                detail="connection_id and table_ref required for table source type"
+            )
+        raise HTTPException(
+            status_code=501,
+            detail="Table source not yet implemented. Use /generate-conditional endpoint with CSV upload."
+        )
+
+    raise HTTPException(status_code=400, detail="Invalid source type")
 
 
 # ============================================================================

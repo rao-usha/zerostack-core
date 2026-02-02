@@ -15,6 +15,19 @@ class SynthesizerType(str, Enum):
     TABDIT = "tabdit"
 
 
+class ConditionOperator(str, Enum):
+    """Operators for conditional generation."""
+    EQ = "eq"           # Equal to value
+    NE = "ne"           # Not equal to value
+    GT = "gt"           # Greater than
+    GTE = "gte"         # Greater than or equal
+    LT = "lt"           # Less than
+    LTE = "lte"         # Less than or equal
+    IN = "in"           # Value in list
+    NOT_IN = "not_in"   # Value not in list
+    BETWEEN = "between" # Between min and max (value should be [min, max])
+
+
 class JobStatus(str, Enum):
     """Job status values."""
     PENDING = "pending"
@@ -50,6 +63,17 @@ class PIIType(str, Enum):
 # ============================================================================
 # COLUMN CONFIGURATION
 # ============================================================================
+
+class GenerationCondition(BaseModel):
+    """A condition for conditional synthetic data generation."""
+    column: str = Field(..., description="Column name to apply condition to")
+    operator: ConditionOperator = Field(..., description="Comparison operator")
+    value: Any = Field(
+        ...,
+        description="Value for comparison. Single value for eq/ne/gt/gte/lt/lte, "
+                    "list for in/not_in, [min, max] for between"
+    )
+
 
 class ColumnConstraints(BaseModel):
     """Constraints for a column."""
@@ -220,28 +244,80 @@ class SourceConfig(BaseModel):
 class SyntheticGenerateRequest(BaseModel):
     """Request to generate synthetic data."""
     source: SourceConfig
-    
+
     # Generation settings
     num_rows: int = Field(default=1000, ge=10, le=1000000)
     random_seed: Optional[int] = None
-    
+
     # Synthesizer selection
     synthesizer: SynthesizerType = SynthesizerType.GAUSSIAN_COPULA
-    
+
     # Synthesizer-specific config (optional)
     copula_config: Optional[CopulaConfig] = None
     ctgan_config: Optional[CTGANConfig] = None
     tvae_config: Optional[TVAEConfig] = None
-    
+
     # Privacy settings
     privacy: Optional[PrivacyConfig] = None
-    
+
     # Column-specific settings
     columns: Optional[Dict[str, ColumnConfig]] = None
-    
+
     # Output settings
     output_name: Optional[str] = None
     output_format: str = Field(default="parquet", pattern="^(parquet|csv)$")
+
+
+class ConditionalGenerateRequest(BaseModel):
+    """Request to generate synthetic data with conditions.
+
+    Allows specifying conditions like:
+    - Generate customers where region='US' and age > 25
+    - Generate transactions where amount between 100 and 1000
+    """
+    source: SourceConfig
+
+    # Generation settings
+    num_rows: int = Field(default=1000, ge=10, le=1000000)
+    random_seed: Optional[int] = None
+
+    # Synthesizer selection (GaussianCopula recommended for conditional sampling)
+    synthesizer: SynthesizerType = SynthesizerType.GAUSSIAN_COPULA
+
+    # Conditions for generation
+    conditions: List[GenerationCondition] = Field(
+        default_factory=list,
+        description="Conditions that generated data must satisfy"
+    )
+
+    # Synthesizer-specific config (optional)
+    copula_config: Optional[CopulaConfig] = None
+    ctgan_config: Optional[CTGANConfig] = None
+    tvae_config: Optional[TVAEConfig] = None
+
+    # Privacy settings
+    privacy: Optional[PrivacyConfig] = None
+
+    # Column-specific settings
+    columns: Optional[Dict[str, ColumnConfig]] = None
+
+    # Output settings
+    output_name: Optional[str] = None
+    output_format: str = Field(default="parquet", pattern="^(parquet|csv)$")
+
+    # Conditional generation settings
+    max_tries_per_batch: int = Field(
+        default=100,
+        ge=10,
+        le=1000,
+        description="Max sampling attempts per batch for reject sampling"
+    )
+    oversample_factor: float = Field(
+        default=2.0,
+        ge=1.1,
+        le=10.0,
+        description="Oversample factor for range conditions (generate more, then filter)"
+    )
 
 
 class JobResponse(BaseModel):

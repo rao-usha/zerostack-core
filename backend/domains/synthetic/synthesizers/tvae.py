@@ -1,11 +1,14 @@
 """TVAE synthesizer implementation."""
 import logging
 import time
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List, TYPE_CHECKING
 
 import pandas as pd
 
 from .base import BaseSynthesizer, SynthesizerResult
+
+if TYPE_CHECKING:
+    from ..models import GenerationCondition
 
 logger = logging.getLogger(__name__)
 
@@ -134,7 +137,112 @@ class TVAESynthesizer(BaseSynthesizer):
             warnings=warnings,
             sample_time_seconds=sample_time,
         )
-    
+
+    def sample_with_conditions(
+        self,
+        num_rows: int,
+        conditions: List["GenerationCondition"],
+        max_tries_per_batch: int = 100,
+        oversample_factor: float = 2.0,
+    ) -> SynthesizerResult:
+        """Generate synthetic data matching conditions.
+
+        TVAE supports conditional sampling via SDV's sample_from_conditions,
+        but uses reject sampling which can be slower than GaussianCopula.
+
+        Args:
+            num_rows: Target number of rows to generate
+            conditions: List of conditions to satisfy
+            max_tries_per_batch: Max sampling attempts per batch
+            oversample_factor: Factor to oversample for range conditions
+
+        Returns:
+            SynthesizerResult with synthetic data matching conditions
+        """
+        self._validate_fitted()
+
+        from ..conditions import ConditionProcessor
+
+        logger.info(f"Generating {num_rows} conditional rows with TVAE")
+        start_time = time.time()
+
+        processor = ConditionProcessor()
+        sdv_conditions, post_filter_conditions = processor.split_conditions(conditions)
+
+        warnings = []
+        warnings.append(
+            "TVAE uses reject sampling for conditions which may be slow. "
+            "Consider GaussianCopula for faster conditional generation."
+        )
+
+        # Determine how many rows to generate
+        target_rows = num_rows
+        if post_filter_conditions:
+            target_rows = int(num_rows * oversample_factor)
+
+        # Generate with SDV conditions if we have any
+        if sdv_conditions:
+            merged = processor.merge_sdv_conditions(target_rows, sdv_conditions)
+
+            if merged:
+                logger.info(f"Using merged condition for {len(sdv_conditions)} columns")
+                try:
+                    synthetic_df = self._synthesizer.sample_from_conditions(
+                        conditions=[merged],
+                        max_tries_per_batch=max_tries_per_batch,
+                    )
+                except Exception as e:
+                    logger.warning(f"Conditional sampling failed: {e}, falling back to regular sampling")
+                    warnings.append(f"Conditional sampling failed: {str(e)}")
+                    synthetic_df = self._synthesizer.sample(target_rows)
+            else:
+                sdv_conds = processor.build_sdv_conditions(target_rows, sdv_conditions)
+                logger.info(f"Using {len(sdv_conds)} SDV conditions")
+                try:
+                    synthetic_df = self._synthesizer.sample_from_conditions(
+                        conditions=sdv_conds,
+                        max_tries_per_batch=max_tries_per_batch,
+                    )
+                except Exception as e:
+                    logger.warning(f"Conditional sampling failed: {e}, falling back to regular sampling")
+                    warnings.append(f"Conditional sampling failed: {str(e)}")
+                    synthetic_df = self._synthesizer.sample(target_rows)
+        else:
+            synthetic_df = self._synthesizer.sample(target_rows)
+
+        # Apply post-filters for range conditions
+        if post_filter_conditions:
+            synthetic_df = processor.apply_post_filters(synthetic_df, post_filter_conditions)
+
+            if len(synthetic_df) < num_rows:
+                warnings.append(
+                    f"Only {len(synthetic_df)} rows matched conditions "
+                    f"(requested {num_rows}). Try increasing oversample_factor."
+                )
+            else:
+                synthetic_df = synthetic_df.head(num_rows)
+
+        # Post-process to restore dtypes
+        synthetic_df = self._post_process(synthetic_df)
+
+        sample_time = time.time() - start_time
+        logger.info(f"Generated {len(synthetic_df)} conditional rows in {sample_time:.2f}s")
+
+        return SynthesizerResult(
+            synthetic_data=synthetic_df,
+            metadata={
+                'synthesizer': self.synthesizer_type,
+                'num_rows': len(synthetic_df),
+                'num_columns': len(synthetic_df.columns),
+                'conditional': True,
+                'conditions_count': len(conditions),
+                'sdv_conditions_count': len(sdv_conditions),
+                'post_filter_conditions_count': len(post_filter_conditions),
+            },
+            warnings=warnings,
+            sample_time_seconds=sample_time,
+        )
+
     @classmethod
     def get_info(cls) -> Dict[str, Any]:
         """Get synthesizer information."""

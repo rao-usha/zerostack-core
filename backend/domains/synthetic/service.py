@@ -13,7 +13,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from .db_models import synthetic_jobs, synthetic_datasets, synthetic_quality_reports
 from .models import (
     SyntheticGenerateRequest, JobStatus, SynthesizerType, PrivacyLevel,
-    JobStatusResponse, SyntheticDatasetResponse, QualityReportResponse, QualityColumnScore
+    JobStatusResponse, SyntheticDatasetResponse, QualityReportResponse, QualityColumnScore,
+    GenerationCondition, ConditionalGenerateRequest,
 )
 from .synthesizers import GaussianCopulaSynthesizer, CTGANSynthesizer, TVAESynthesizer, TabDiTSynthesizer
 from .evaluator import SyntheticDataEvaluator
@@ -104,6 +105,9 @@ class SyntheticDataService:
         output_name: Optional[str] = None,
         privacy_level: Optional[PrivacyLevel] = None,
         auto_detect_pii: bool = True,
+        conditions: Optional[List[GenerationCondition]] = None,
+        max_tries_per_batch: int = 100,
+        oversample_factor: float = 2.0,
     ) -> Tuple[UUID, pd.DataFrame]:
         """Run a synthetic generation job.
         
@@ -123,7 +127,10 @@ class SyntheticDataService:
             output_name: Optional name for output dataset
             privacy_level: Privacy level override
             auto_detect_pii: Whether to auto-detect PII columns
-            
+            conditions: Optional list of conditions for conditional generation
+            max_tries_per_batch: Max sampling attempts for conditional sampling
+            oversample_factor: Oversample factor for range conditions
+
         Returns:
             Tuple of (synthetic dataset ID, synthetic dataframe)
         """
@@ -189,10 +196,23 @@ class SyntheticDataService:
             # Fit synthesizer
             await self._update_job_status(job_id, JobStatus.RUNNING, "Fitting model...", progress=15)
             synthesizer.fit(source_data, metadata=metadata if metadata else None)
-            
-            # Generate synthetic data
-            await self._update_job_status(job_id, JobStatus.RUNNING, "Generating synthetic data...", progress=50)
-            synth_result = synthesizer.sample(job.num_rows_requested)
+
+            # Generate synthetic data (conditional or unconditional)
+            if conditions:
+                await self._update_job_status(
+                    job_id, JobStatus.RUNNING,
+                    f"Generating conditional synthetic data ({len(conditions)} conditions)...",
+                    progress=50
+                )
+                synth_result = synthesizer.sample_with_conditions(
+                    num_rows=job.num_rows_requested,
+                    conditions=conditions,
+                    max_tries_per_batch=max_tries_per_batch,
+                    oversample_factor=oversample_factor,
+                )
+            else:
+                await self._update_job_status(job_id, JobStatus.RUNNING, "Generating synthetic data...", progress=50)
+                synth_result = synthesizer.sample(job.num_rows_requested)
             synthetic_df = synth_result.synthetic_data
             
             # Step 2: Replace PII columns with fake data
