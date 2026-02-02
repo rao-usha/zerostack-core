@@ -1,6 +1,7 @@
 """ML Model Development API router."""
+import logging
 from fastapi import APIRouter, HTTPException, Query
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from uuid import uuid4
 from sqlalchemy import create_engine
 
@@ -21,10 +22,35 @@ from domains.ml_development.service import (
     MLRunService, MLMonitorService, MLSyntheticExampleService
 )
 from domains.ml_development.promotion_service import get_promotion_service
+from services.drift_detector import get_drift_detector, DriftCheckResult
 from pydantic import BaseModel, Field
 from datetime import datetime
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/ml-development", tags=["ml-development"])
+
+
+# Response model for run updates with drift check results
+class DriftCheckResultResponse(BaseModel):
+    """Single drift check result."""
+    check_id: str
+    check_name: str
+    metric: str
+    is_breached: bool
+    baseline_value: Optional[float]
+    current_value: Optional[float]
+    change_percent: Optional[float]
+    severity: Optional[str]
+    message: str
+
+
+class RunUpdateResponse(BaseModel):
+    """Response for run update with optional drift results."""
+    run: MLRun
+    drift_results: Optional[List[DriftCheckResultResponse]] = None
+    drift_checks_run: bool = False
+
 
 # Initialize services
 engine = create_engine(settings.database_url)
@@ -321,7 +347,7 @@ async def create_run(request: MLRunCreate):
     return run
 
 
-@router.put("/runs/{run_id}", response_model=MLRun)
+@router.put("/runs/{run_id}", response_model=RunUpdateResponse)
 async def update_run(
     run_id: str,
     status: Optional[str] = None,
@@ -329,7 +355,11 @@ async def update_run(
     artifacts_json: Optional[dict] = None,
     logs_text: Optional[str] = None
 ):
-    """Update a run's status, metrics, or logs."""
+    """Update a run's status, metrics, or logs.
+
+    When status changes to 'succeeded' and metrics are available,
+    automatically triggers drift detection for all configured checks.
+    """
     run = run_service.update_run(
         run_id=run_id,
         status=status,
@@ -339,7 +369,56 @@ async def update_run(
     )
     if not run:
         raise HTTPException(status_code=404, detail="Run not found")
-    return run
+
+    drift_results = None
+    drift_checks_run = False
+
+    # Trigger drift detection when run succeeds with metrics
+    if status == RunStatus.SUCCEEDED.value:
+        # Get metrics from the run (either just updated or already stored)
+        run_metrics = run.get("metrics_json") or metrics_json
+
+        if run_metrics and isinstance(run_metrics, dict):
+            try:
+                detector = get_drift_detector()
+                results = detector.check_run_metrics(run_id, run_metrics)
+                drift_checks_run = True
+
+                if results:
+                    drift_results = [
+                        DriftCheckResultResponse(
+                            check_id=r.check_id,
+                            check_name=r.check_name,
+                            metric=r.metric,
+                            is_breached=r.is_breached,
+                            baseline_value=r.baseline_value,
+                            current_value=r.current_value,
+                            change_percent=r.change_percent,
+                            severity=r.severity.value if r.severity else None,
+                            message=r.message
+                        )
+                        for r in results
+                    ]
+
+                    # Log drift alerts
+                    breached = [r for r in results if r.is_breached]
+                    if breached:
+                        logger.warning(
+                            f"Run {run_id} triggered {len(breached)} drift alerts: "
+                            f"{[r.message for r in breached]}"
+                        )
+                    else:
+                        logger.info(f"Run {run_id} passed {len(results)} drift checks")
+
+            except Exception as e:
+                logger.error(f"Failed to run drift detection for run {run_id}: {e}")
+                # Don't fail the run update if drift detection fails
+
+    return RunUpdateResponse(
+        run=run,
+        drift_results=drift_results,
+        drift_checks_run=drift_checks_run
+    )
 
 
 # Monitoring endpoints
