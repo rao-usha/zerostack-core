@@ -1435,3 +1435,211 @@ export const proposeOntologyTerms = async (prompt: string, count: number = 20) =
     items: []
   }
 }
+
+// ========================================
+// Query Workbench API
+// ========================================
+
+export interface QueryParameter {
+  name: string
+  type: string
+  default?: string
+  description?: string
+}
+
+export interface SavedQuery {
+  id: string
+  name: string
+  description?: string
+  sql: string
+  db_id: string
+  folder?: string
+  tags?: string[]
+  parameters?: QueryParameter[]
+  is_public: boolean
+  created_by?: string
+  schedule_cron?: string
+  schedule_enabled: boolean
+  cache_ttl_seconds?: number
+  run_count: number
+  last_run_at?: string
+  avg_execution_time_ms?: number
+  created_at: string
+  updated_at: string
+}
+
+export interface SavedQueryListItem {
+  id: string
+  name: string
+  description?: string
+  db_id: string
+  folder?: string
+  tags?: string[]
+  is_public: boolean
+  created_by?: string
+  run_count: number
+  last_run_at?: string
+  avg_execution_time_ms?: number
+  created_at: string
+}
+
+export interface QueryExecution {
+  id: string
+  saved_query_id?: string
+  sql_snapshot: string
+  db_id: string
+  parameters_used?: Record<string, any>
+  status: string
+  started_at: string
+  finished_at?: string
+  execution_time_ms?: number
+  row_count?: number
+  column_count?: number
+  result_preview?: { columns: string[]; rows: any[][] }
+  error_message?: string
+  error_code?: string
+  executed_by?: string
+  source: string
+}
+
+export interface QueryResult {
+  execution_id: string
+  columns: string[]
+  rows: any[][]
+  total_rows: number
+  execution_time_ms: number
+  page: number
+  page_size: number
+}
+
+export interface FolderInfo {
+  name: string
+  query_count: number
+}
+
+// List saved queries
+export const listSavedQueries = async (params?: {
+  db_id?: string
+  folder?: string
+  tags?: string
+  search?: string
+  is_public?: boolean
+  page?: number
+  page_size?: number
+}): Promise<{ queries: SavedQueryListItem[]; total: number; page: number; page_size: number }> => {
+  const response = await client.get('/api/v1/data-explorer/workbench/queries', { params })
+  return response.data
+}
+
+// Get a saved query
+export const getSavedQuery = async (queryId: string): Promise<SavedQuery> => {
+  const response = await client.get(`/api/v1/data-explorer/workbench/queries/${queryId}`)
+  return response.data
+}
+
+// Create a saved query
+export const createSavedQuery = async (data: {
+  name: string
+  sql: string
+  db_id?: string
+  description?: string
+  folder?: string
+  tags?: string[]
+  parameters?: QueryParameter[]
+  is_public?: boolean
+}): Promise<SavedQuery> => {
+  const response = await client.post('/api/v1/data-explorer/workbench/queries', data)
+  return response.data
+}
+
+// Update a saved query
+export const updateSavedQuery = async (
+  queryId: string,
+  data: {
+    name?: string
+    sql?: string
+    description?: string
+    folder?: string
+    tags?: string[]
+    parameters?: QueryParameter[]
+    is_public?: boolean
+    schedule_cron?: string
+    schedule_enabled?: boolean
+    cache_ttl_seconds?: number
+  }
+): Promise<SavedQuery> => {
+  const response = await client.put(`/api/v1/data-explorer/workbench/queries/${queryId}`, data)
+  return response.data
+}
+
+// Delete a saved query
+export const deleteSavedQuery = async (queryId: string): Promise<void> => {
+  await client.delete(`/api/v1/data-explorer/workbench/queries/${queryId}`)
+}
+
+// Clone a saved query
+export const cloneSavedQuery = async (queryId: string, newName: string): Promise<SavedQuery> => {
+  const response = await client.post(
+    `/api/v1/data-explorer/workbench/queries/${queryId}/clone?new_name=${encodeURIComponent(newName)}`
+  )
+  return response.data
+}
+
+// Execute a saved query
+export const executeSavedQuery = async (
+  queryId: string,
+  data?: {
+    parameters?: Record<string, any>
+    page?: number
+    page_size?: number
+  }
+): Promise<QueryResult> => {
+  const response = await client.post(`/api/v1/data-explorer/workbench/queries/${queryId}/execute`, data || {})
+  return response.data
+}
+
+// Execute an ad-hoc query
+export const executeWorkbenchQuery = async (data: {
+  sql: string
+  db_id?: string
+  parameters?: Record<string, any>
+  page?: number
+  page_size?: number
+}): Promise<QueryResult> => {
+  const response = await client.post('/api/v1/data-explorer/workbench/execute', data)
+  return response.data
+}
+
+// Get query executions for a saved query
+export const getQueryExecutions = async (
+  queryId: string,
+  limit: number = 50
+): Promise<{ executions: QueryExecution[]; total: number }> => {
+  const response = await client.get(`/api/v1/data-explorer/workbench/queries/${queryId}/executions`, {
+    params: { limit }
+  })
+  return response.data
+}
+
+// Get recent executions
+export const getRecentExecutions = async (params?: {
+  db_id?: string
+  status?: string
+  limit?: number
+}): Promise<{ executions: QueryExecution[]; total: number }> => {
+  const response = await client.get('/api/v1/data-explorer/workbench/executions', { params })
+  return response.data
+}
+
+// Get execution detail
+export const getQueryExecution = async (executionId: string): Promise<QueryExecution> => {
+  const response = await client.get(`/api/v1/data-explorer/workbench/executions/${executionId}`)
+  return response.data
+}
+
+// Get folders
+export const getQueryFolders = async (dbId?: string): Promise<FolderInfo[]> => {
+  const params = dbId ? { db_id: dbId } : {}
+  const response = await client.get('/api/v1/data-explorer/workbench/folders', { params })
+  return response.data
+}

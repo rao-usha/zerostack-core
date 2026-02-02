@@ -43,6 +43,7 @@ import CostAnalytics from './pages/CostAnalytics'
 import ModelRegistry from './pages/ModelRegistry'
 import ModelMonitoring from './pages/ModelMonitoring'
 import DataIngestion from './pages/DataIngestion'
+import QueryWorkbench from './pages/QueryWorkbench'
 
 function App() {
   return (
@@ -57,6 +58,7 @@ function App() {
           <Route path="/explorer" element={<DataExplorer />} />
           <Route path="/analysis" element={<DataAnalysis />} />
           <Route path="/dictionary" element={<DataDictionary />} />
+          <Route path="/query-workbench" element={<QueryWorkbench />} />
           <Route path="/model-development" element={<ModelLibrary />} />
           <Route path="/ml-workbench" element={<MLWorkbench />} />
           <Route path="/forecast" element={<ForecastDashboard />} />

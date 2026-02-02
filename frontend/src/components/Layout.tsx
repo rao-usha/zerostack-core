@@ -28,7 +28,8 @@ import {
   DollarSign,
   Package,
   Gauge,
-  ScanLine
+  ScanLine,
+  Terminal
 } from 'lucide-react'
 import { LucideIcon } from 'lucide-react'
 import { checkBackendHealth } from '../api/health'
@@ -127,6 +128,7 @@ export default function Layout({ children }: LayoutProps) {
         { path: '/datasets', icon: HardDrive, label: 'Datasets' },
         { path: '/files/locations', icon: FolderOpen, label: 'Files' },
         { path: '/explorer', icon: Table, label: 'Data Explorer' },
+        { path: '/query-workbench', icon: Terminal, label: 'Query Workbench' },
       ]
     },
     { type: 'divider' },

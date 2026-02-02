@@ -40,6 +40,7 @@ from domains.data_explorer.dictionary_enhanced_router import router as dictionar
 from domains.data_explorer.dictionary_semantics_router import router as dictionary_semantics_router
 from domains.data_explorer.relationship_intelligence_router import router as relationship_intelligence_router
 from domains.data_explorer.mcp_dictionary_router import router as mcp_dictionary_router
+from domains.data_explorer.query_workbench_router import router as query_workbench_router
 from domains.chat.router import router as chat_router
 from domains.ml_development.router import router as ml_development_router
 from domains.evaluation_packs.router import router as evaluation_packs_router
@@ -118,6 +119,7 @@ app.include_router(dictionary_enhanced_router, prefix=settings.api_prefix)
 app.include_router(dictionary_semantics_router, prefix=settings.api_prefix)
 app.include_router(relationship_intelligence_router, prefix=settings.api_prefix)
 app.include_router(mcp_dictionary_router, prefix=settings.api_prefix)
+app.include_router(query_workbench_router, prefix=settings.api_prefix)
 app.include_router(chat_router, prefix=settings.api_prefix)
 app.include_router(ml_development_router, prefix=settings.api_prefix)
 app.include_router(evaluation_packs_router, prefix=settings.api_prefix)
