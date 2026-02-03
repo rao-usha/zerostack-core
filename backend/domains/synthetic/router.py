@@ -542,7 +542,7 @@ async def generate_conditional(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/generate-conditional-json", response_model=JobResponse, status_code=202)
+@router.post("/generate-conditional-json", response_model=GenerationResultResponse, status_code=202)
 @limiter.limit("5/minute")
 async def generate_conditional_json(
     request: Request,
@@ -554,36 +554,277 @@ async def generate_conditional_json(
     This endpoint accepts the full request as JSON body. Use this when you have
     the source data already loaded or are calling from a programmatic client.
 
-    Note: This endpoint requires source data to be available via dataset_id or table_ref.
+    **Source types:**
+    - `dataset`: Load from a stored dataset by dataset_id
+    - `table`: Load from a database table by connection_id and table_ref
+
     For CSV upload, use /generate-conditional instead.
     """
+    from .models import SourceConfig, SynthesizerType, PrivacyConfig
     from .conditions import ConditionProcessor, ConditionValidationError
 
     service = SyntheticDataService(session)
+    storage = _get_storage()
 
-    # For now, we need the source data to be provided
+    # Load source data based on source type
     if body.source.type == "dataset":
         if not body.source.dataset_id:
             raise HTTPException(
                 status_code=400,
                 detail="dataset_id required for dataset source type"
             )
-        raise HTTPException(
-            status_code=501,
-            detail="Dataset source not yet implemented. Use /generate-conditional endpoint with CSV upload."
-        )
+        df = await _load_dataset_data(body.source.dataset_id, session)
     elif body.source.type == "table":
         if not body.source.connection_id or not body.source.table_ref:
             raise HTTPException(
                 status_code=400,
                 detail="connection_id and table_ref required for table source type"
             )
-        raise HTTPException(
-            status_code=501,
-            detail="Table source not yet implemented. Use /generate-conditional endpoint with CSV upload."
+        df = await _load_table_data(
+            body.source.connection_id,
+            body.source.table_ref,
+            limit=body.source.sample_limit or 100000,
+        )
+    else:
+        raise HTTPException(status_code=400, detail="Invalid source type")
+
+    if len(df) < 10:
+        raise HTTPException(status_code=400, detail="Source data must have at least 10 rows")
+
+    logger.info(f"Loaded source data: {len(df)} rows, {len(df.columns)} columns")
+
+    # Validate conditions
+    processor = ConditionProcessor()
+    try:
+        warnings = processor.validate_conditions(body.conditions, df)
+    except ConditionValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # Get privacy config
+    priv_level = body.privacy.level if body.privacy else PrivacyLevel.STANDARD
+    auto_detect_pii = body.privacy.auto_detect_pii if body.privacy else True
+    anonymize_pii = body.privacy.anonymize_pii if body.privacy else True
+
+    # Create privacy config
+    privacy_config = PrivacyConfig(
+        level=priv_level,
+        auto_detect_pii=auto_detect_pii,
+        anonymize_pii=anonymize_pii,
+    )
+
+    # Create request for job
+    gen_request = SyntheticGenerateRequest(
+        source=body.source,
+        num_rows=body.num_rows,
+        synthesizer=body.synthesizer,
+        privacy=privacy_config,
+        output_name=body.output_name,
+    )
+
+    # Create job
+    job_id = await service.create_job(gen_request)
+
+    # Run job with conditions
+    try:
+        dataset_id, synthetic_df = await service.run_job(
+            job_id,
+            source_data=df,
+            output_name=body.output_name,
+            privacy_level=priv_level,
+            auto_detect_pii=auto_detect_pii,
+            conditions=body.conditions,
+            max_tries_per_batch=body.max_tries_per_batch,
+            oversample_factor=body.oversample_factor,
         )
 
-    raise HTTPException(status_code=400, detail="Invalid source type")
+        # Get column info
+        columns_info = [
+            {"name": col, "dtype": str(synthetic_df[col].dtype)}
+            for col in synthetic_df.columns
+        ]
+
+        # Save to persistent storage
+        storage_uri = None
+        if storage:
+            try:
+                storage_uri, file_size = storage.save_dataset(
+                    dataset_id=dataset_id,
+                    df=synthetic_df,
+                    job_id=job_id,
+                    synthesizer_type=body.synthesizer.value,
+                    columns_info=columns_info,
+                    quality_score=None,
+                )
+
+                # Save source sample for quality comparisons
+                storage.save_source_sample(dataset_id, df)
+
+                # Update database with storage URI
+                await service.update_dataset_storage(dataset_id, storage_uri, file_size)
+
+                logger.info(f"Saved conditional synthetic dataset to {storage_uri}")
+            except Exception as e:
+                logger.warning(f"Failed to save to object store: {e}")
+
+        # Cache for quick access
+        _synthetic_cache.put(dataset_id, synthetic_df)
+        _source_cache.put(dataset_id, df)
+
+        # Get job status
+        job_status = await service.get_job_status(job_id)
+
+        # Build response message
+        quality_str = f" Quality: {job_status.quality_score:.2f}" if job_status.quality_score else ""
+        storage_str = " Saved to storage." if storage_uri else ""
+        cond_str = f" ({len(body.conditions)} conditions applied)"
+
+        # Build preview (first 50 rows)
+        preview_rows = synthetic_df.head(50).to_dict(orient="records")
+
+        return GenerationResultResponse(
+            job_id=job_id,
+            status=job_status.status,
+            message=f"Generated {len(synthetic_df)} conditional synthetic rows.{cond_str}{quality_str}{storage_str}",
+            synthetic_dataset_id=dataset_id,
+            num_rows=len(synthetic_df),
+            columns=[ColumnInfo(name=col, dtype=str(synthetic_df[col].dtype)) for col in synthetic_df.columns],
+            preview=preview_rows,
+            quality_score=job_status.quality_score,
+            warnings=warnings,
+        )
+    except Exception as e:
+        logger.error(f"Conditional generation failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+async def _load_dataset_data(dataset_id: UUID, session: AsyncSession) -> pd.DataFrame:
+    """Load data from a stored dataset.
+
+    Args:
+        dataset_id: Dataset UUID
+        session: Database session
+
+    Returns:
+        DataFrame with dataset data
+
+    Raises:
+        HTTPException: If dataset not found or cannot be loaded
+    """
+    from sqlalchemy import select
+    from domains.datasets.db_models import datasets
+    from domains.datasets.storage import get_dataset_storage
+
+    # Look up dataset in database
+    result = await session.execute(
+        select(datasets).where(datasets.c.id == dataset_id)
+    )
+    dataset_row = result.fetchone()
+
+    if not dataset_row:
+        raise HTTPException(status_code=404, detail=f"Dataset {dataset_id} not found")
+
+    # Get version info
+    version = dataset_row.current_version_number or 1
+    storage_format = dataset_row.storage_format or "parquet"
+
+    # Load from storage
+    try:
+        storage = get_dataset_storage()
+        df = storage.read_dataframe(dataset_id, version, format=storage_format)
+        return df
+    except FileNotFoundError:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Dataset file not found in storage for {dataset_id}"
+        )
+    except Exception as e:
+        logger.error(f"Failed to load dataset {dataset_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to load dataset: {str(e)}"
+        )
+
+
+async def _load_table_data(
+    connection_id: str,
+    table_ref: str,
+    limit: int = 100000,
+) -> pd.DataFrame:
+    """Load data from a database table.
+
+    Args:
+        connection_id: Database connection ID
+        table_ref: Table reference in format "schema.table" or just "table"
+        limit: Maximum rows to load
+
+    Returns:
+        DataFrame with table data
+
+    Raises:
+        HTTPException: If table not found or cannot be queried
+    """
+    from domains.data_explorer.connection import get_explorer_connection
+
+    # Parse table reference
+    if "." in table_ref:
+        schema, table_name = table_ref.split(".", 1)
+    else:
+        schema = "public"
+        table_name = table_ref
+
+    # Validate identifiers to prevent SQL injection
+    if not _is_valid_identifier(schema) or not _is_valid_identifier(table_name):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid schema or table name"
+        )
+
+    try:
+        with get_explorer_connection(connection_id) as conn:
+            with conn.cursor() as cur:
+                # Check if table exists
+                cur.execute(
+                    """
+                    SELECT EXISTS (
+                        SELECT 1 FROM information_schema.tables
+                        WHERE table_schema = %s AND table_name = %s
+                    )
+                    """,
+                    (schema, table_name)
+                )
+                if not cur.fetchone()[0]:
+                    raise HTTPException(
+                        status_code=404,
+                        detail=f"Table {schema}.{table_name} not found"
+                    )
+
+                # Query the table with limit
+                # Using format() for identifiers is safe here since we validated them
+                query = f'SELECT * FROM "{schema}"."{table_name}" LIMIT {limit}'
+                cur.execute(query)
+
+                columns = [desc[0] for desc in cur.description]
+                rows = cur.fetchall()
+
+                df = pd.DataFrame(rows, columns=columns)
+                logger.info(f"Loaded {len(df)} rows from {schema}.{table_name}")
+                return df
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to load table {table_ref}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to load table: {str(e)}"
+        )
+
+
+def _is_valid_identifier(name: str) -> bool:
+    """Check if a string is a valid SQL identifier (no injection risk)."""
+    import re
+    # Allow alphanumeric, underscore, and must start with letter or underscore
+    return bool(re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', name))
 
 
 # ============================================================================

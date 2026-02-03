@@ -237,8 +237,14 @@ class SourceConfig(BaseModel):
     """Source data configuration."""
     type: str = Field(..., pattern="^(dataset|table)$")  # "dataset" or "table"
     dataset_id: Optional[UUID] = None  # For uploaded datasets
-    connection_id: Optional[UUID] = None  # For DB tables
+    connection_id: Optional[str] = None  # For DB tables (connection ID string)
     table_ref: Optional[str] = None  # "schema.table" for DB tables
+    sample_limit: Optional[int] = Field(
+        default=100000,
+        ge=100,
+        le=1000000,
+        description="Max rows to sample from table source (default 100K)"
+    )
 
 
 class SyntheticGenerateRequest(BaseModel):
