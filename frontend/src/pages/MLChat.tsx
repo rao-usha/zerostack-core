@@ -60,7 +60,7 @@ export default function MLChat() {
       setApiKeys(keysData)
       
       // Set default provider/model to first available with API key
-      const firstProvider = modelsData.providers.find(p => p.has_api_key && p.models.length > 0)
+      const firstProvider = modelsData.providers.find((p: { provider: string; has_api_key: boolean; models: string[] }) => p.has_api_key && p.models.length > 0)
       if (firstProvider && firstProvider.models.length > 0) {
         setProvider(firstProvider.provider)
         setModel(firstProvider.models[0])

@@ -4,8 +4,6 @@ import {
   createConversation,
   listConversations,
   getConversation,
-  updateConversation,
-  sendMessage,
   deleteConversation
 } from '../api/client'
 import ChatAutocomplete from '../components/ChatAutocomplete'
@@ -54,7 +52,6 @@ export default function Chat() {
   const [availableDatabases, setAvailableDatabases] = useState<any[]>([])
   
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const eventSourceRef = useRef<EventSource | null>(null)
 
   useEffect(() => {
     loadConversations()
@@ -274,15 +271,6 @@ export default function Chat() {
       console.error('Failed to send message:', error)
       setIsStreaming(false)
       setStreamingContent('')
-    }
-  }
-
-  const handleRename = async (conversationId: string, newTitle: string) => {
-    try {
-      await updateConversation(conversationId, { title: newTitle })
-      loadConversations()
-    } catch (error) {
-      console.error('Failed to rename conversation:', error)
     }
   }
 

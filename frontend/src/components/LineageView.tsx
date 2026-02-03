@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { getLineage, getLineageSummary } from '../api/client'
+import { getLineage } from '../api/client'
 import LineageTimeline from './LineageTimeline'
 import LineageSankey from './LineageSankey'
 

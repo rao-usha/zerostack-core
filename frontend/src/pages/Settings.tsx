@@ -322,7 +322,6 @@ export default function Settings() {
                 {settings.map(setting => {
                   const status = getSettingStatus(setting)
                   const testResult = testResults[setting.key]
-                  const isEditing = editValues[setting.key] !== ''
 
                   return (
                     <div key={setting.key} className="p-6">

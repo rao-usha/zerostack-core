@@ -28,7 +28,7 @@ export default function ChatEnhanced() {
   const [selectedDataset, setSelectedDataset] = useState<string>('')
   const [datasets, setDatasets] = useState<any[]>([])
   const [ontologies, setOntologies] = useState<any[]>([])
-  const [sessionId] = useState(() => `session_${Date.now()}`)
+  const [_sessionId] = useState(() => `session_${Date.now()}`)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -119,7 +119,7 @@ export default function ChatEnhanced() {
       setLoading(true)
       
       try {
-        let result
+        let result: any
         const actionType = message.action.type
         const params = message.action.params
 

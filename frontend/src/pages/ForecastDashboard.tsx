@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
 
 // ============================================================================
 // TYPES
@@ -94,8 +93,6 @@ const METRIC_HELP: Record<string, { title: string; explanation: string; good: st
 // MAIN COMPONENT  
 // ============================================================================
 export default function ForecastDashboard() {
-  const navigate = useNavigate()
-  
   // State
   const [latestForecast, setLatestForecast] = useState<ForecastResult | null>(null)
   const [allForecasts, setAllForecasts] = useState<ForecastResult[]>([])
@@ -120,7 +117,6 @@ export default function ForecastDashboard() {
     limit: 1000 
   })
   const [activeView, setActiveView] = useState<'dashboard' | 'history' | 'compare' | 'help'>('dashboard')
-  const [showDetails, setShowDetails] = useState(false)
   const [activeTooltip, setActiveTooltip] = useState<string | null>(null)
 
   // ============================================================================
@@ -378,8 +374,6 @@ export default function ForecastDashboard() {
   const features = parseFeatures(latestForecast?.feature_importance)
   const maxForecast = Math.max(...forecasts.map(f => f.value), 1)
   const maxFeature = Math.max(...features.map(f => f.importance), 1)
-  const totalForecast = forecasts.reduce((sum, f) => sum + f.value, 0)
-  const avgForecast = forecasts.length > 0 ? totalForecast / forecasts.length : 0
   const completedForecasts = allForecasts.filter(j => j.status === 'completed' && j.mae)
     .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''))
 

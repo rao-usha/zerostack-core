@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ReactFlow,
   Background,
@@ -18,8 +18,7 @@ import ELK from 'elkjs';
 // Custom node component for lineage nodes
 const LineageNode = ({ data }: { data: any }) => {
   const { icon, name, description, node_type, metadata, color } = data;
-  
-  const bgColor = color || '#4A90E2';
+
   const borderColor = color || '#4A90E2';
   
   return (
@@ -138,7 +137,7 @@ const getLayoutedElements = async (nodes: Node[], edges: Edge[]) => {
     const layoutedGraph = await elk.layout(graph);
 
     const layoutedNodes = nodes.map((node) => {
-      const layoutedNode = layoutedGraph.children?.find((lgNode) => lgNode.id === node.id);
+      const layoutedNode = layoutedGraph.children?.find((lgNode: { id: string }) => lgNode.id === node.id);
       return {
         ...node,
         position: {
@@ -235,7 +234,7 @@ export const LineageViewer: React.FC<LineageViewerProps> = ({ schema, table, nod
     fetchLineage();
   }, [schema, table, nodeId, nodeType, setNodes, setEdges]);
 
-  const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
+  const onNodeClick = useCallback((_event: React.MouseEvent, node: Node) => {
     console.log('Node clicked:', node);
     // Future: navigate to node detail or expand lineage
   }, []);
@@ -328,7 +327,7 @@ export const LineageViewer: React.FC<LineageViewerProps> = ({ schema, table, nod
         <Background color="#e5e7eb" gap={16} />
         <Controls />
         <MiniMap
-          nodeColor={(node) => {
+          nodeColor={(node: Node) => {
             return node.data.color || '#4A90E2';
           }}
           maskColor="rgba(0, 0, 0, 0.05)"

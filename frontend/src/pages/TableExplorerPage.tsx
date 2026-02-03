@@ -350,7 +350,7 @@ export default function TableExplorerPage() {
               <div style={styles.summaryList}>
                 <div style={styles.summaryItem}>
                   <span style={{ color: '#10b981' }}>✓</span>
-                  <span>{scan.columns.filter(c => c.null_percent === 0).length} columns have no nulls</span>
+                  <span>{scan.columns.filter(c => c.nulls_pct === 0).length} columns have no nulls</span>
                 </div>
                 <div style={styles.summaryItem}>
                   <span style={{ color: '#fbbf24' }}>⚠</span>
@@ -502,7 +502,7 @@ export default function TableExplorerPage() {
                   <tbody>
                     {scan.sample_rows.slice(0, 20).map((row, i) => (
                       <tr key={i} style={styles.tr}>
-                        {Object.entries(row).slice(0, 8).map(([key, value], j) => (
+                        {Object.entries(row).slice(0, 8).map(([_key, value], j) => (
                           <td key={j} style={styles.td}>
                             <span style={{ maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', display: 'block' }}>
                               {value === null ? <em style={{ color: '#6b7280' }}>null</em> : String(value).slice(0, 30)}

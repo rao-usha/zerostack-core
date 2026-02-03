@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 
 interface Run {
   id: string;
@@ -30,7 +30,6 @@ interface ComparisonData {
 
 export default function RunComparison() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const navigate = useNavigate();
   const [comparison, setComparison] = useState<ComparisonData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

@@ -233,8 +233,10 @@ export default function DistillationWorkbench() {
   // Search/Filter state
   const [searchQuery, setSearchQuery] = useState('')
   const [filterProvider, setFilterProvider] = useState('')
-  const [filterBanked, setFilterBanked] = useState<boolean | null>(null)
-  const [selectedTagFilter, setSelectedTagFilter] = useState<string[]>([])
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [filterBanked, _setFilterBanked] = useState<boolean | null>(null)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [selectedTagFilter, _setSelectedTagFilter] = useState<string[]>([])
 
   // Tagging state
   const [tagModalOpen, setTagModalOpen] = useState(false)
@@ -657,22 +659,6 @@ export default function DistillationWorkbench() {
     }
   }
 
-  const handleAddBankedToQueue = async (queueId: string, bankedIds: string[]) => {
-    try {
-      const res = await fetch(`/api/v1/distillation/review-queues/${queueId}/items`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ banked_ids: bankedIds })
-      })
-      if (res.ok) {
-        loadReviewItems(queueId)
-        toast.success('Added to review queue!')
-      }
-    } catch (err) {
-      console.error('Failed to add to queue:', err)
-    }
-  }
-
   const handleSubmitReview = async (action: string) => {
     if (!currentReviewItem) return
 
@@ -1069,19 +1055,6 @@ export default function DistillationWorkbench() {
     } catch (err) {
       console.error('Failed to export:', err)
     }
-  }
-
-  const toggleModel = (modelId: string) => {
-    setSelectedModels(prev => {
-      if (prev.includes(modelId)) {
-        return prev.filter(m => m !== modelId)
-      }
-      // Limit to 3 models max
-      if (prev.length >= 3) {
-        return prev
-      }
-      return [...prev, modelId]
-    })
   }
 
   const navItems = [

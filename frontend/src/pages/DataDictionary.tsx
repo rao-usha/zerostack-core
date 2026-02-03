@@ -274,10 +274,10 @@ export default function DataDictionary() {
       setVersionNotes('')
       
       // Reload entries in the background (don't block on this)
-      loadDictionary().catch(reloadErr => {
+      loadDictionary(selectedDbId).catch(reloadErr => {
         console.warn('Failed to reload dictionary after save, but save succeeded:', reloadErr)
         // Silently retry after a delay
-        setTimeout(() => loadDictionary().catch(() => {}), 2000)
+        setTimeout(() => loadDictionary(selectedDbId).catch(() => {}), 2000)
       })
     } catch (err: any) {
       console.error('Failed to save entry:', err)
@@ -318,9 +318,9 @@ export default function DataDictionary() {
       setVersions([])
       
       // Reload entries in background
-      loadDictionary().catch(err => {
+      loadDictionary(selectedDbId).catch(err => {
         console.warn('Failed to reload after activation, but activation succeeded:', err)
-        setTimeout(() => loadDictionary().catch(() => {}), 2000)
+        setTimeout(() => loadDictionary(selectedDbId).catch(() => {}), 2000)
       })
     } catch (err: any) {
       console.error('Failed to activate version:', err)
@@ -350,9 +350,9 @@ export default function DataDictionary() {
       showToast('Entry submitted for approval successfully', 'success')
       
       // Reload in background
-      loadDictionary().catch(err => {
+      loadDictionary(selectedDbId).catch(err => {
         console.warn('Failed to reload after submit, but submit succeeded:', err)
-        setTimeout(() => loadDictionary().catch(() => {}), 2000)
+        setTimeout(() => loadDictionary(selectedDbId).catch(() => {}), 2000)
       })
     } catch (err: any) {
       console.error('Failed to submit for approval:', err)
@@ -389,9 +389,9 @@ export default function DataDictionary() {
       setApprovalNotes('')
       
       // Reload in background
-      loadDictionary().catch(err => {
+      loadDictionary(selectedDbId).catch(err => {
         console.warn('Failed to reload after approval action, but action succeeded:', err)
-        setTimeout(() => loadDictionary().catch(() => {}), 2000)
+        setTimeout(() => loadDictionary(selectedDbId).catch(() => {}), 2000)
       })
     } catch (err: any) {
       console.error(`Failed to ${approvalModal.action} entry:`, err)

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { Send, Bot, User, Network, Plus, Eye, GitBranch, Sparkles } from 'lucide-react'
-import { chatQuery, listOntologies, getOntology } from '../api/client'
+import { chatQuery, listOntologies } from '../api/client'
 import ChatUIElements from '../components/ChatUIElements'
 import OntologyViewer from '../components/OntologyViewer'
 
@@ -19,7 +19,8 @@ export default function Ontology() {
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [ontologyCount, setOntologyCount] = useState<number | null>(null)
-  const [sessionId] = useState(`ont-${Date.now()}`)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_sessionId] = useState(`ont-${Date.now()}`)
   const [currentOntologyId, setCurrentOntologyId] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -65,7 +66,8 @@ export default function Ontology() {
     }
   }
 
-  const handleSend = async (text?: string, action?: string, payload?: any) => {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const handleSend = async (text?: string, action?: string, _payload?: any) => {
     const queryToSend = text || input.trim()
     if (!queryToSend && !action) return
 
@@ -84,7 +86,8 @@ export default function Ontology() {
     setIsLoading(true)
 
     try {
-      const response = await chatQuery(queryToSend, undefined, sessionId, action, payload)
+      // Note: chatQuery only supports (query, datasetId) - session/action/payload need backend support
+      const response = await chatQuery(queryToSend, undefined)
       
       // Add assistant message
       const assistantMessage: Message = {
@@ -279,8 +282,8 @@ export default function Ontology() {
                       />
                     )}
 
-                    {message.response_type === 'ontology_view' && message.metadata?.ontology && (
-                      <OntologyViewer ontology={message.metadata.ontology} />
+                    {message.response_type === 'ontology_view' && message.metadata?.ontology_id && (
+                      <OntologyViewer ontologyId={message.metadata.ontology_id} />
                     )}
                   </div>
                 </div>

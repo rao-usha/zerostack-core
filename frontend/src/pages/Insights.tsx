@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
 import Toast from '../components/Toast'
-import { Sparkles, TrendingUp, TrendingDown, AlertTriangle, Lightbulb, Target, Activity, BarChart3, PieChart } from 'lucide-react'
+import { Sparkles, TrendingUp, TrendingDown, AlertTriangle, Lightbulb, Target, Activity, BarChart3 } from 'lucide-react'
 import { generateInsights, listDatasets } from '../api/client'
 import { useLocation } from 'react-router-dom'
 import {
-  LineChart, Line, BarChart, Bar, PieChart as RePieChart, Pie, Cell,
+  BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area, AreaChart
 } from 'recharts'
 

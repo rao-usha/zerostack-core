@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useMemo } from 'react'
 import Plot from 'react-plotly.js'
 
 interface LineageSankeyProps {
@@ -75,39 +75,6 @@ const LineageSankey: React.FC<LineageSankeyProps> = ({ nodes, edges }) => {
     return filteredEdges
   }, [edges, threshold, maxFlows, focusNode, showSmallFlows, totalRows])
 
-  // Group nodes by type if enabled
-  const processedNodes = useMemo(() => {
-    if (!groupByType) {
-      return nodes
-    }
-
-    // Group nodes by entity type
-    const typeGroups: Record<string, typeof nodes> = {}
-    nodes.forEach(node => {
-      const type = node.entity_type
-      if (!typeGroups[type]) {
-        typeGroups[type] = []
-      }
-      typeGroups[type].push(node)
-    })
-
-    // Create aggregated nodes
-    return Object.entries(typeGroups).flatMap(([type, groupNodes]) => {
-      if (groupNodes.length <= 3) {
-        return groupNodes // Don't group if only 2-3 nodes
-      }
-      
-      // Create group node
-      return [{
-        entity_type: type,
-        entity_name: `${type.replace(/_/g, ' ')} (${groupNodes.length})`,
-        row_count: groupNodes.reduce((sum, n) => sum + (n.row_count || 0), 0),
-        _isGroup: true,
-        _members: groupNodes
-      }]
-    })
-  }, [nodes, groupByType])
-
   // Build Sankey data
   const sankeyData = useMemo(() => {
     // Create node list with indices
@@ -142,7 +109,7 @@ const LineageSankey: React.FC<LineageSankeyProps> = ({ nodes, edges }) => {
     }
 
     const nodeColors = nodeList.map(getNodeColor)
-    const linkColors = filteredData.map((e, idx) => {
+    const linkColors = filteredData.map((e, _idx) => {
       const opacity = focusNode 
         ? (e.source_name === focusNode || e.target_name === focusNode ? 0.6 : 0.1)
         : 0.4

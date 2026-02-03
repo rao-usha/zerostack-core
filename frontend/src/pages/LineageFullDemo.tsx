@@ -6,7 +6,6 @@
  */
 import React, { useState } from 'react';
 import { Play, RefreshCw, Database, Sparkles } from 'lucide-react';
-import QueryLineageView from '../components/QueryLineageView';
 import ColumnLineageGraph from '../components/ColumnLineageGraph';
 import MLQueryAnalyzer from '../components/MLQueryAnalyzer';
 import { parseColumnLineage, analyzeMLQuery } from '../api/client';

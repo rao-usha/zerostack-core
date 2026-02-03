@@ -6,7 +6,7 @@ interface JsonViewerProps {
   level?: number
 }
 
-function JsonViewer({ data, level = 0 }: JsonViewerProps) {
+function JsonViewer({ data, level: _level = 0 }: JsonViewerProps) {
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set())
 
   const toggleKey = (key: string) => {

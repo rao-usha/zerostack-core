@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Box, ArrowLeft, FileText, Rocket, BarChart3, AlertTriangle, TrendingUp, TrendingDown } from 'lucide-react'
+import { Box, ArrowLeft, FileText, Rocket, BarChart3, AlertTriangle } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
 interface Model {
@@ -258,7 +258,7 @@ export default function ModelDetail() {
                         {key.toUpperCase()}
                       </p>
                       <p style={{ color: '#f0f0f5', fontSize: '1.5rem', fontWeight: '700' }}>
-                        {typeof value === 'number' ? value.toFixed(4) : value}
+                        {typeof value === 'number' ? value.toFixed(4) : String(value)}
                       </p>
                     </div>
                   ))}

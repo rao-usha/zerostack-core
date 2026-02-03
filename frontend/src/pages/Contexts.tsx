@@ -6,10 +6,7 @@ import {
   BookOpen,
   GitBranch,
   Download,
-  Edit,
   Trash2,
-  Filter,
-  Sparkles,
   Settings,
   X,
   FileText,
@@ -20,7 +17,6 @@ import {
 import {
   listContexts,
   createContext,
-  getContext,
   getContextLayers,
   addContextLayer,
   updateContextLayer,
@@ -294,7 +290,7 @@ export default function Contexts() {
   const handleSummarizeDocument = async (documentId: string) => {
     setLoading(true)
     try {
-      const result = await summarizeDocument(documentId)
+      await summarizeDocument(documentId)
       loadContextData()
       setToast({ message: 'Document summarized successfully!', type: 'success' })
     } catch (error: any) {

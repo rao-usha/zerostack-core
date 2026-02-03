@@ -61,7 +61,7 @@ const PipelineVisualizer: React.FC<PipelineVisualizerProps> = ({ pipelines, maxV
         </h3>
       </div>
 
-      {displayPipelines.map((pipeline, pipelineIdx) => (
+      {displayPipelines.map((pipeline, _pipelineIdx) => (
         <div
           key={pipeline.pipeline_id}
           className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow"

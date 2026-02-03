@@ -19,24 +19,11 @@ interface LineageTimelineProps {
  * Lineage Timeline - Chronological view of data transformations
  * Shows data flow over time with transformation events
  */
-const LineageTimeline: React.FC<LineageTimelineProps> = ({ nodes, edges }) => {
+const LineageTimeline: React.FC<LineageTimelineProps> = ({ nodes: _nodes, edges }) => {
   // Sort edges by created_at
-  const sortedEdges = [...edges].sort((a, b) => 
+  const sortedEdges = [...edges].sort((a, b) =>
     new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
   )
-
-  const getEntityIcon = (type: string) => {
-    const icons: Record<string, string> = {
-      file: '📁',
-      file_table: '📊',
-      database_table: '🗄️',
-      dataset: '💾',
-      notebook: '📓',
-      model: '🤖',
-      report: '📈',
-    }
-    return icons[type] || '📄'
-  }
 
   const formatEdgeType = (type: string) => {
     return type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())

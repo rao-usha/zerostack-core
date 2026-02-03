@@ -1,15 +1,12 @@
 import { useState, useEffect } from 'react'
 import Toast from './Toast'
 import {
-  Brain,
   Plus,
   Edit,
   Copy,
   Trash2,
   Star,
   AlertCircle,
-  CheckCircle2,
-  X
 } from 'lucide-react'
 import {
   fetchPromptRecipes,

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import Toast from '../components/Toast'
-import { TrendingUp, Activity, BarChart3 } from 'lucide-react'
+import { Activity, BarChart3 } from 'lucide-react'
 import { buildPredictiveModel, listDatasets, getDataset } from '../api/client'
 
 export default function Models() {

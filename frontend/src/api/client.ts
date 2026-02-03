@@ -815,7 +815,7 @@ export const sendMessage = async (conversationId: string, data: {
   
   // If streaming, return URL for EventSource
   if (data.stream) {
-    const url = `${API_BASE_URL}/api/v1/chat/conversations/${conversationId}/messages`
+    const url = `/api/v1/chat/conversations/${conversationId}/messages`
     return { url, ...response.data }
   }
   
@@ -876,6 +876,7 @@ export const createAnalysisJob = async (data: {
   db_id?: string
   context?: string
   tags?: string[]
+  prompt_recipe_id?: number
 }) => {
   const response = await client.post('/api/v1/data-analysis/jobs', data)
   return response.data
@@ -941,6 +942,7 @@ export const createPromptRecipe = async (recipe: {
   system_message: string
   user_template: string
   metadata?: any
+  recipe_metadata?: any
 }) => {
   const response = await client.post('/api/v1/data-explorer/prompt-recipes/', recipe)
   return response.data
@@ -1350,6 +1352,8 @@ export interface FileLocation {
   created_at: string
   updated_at: string
   file_count: number
+  gdrive_account_email?: string
+  gdrive_folder_id?: string
 }
 
 export interface FileAsset {
@@ -1676,7 +1680,7 @@ export const getOntologyDiff = async (ontologyId: string) => {
 }
 
 // AI-assisted ontology helpers (future integration with MCP tools)
-export const proposeOntologyTerms = async (prompt: string, count: number = 20) => {
+export const proposeOntologyTerms = async (_prompt: string, _count: number = 20) => {
   // This will call the AI MCP tool when we integrate it
   // For now, return mock data or call backend endpoint if available
   return {

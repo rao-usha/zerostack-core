@@ -104,7 +104,6 @@ export default function FloatingChat() {
           if (!line.trim()) return <div key={idx} className="h-2" />
 
           // Bold text with **
-          let formattedLine = line
           const boldRegex = /\*\*(.*?)\*\*/g
           const parts = []
           let lastIndex = 0

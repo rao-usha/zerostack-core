@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Activity, Search, Filter, Plus, BookOpen, Box, PlayCircle, BarChart3, CheckCircle2 } from 'lucide-react'
+import { Activity, Search, Plus, BookOpen, Box, PlayCircle, BarChart3, CheckCircle2 } from 'lucide-react'
 
 interface Recipe {
   id: string

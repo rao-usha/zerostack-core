@@ -31,12 +31,10 @@ import {
   getAnalysisJob,
   cancelAnalysisJob,
   deleteAnalysisJob,
-  getJobStatus,
   getAvailableModels,
   checkApiKeys,
   fetchPromptRecipes,
   createPromptRecipe,
-  clonePromptRecipe
 } from '../api/client'
 import PromptLibrary from '../components/PromptLibrary'
 
@@ -139,7 +137,7 @@ export default function DataAnalysis() {
   
   // Job detail
   const [selectedJob, setSelectedJob] = useState<JobWithResult | null>(null)
-  const [loadingDetail, setLoadingDetail] = useState(false)
+  const [, setLoadingDetail] = useState(false)
   
   // Delete confirmation
   const [deleteConfirmJob, setDeleteConfirmJob] = useState<string | null>(null)
@@ -251,7 +249,7 @@ export default function DataAnalysis() {
       setApiKeys(keysData)
       
       // Set default provider/model to first available
-      const firstProvider = modelsData.providers.find(p => p.has_api_key && p.models.length > 0)
+      const firstProvider = modelsData.providers.find((p: { has_api_key: boolean; models: string[] }) => p.has_api_key && p.models.length > 0)
       if (firstProvider && firstProvider.models.length > 0) {
         setProvider(firstProvider.provider)
         setModel(firstProvider.models[0])

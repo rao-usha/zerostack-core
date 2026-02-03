@@ -1,12 +1,11 @@
-import React, { useState, useEffect } from 'react'
-import { 
-  FolderOpen, 
-  Plus, 
-  RefreshCw, 
-  Trash2, 
-  CheckCircle2, 
+import { useState, useEffect } from 'react'
+import {
+  FolderOpen,
+  Plus,
+  RefreshCw,
+  Trash2,
+  CheckCircle2,
   XCircle,
-  Folder,
   Clock,
   FileText,
   Cloud,

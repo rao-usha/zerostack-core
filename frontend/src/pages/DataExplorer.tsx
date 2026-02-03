@@ -104,7 +104,7 @@ export default function DataExplorer() {
   const [query, setQuery] = useState('')
   const [queryResult, setQueryResult] = useState<QueryResponse | null>(null)
   const [executingQuery, setExecutingQuery] = useState(false)
-  const [queryPage, setQueryPage] = useState(1)
+  const [, setQueryPage] = useState(1)
   
   // Active tab
   const [activeTab, setActiveTab] = useState<'preview' | 'columns' | 'query' | 'summary'>('preview')

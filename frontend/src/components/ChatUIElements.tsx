@@ -27,11 +27,12 @@ interface ChatUIElementsProps {
   elements: UIElement[]
   onAction: (action: string, data?: any) => void
   availableOntologies?: Array<{id: string, name: string}>
+  currentOntologyId?: string | null
 }
 
 export default function ChatUIElements({ elements, onAction, availableOntologies = [] }: ChatUIElementsProps) {
   const [selectedOntology, setSelectedOntology] = useState('')
-  const [selectedToggle, setSelectedToggle] = useState('')
+  const [_selectedToggle, _setSelectedToggle] = useState('')
 
   const renderButton = (element: ButtonElement) => {
     const iconMap: {[key: string]: any} = {

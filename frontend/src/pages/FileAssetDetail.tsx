@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft,
@@ -397,17 +397,11 @@ export default function FileAssetDetail() {
                 ) : previewData ? (
                   <div>
                     <DataTable
-                      columns={previewData.columns.map((col: any) => ({
-                        header: col.name,
-                        accessorKey: col.name,
-                      }))}
-                      data={previewData.rows.map((row: any[]) => {
-                        const obj: any = {}
-                        previewData.columns.forEach((col: any, idx: number) => {
-                          obj[col.name] = row[idx]
-                        })
-                        return obj
-                      })}
+                      columns={previewData.columns.map((col: any) => col.name)}
+                      data={previewData.rows}
+                      currentPage={1}
+                      pageSize={100}
+                      onPageChange={() => {}}
                     />
                     <div style={{
                       marginTop: '1rem',

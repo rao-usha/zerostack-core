@@ -57,28 +57,23 @@ const LineageHealthBadge: React.FC<LineageHealthBadgeProps> = ({
   const isStale = health.is_stale
   const riskLevel = impact?.risk_level || 'low'
 
-  let healthStatus = 'healthy'
   let statusColor = 'green'
   let statusIcon = '✓'
   let statusText = 'Healthy'
 
   if (isStale) {
-    healthStatus = 'warning'
     statusColor = 'yellow'
     statusIcon = '⚠'
     statusText = 'Stale Data'
   } else if (riskLevel === 'high') {
-    healthStatus = 'caution'
     statusColor = 'orange'
     statusIcon = '⚡'
     statusText = 'High Impact'
   } else if (!hasUpstream && hasDownstream) {
-    healthStatus = 'source'
     statusColor = 'blue'
     statusIcon = '📍'
     statusText = 'Data Source'
   } else if (hasUpstream && !hasDownstream) {
-    healthStatus = 'sink'
     statusColor = 'purple'
     statusIcon = '🎯'
     statusText = 'End Point'

@@ -1,20 +1,18 @@
 import { useState, useEffect } from 'react'
-import { 
-  Brain, 
-  Play, 
-  Loader2, 
-  CheckCircle2, 
+import {
+  Brain,
+  Play,
+  Loader2,
+  CheckCircle2,
   AlertCircle,
-  Save,
   Trash2,
   Calendar,
-  Tag,
   TrendingUp,
   AlertTriangle,
   BarChart3,
   Shield
 } from 'lucide-react'
-import { runAIAnalysis, listAnalyses, deleteAnalysis, updateAnalysis } from '../api/client'
+import { runAIAnalysis, listAnalyses, deleteAnalysis } from '../api/client'
 
 interface Table {
   schema: string
