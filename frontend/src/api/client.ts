@@ -279,6 +279,79 @@ export const generateSyntheticData = async (datasetId: string, numRows: number =
   return response.data
 }
 
+// ========================================
+// Conditional Synthetic Data Generation
+// ========================================
+
+export type ConditionOperator = 'eq' | 'ne' | 'gt' | 'gte' | 'lt' | 'lte' | 'in' | 'not_in' | 'between'
+
+export interface GenerationCondition {
+  column: string
+  operator: ConditionOperator
+  value: any
+}
+
+export interface ConditionalGenerateRequest {
+  num_rows: number
+  synthesizer?: 'gaussian_copula' | 'ctgan' | 'tvae'
+  conditions: GenerationCondition[]
+  oversample_factor?: number
+  max_tries_per_batch?: number
+}
+
+export interface ConditionalGenerateResponse {
+  job_id: string
+  status: string
+  message: string
+  synthetic_dataset_id?: string
+  num_rows?: number
+  columns?: string[]
+  preview?: any[]
+  warnings?: string[]
+}
+
+export const generateConditionalSyntheticData = async (
+  file: File,
+  request: ConditionalGenerateRequest,
+  onProgress?: (progress: number) => void
+): Promise<ConditionalGenerateResponse> => {
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('num_rows', request.num_rows.toString())
+
+  if (request.synthesizer) {
+    formData.append('synthesizer', request.synthesizer)
+  }
+  if (request.conditions.length > 0) {
+    formData.append('conditions', JSON.stringify(request.conditions))
+  }
+  if (request.oversample_factor !== undefined) {
+    formData.append('oversample_factor', request.oversample_factor.toString())
+  }
+  if (request.max_tries_per_batch !== undefined) {
+    formData.append('max_tries_per_batch', request.max_tries_per_batch.toString())
+  }
+
+  const response = await client.post('/api/v1/synthetic/generate-conditional', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    onUploadProgress: onProgress ? (e) => onProgress(Math.round((e.loaded * 100) / (e.total || 1))) : undefined,
+  })
+  return response.data
+}
+
+export const getColumnMetadata = async (file: File): Promise<{
+  columns: Array<{ name: string; dtype: string; unique_values?: any[] }>
+  row_count: number
+}> => {
+  const formData = new FormData()
+  formData.append('file', file)
+
+  const response = await client.post('/api/v1/synthetic/analyze-columns', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+  return response.data
+}
+
 export const buildPredictiveModel = async (
   datasetId: string,
   targetColumn: string,
