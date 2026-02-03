@@ -299,14 +299,20 @@ export interface ConditionalGenerateRequest {
   max_tries_per_batch?: number
 }
 
+export interface ColumnInfo {
+  name: string
+  dtype: string
+}
+
 export interface ConditionalGenerateResponse {
   job_id: string
   status: string
   message: string
   synthetic_dataset_id?: string
   num_rows?: number
-  columns?: string[]
+  columns?: ColumnInfo[]
   preview?: any[]
+  quality_score?: number
   warnings?: string[]
 }
 
@@ -349,6 +355,175 @@ export const getColumnMetadata = async (file: File): Promise<{
   const response = await client.post('/api/v1/synthetic/analyze-columns', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   })
+  return response.data
+}
+
+// ========================================
+// Synthetic Data Quality Metrics
+// ========================================
+
+export interface QualityColumnScore {
+  column_name: string
+  dtype: string
+  ks_statistic?: number
+  p_value?: number
+  score: number
+  rating: 'excellent' | 'good' | 'fair' | 'poor'
+}
+
+export interface QualityReport {
+  report_id: string
+  synthetic_dataset_id: string
+  overall_score: number
+  statistical_fidelity_score: number
+  correlation_score: number
+  privacy_score?: number
+  column_scores: QualityColumnScore[]
+  recommendations: string[]
+  warnings: string[]
+}
+
+export interface DistributionComparison {
+  dataset_id: string
+  numeric_columns: Array<{
+    column_name: string
+    dtype: string
+    bins: number[]
+    real_counts: number[]
+    synthetic_counts: number[]
+    real_density: number[]
+    synthetic_density: number[]
+    statistics: {
+      real: { mean: number; std: number; min: number; max: number }
+      synthetic: { mean: number; std: number; min: number; max: number }
+    }
+  }>
+  categorical_columns: Array<{
+    column_name: string
+    categories: string[]
+    real_counts: number[]
+    synthetic_counts: number[]
+    real_percentages: number[]
+    synthetic_percentages: number[]
+  }>
+}
+
+export interface CorrelationComparison {
+  dataset_id: string
+  columns: string[]
+  real_correlation: number[][]
+  synthetic_correlation: number[][]
+  difference: number[][]
+  summary: {
+    mean_absolute_difference: number
+    max_absolute_difference: number
+  }
+}
+
+export interface PrivacyRiskAssessment {
+  dataset_id: string
+  assessment: {
+    overall_risk: 'low' | 'medium' | 'high'
+    uniqueness_risk: { level: string; quasi_identifiers: string[] }
+    similarity_risk: { level: string; close_matches: number }
+    outlier_risk: { level: string; extreme_values: number }
+    recommendations: string[]
+  }
+}
+
+export interface QualityDashboard {
+  dataset_id: string
+  quality_report: {
+    overall_score?: number
+    statistical_fidelity_score?: number
+    correlation_score?: number
+    privacy_score?: number
+    recommendations: string[]
+    warnings: string[]
+  }
+  summary_stats: {
+    real_rows: number
+    synthetic_rows: number
+    total_columns: number
+  }
+  distribution_preview: {
+    numeric_count: number
+    categorical_count: number
+    columns_shown: string[]
+  }
+  correlation_summary: {
+    mean_absolute_difference: number
+    max_absolute_difference: number
+  }
+}
+
+// Fetch quality report for a synthetic dataset
+export const getSyntheticQualityReport = async (datasetId: string): Promise<QualityReport> => {
+  const response = await client.get(`/api/v1/synthetic/datasets/${datasetId}/quality`)
+  return response.data
+}
+
+// Fetch distribution comparison data for charts
+export const getSyntheticDistributions = async (
+  datasetId: string,
+  columns?: string[]
+): Promise<DistributionComparison> => {
+  const params = columns ? { columns: columns.join(',') } : {}
+  const response = await client.get(`/api/v1/synthetic/datasets/${datasetId}/distributions`, { params })
+  return response.data
+}
+
+// Fetch correlation comparison data
+export const getSyntheticCorrelations = async (datasetId: string): Promise<CorrelationComparison> => {
+  const response = await client.get(`/api/v1/synthetic/datasets/${datasetId}/correlations`)
+  return response.data
+}
+
+// Fetch privacy risk assessment
+export const getSyntheticPrivacyRisk = async (datasetId: string): Promise<PrivacyRiskAssessment> => {
+  const response = await client.get(`/api/v1/synthetic/datasets/${datasetId}/privacy-risk`)
+  return response.data
+}
+
+// Fetch comprehensive quality dashboard
+export const getSyntheticQualityDashboard = async (datasetId: string): Promise<QualityDashboard> => {
+  const response = await client.get(`/api/v1/synthetic/datasets/${datasetId}/quality-dashboard`)
+  return response.data
+}
+
+// Fetch detection score (how distinguishable is synthetic from real)
+export const getSyntheticDetectionScore = async (datasetId: string): Promise<{
+  dataset_id: string
+  overall_score: number
+  detection_accuracy: number
+  detection_auc: number
+  cross_validation: { scores: number[]; mean: number; std: number }
+  distinguishing_features: Array<{ column: string; importance: number }>
+  recommendations: string[]
+}> => {
+  const response = await client.get(`/api/v1/synthetic/datasets/${datasetId}/detection`)
+  return response.data
+}
+
+// Fetch ML utility score (TSTR methodology)
+export const getSyntheticMLUtility = async (
+  datasetId: string,
+  targetColumn: string,
+  taskType?: 'classification' | 'regression'
+): Promise<{
+  dataset_id: string
+  target_column: string
+  task_type: string
+  overall_score: number
+  tstr: { score: number; metrics: Record<string, number> }
+  trtr: { score: number; metrics: Record<string, number> }
+  utility_ratio: number
+  feature_importance_correlation: number
+  recommendations: string[]
+}> => {
+  const params: Record<string, string> = { target_column: targetColumn }
+  if (taskType) params.task_type = taskType
+  const response = await client.get(`/api/v1/synthetic/datasets/${datasetId}/ml-utility`, { params })
   return response.data
 }
 

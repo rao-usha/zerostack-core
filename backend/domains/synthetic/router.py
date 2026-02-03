@@ -18,6 +18,7 @@ from .models import (
     SyntheticDatasetResponse, SyntheticDatasetListResponse,
     QualityReportResponse, SynthesizersListResponse, SynthesizerInfo,
     PrivacyLevel, ConditionalGenerateRequest, GenerationCondition,
+    GenerationResultResponse, ColumnInfo,
 )
 from .service import SyntheticDataService
 from .storage import SyntheticDataStorage, get_synthetic_storage
@@ -342,7 +343,7 @@ async def generate_from_csv(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/generate-conditional", response_model=JobResponse, status_code=202)
+@router.post("/generate-conditional", response_model=GenerationResultResponse, status_code=202)
 @limiter.limit("5/minute")
 async def generate_conditional(
     request: Request,
@@ -518,15 +519,23 @@ async def generate_conditional(
         job_status = await service.get_job_status(job_id)
 
         # Build response message
-        quality_str = f"Quality: {job_status.quality_score:.2f}" if job_status.quality_score else ""
+        quality_str = f" Quality: {job_status.quality_score:.2f}" if job_status.quality_score else ""
         storage_str = " Saved to storage." if storage_uri else ""
         cond_str = f" ({len(conditions)} conditions applied)"
 
-        return JobResponse(
+        # Build preview (first 50 rows)
+        preview_rows = synthetic_df.head(50).to_dict(orient="records")
+
+        return GenerationResultResponse(
             job_id=job_id,
             status=job_status.status,
-            message=f"Generated {len(synthetic_df)} conditional synthetic rows.{cond_str} {quality_str}{storage_str}",
-            estimated_seconds=0,
+            message=f"Generated {len(synthetic_df)} conditional synthetic rows.{cond_str}{quality_str}{storage_str}",
+            synthetic_dataset_id=dataset_id,
+            num_rows=len(synthetic_df),
+            columns=[ColumnInfo(name=col, dtype=str(synthetic_df[col].dtype)) for col in synthetic_df.columns],
+            preview=preview_rows,
+            quality_score=job_status.quality_score,
+            warnings=warnings,
         )
     except Exception as e:
         logger.error(f"Conditional generation failed: {e}")

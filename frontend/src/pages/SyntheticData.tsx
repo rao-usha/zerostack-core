@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import Toast from '../components/Toast'
 import ConditionBuilder from '../components/ConditionBuilder'
+import QualityDashboard from '../components/QualityDashboard'
 import { Database, Sparkles, Upload, FileSpreadsheet, Settings, ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react'
 import {
   generateSyntheticData,
@@ -513,36 +514,50 @@ export default function SyntheticData() {
                 <table className="min-w-full divide-y divide-dark-border">
                   <thead className="bg-dark-surface">
                     <tr>
-                      {syntheticResult.columns?.map((col: string) => (
-                        <th
-                          key={col}
-                          className="px-4 py-3 text-left text-xs font-medium text-dark-muted uppercase"
-                        >
-                          {col}
-                        </th>
-                      ))}
+                      {syntheticResult.columns?.map((col: any) => {
+                        const colName = typeof col === 'string' ? col : col.name
+                        return (
+                          <th
+                            key={colName}
+                            className="px-4 py-3 text-left text-xs font-medium text-dark-muted uppercase"
+                          >
+                            {colName}
+                          </th>
+                        )
+                      })}
                     </tr>
                   </thead>
                   <tbody className="bg-dark-card divide-y divide-dark-border">
                     {syntheticResult.preview.slice(0, 50).map((row: any, idx: number) => (
                       <tr key={idx} className="hover:bg-dark-surface">
-                        {syntheticResult.columns?.map((col: string) => (
-                          <td key={col} className="px-4 py-3 text-sm text-dark-text">
-                            {row[col] !== null && row[col] !== undefined
-                              ? typeof row[col] === 'number'
-                                ? Number.isInteger(row[col])
-                                  ? row[col]
-                                  : row[col].toFixed(2)
-                                : String(row[col])
-                              : '-'}
-                          </td>
-                        ))}
+                        {syntheticResult.columns?.map((col: any) => {
+                          const colName = typeof col === 'string' ? col : col.name
+                          return (
+                            <td key={colName} className="px-4 py-3 text-sm text-dark-text">
+                              {row[colName] !== null && row[colName] !== undefined
+                                ? typeof row[colName] === 'number'
+                                  ? Number.isInteger(row[colName])
+                                    ? row[colName]
+                                    : row[colName].toFixed(2)
+                                  : String(row[colName])
+                                : '-'}
+                            </td>
+                          )
+                        })}
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
             </div>
+          )}
+
+          {/* Quality Dashboard */}
+          {syntheticResult.synthetic_dataset_id && (
+            <QualityDashboard
+              datasetId={syntheticResult.synthetic_dataset_id}
+              initialQualityScore={syntheticResult.quality_score}
+            />
           )}
 
           {/* Information */}

@@ -328,6 +328,33 @@ class JobResponse(BaseModel):
     estimated_seconds: Optional[int] = None
 
 
+class ColumnInfo(BaseModel):
+    """Column information."""
+    name: str
+    dtype: str
+
+
+class GenerationResultResponse(BaseModel):
+    """Enhanced response for completed generation with preview and quality info."""
+    job_id: UUID
+    status: JobStatus
+    message: str
+
+    # Dataset info
+    synthetic_dataset_id: Optional[UUID] = None
+    num_rows: int = 0
+    columns: List[ColumnInfo] = Field(default_factory=list)
+
+    # Preview data
+    preview: List[Dict[str, Any]] = Field(default_factory=list)
+
+    # Quality info (basic, call quality endpoints for full report)
+    quality_score: Optional[float] = None
+
+    # Warnings from condition validation
+    warnings: List[str] = Field(default_factory=list)
+
+
 class JobStatusResponse(BaseModel):
     """Detailed job status."""
     job_id: UUID
