@@ -911,3 +911,232 @@ async def list_statistical_test_types():
             }
         ]
     }
+
+
+# ========================================
+# Notification Configuration
+# ========================================
+
+class NotificationChannelConfig(BaseModel):
+    """Configuration for a notification channel."""
+    channel: str = Field(..., description="Channel type: email, slack, or webhook")
+    is_enabled: bool = Field(True, description="Whether channel is enabled")
+    config: dict = Field(..., description="Channel-specific configuration")
+
+
+class NotificationChannelResponse(BaseModel):
+    """Response for notification channel configuration."""
+    channel: str
+    is_enabled: bool
+    config: dict
+    updated_at: Optional[datetime] = None
+
+
+class NotificationTestRequest(BaseModel):
+    """Request to test a notification channel."""
+    channel: str = Field(..., description="Channel to test: email, slack, or webhook")
+    test_message: Optional[str] = Field("Test notification from ZeroStack", description="Custom test message")
+
+
+@router.get("/notifications/config", response_model=List[NotificationChannelResponse])
+async def list_notification_configs():
+    """
+    List all notification channel configurations.
+
+    Returns settings for email, slack, and webhook channels.
+    """
+    query = "SELECT channel, is_enabled, config, updated_at FROM notification_settings"
+
+    with engine.connect() as conn:
+        result = conn.execute(text(query))
+        channels = []
+        for row in result:
+            config = row.config if isinstance(row.config, dict) else {}
+            # Mask sensitive fields
+            if 'password' in config:
+                config = {**config, 'password': '***'}
+            if 'webhook_url' in config:
+                url = config.get('webhook_url', '')
+                config = {**config, 'webhook_url': url[:30] + '...' if len(url) > 30 else url}
+
+            channels.append(NotificationChannelResponse(
+                channel=row.channel,
+                is_enabled=row.is_enabled,
+                config=config,
+                updated_at=row.updated_at
+            ))
+        return channels
+
+
+@router.post("/notifications/config", response_model=NotificationChannelResponse)
+async def configure_notification_channel(request: NotificationChannelConfig):
+    """
+    Configure a notification channel.
+
+    **Email configuration:**
+    ```json
+    {
+      "channel": "email",
+      "is_enabled": true,
+      "config": {
+        "smtp_host": "smtp.gmail.com",
+        "smtp_port": 587,
+        "smtp_user": "user@example.com",
+        "smtp_password": "app_password",
+        "from_email": "alerts@example.com",
+        "to_emails": ["admin@example.com"]
+      }
+    }
+    ```
+
+    **Slack configuration:**
+    ```json
+    {
+      "channel": "slack",
+      "is_enabled": true,
+      "config": {
+        "webhook_url": "https://hooks.slack.com/services/...",
+        "channel": "#alerts"
+      }
+    }
+    ```
+
+    **Webhook configuration:**
+    ```json
+    {
+      "channel": "webhook",
+      "is_enabled": true,
+      "config": {
+        "url": "https://your-service.com/webhook",
+        "headers": {"Authorization": "Bearer token"}
+      }
+    }
+    ```
+    """
+    from services.notifications import NotificationService, NotificationChannel
+
+    if request.channel not in ["email", "slack", "webhook"]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid channel: {request.channel}. Must be email, slack, or webhook"
+        )
+
+    service = NotificationService(engine)
+    channel_enum = NotificationChannel(request.channel)
+    service.configure_channel(channel_enum, request.is_enabled, request.config)
+
+    # Return the configured channel (mask sensitive data)
+    response_config = {**request.config}
+    if 'password' in response_config:
+        response_config['password'] = '***'
+    if 'smtp_password' in response_config:
+        response_config['smtp_password'] = '***'
+
+    return NotificationChannelResponse(
+        channel=request.channel,
+        is_enabled=request.is_enabled,
+        config=response_config,
+        updated_at=datetime.utcnow()
+    )
+
+
+@router.post("/notifications/test")
+async def test_notification_channel(request: NotificationTestRequest):
+    """
+    Test a notification channel by sending a test message.
+
+    Returns success/failure status and any error details.
+    """
+    from services.notifications import NotificationService, NotificationChannel
+
+    if request.channel not in ["email", "slack", "webhook"]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid channel: {request.channel}. Must be email, slack, or webhook"
+        )
+
+    service = NotificationService(engine)
+    channel_enum = NotificationChannel(request.channel)
+
+    result = await service.send(
+        channel=channel_enum,
+        subject="ZeroStack Test Notification",
+        body=request.test_message or "This is a test notification from ZeroStack drift detection."
+    )
+
+    return {
+        "channel": request.channel,
+        "success": result.success,
+        "message": result.message,
+        "error": result.error
+    }
+
+
+@router.get("/checks/{check_id}/notification-channels")
+async def get_check_notification_channels(check_id: str):
+    """
+    Get notification channels configured for a specific drift check.
+
+    Returns list of channel names (e.g., ["email", "slack"]).
+    """
+    query = """
+        SELECT notification_channels
+        FROM drift_checks
+        WHERE id = :check_id
+    """
+
+    with engine.connect() as conn:
+        result = conn.execute(text(query), {"check_id": check_id}).fetchone()
+
+        if not result:
+            raise HTTPException(status_code=404, detail="Drift check not found")
+
+        channels = result.notification_channels or []
+        return {
+            "check_id": check_id,
+            "channels": channels
+        }
+
+
+@router.put("/checks/{check_id}/notification-channels")
+async def set_check_notification_channels(
+    check_id: str,
+    channels: List[str] = Query(..., description="List of channels: email, slack, webhook")
+):
+    """
+    Set notification channels for a specific drift check.
+
+    When this check triggers an alert, notifications will be sent to all
+    specified channels that are enabled and configured.
+
+    Example: `/drift/checks/{id}/notification-channels?channels=email&channels=slack`
+    """
+    # Validate channels
+    valid_channels = {"email", "slack", "webhook"}
+    invalid = set(channels) - valid_channels
+    if invalid:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid channels: {invalid}. Must be one of: {valid_channels}"
+        )
+
+    query = """
+        UPDATE drift_checks
+        SET notification_channels = :channels
+        WHERE id = :check_id
+    """
+
+    with engine.begin() as conn:
+        result = conn.execute(text(query), {
+            "check_id": check_id,
+            "channels": channels
+        })
+
+        if result.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Drift check not found")
+
+    return {
+        "check_id": check_id,
+        "channels": channels,
+        "message": f"Notification channels updated: {channels}"
+    }

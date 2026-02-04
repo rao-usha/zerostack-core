@@ -32,100 +32,103 @@ class TestDocumentUploadSummarization:
         )
         return result["context_id"]
     
-    def test_upload_with_auto_summarize_skipped_if_no_key(self, test_context_id):
+    @pytest.mark.asyncio
+    async def test_upload_with_auto_summarize_skipped_if_no_key(self, test_context_id):
         """Test that upload succeeds even if summarization is skipped due to no API key."""
         with patch('domains.contexts.service.DocumentSummarizer') as mock_summarizer_class:
             mock_summarizer = Mock()
             mock_summarizer.summarize.return_value = None
             mock_summarizer_class.return_value = mock_summarizer
-            
+
             service = ContextService()
             service.summarizer = mock_summarizer
-            
+
             from fastapi import UploadFile
             import io
-            
+
             test_file = UploadFile(
                 filename="test.txt",
                 file=io.BytesIO(b"This is a test document with enough text for summarization. " * 10),
                 headers={"content-type": "text/plain"}
             )
-            
+
             # This should not raise an exception even if summarization fails
             result = await service.upload_document(
                 context_id=test_context_id,
                 file=test_file,
                 auto_summarize=True
             )
-            
+
             assert result is not None
             assert "document_id" in result
     
-    def test_summarize_document_with_valid_key(self, test_context_id):
+    @pytest.mark.asyncio
+    async def test_summarize_document_with_valid_key(self, test_context_id):
         """Test summarizing a document when API key is configured."""
         with patch('domains.contexts.service.DocumentSummarizer') as mock_summarizer_class:
             mock_summarizer = Mock()
             mock_summarizer.summarize.return_value = "This is a test summary of the document."
             mock_summarizer_class.return_value = mock_summarizer
-            
+
             service = ContextService()
             service.summarizer = mock_summarizer
-            
+
             # First upload a document
             from fastapi import UploadFile
             import io
-            
+
             test_file = UploadFile(
                 filename="test.txt",
                 file=io.BytesIO(b"This is a test document with enough text for summarization. " * 10),
                 headers={"content-type": "text/plain"}
             )
-            
+
             upload_result = await service.upload_document(
                 context_id=test_context_id,
                 file=test_file,
                 auto_summarize=False  # Don't auto-summarize
             )
-            
+
             doc_id = upload_result["document_id"]
-            
+
             # Now try to summarize
             summary = service.summarize_document(doc_id, style="concise")
-            
+
             assert summary is not None
             assert summary == "This is a test summary of the document."
             mock_summarizer.summarize.assert_called_once()
     
-    def test_summarize_document_without_key(self, test_context_id):
+    @pytest.mark.asyncio
+    async def test_summarize_document_without_key(self, test_context_id):
         """Test summarizing returns None when API key is not configured."""
         with patch('domains.contexts.service.DocumentSummarizer') as mock_summarizer_class:
             mock_summarizer = Mock()
             mock_summarizer.summarize.return_value = None  # Simulates no API key
             mock_summarizer_class.return_value = mock_summarizer
-            
+
             service = ContextService()
             service.summarizer = mock_summarizer
-            
+
             from fastapi import UploadFile
             import io
-            
+
             test_file = UploadFile(
                 filename="test.txt",
                 file=io.BytesIO(b"This is a test document with enough text for summarization. " * 10),
                 headers={"content-type": "text/plain"}
             )
-            
+
             upload_result = await service.upload_document(
                 context_id=test_context_id,
                 file=test_file,
                 auto_summarize=False
             )
-            
+
             doc_id = upload_result["document_id"]
-            
+
             # Try to summarize
             summary = service.summarize_document(doc_id, style="concise")
-            
+
             assert summary is None
     
     def test_summarize_document_not_found(self):
@@ -135,31 +138,32 @@ class TestDocumentUploadSummarization:
         with pytest.raises(ValueError, match="Document not found"):
             service.summarize_document(str(uuid.uuid4()), style="concise")
     
-    def test_summarize_document_no_extractable_text(self, test_context_id):
+    @pytest.mark.asyncio
+    async def test_summarize_document_no_extractable_text(self, test_context_id):
         """Test that summarizing a document without extractable text returns None."""
         service = ContextService()
-        
+
         from fastapi import UploadFile
         import io
-        
+
         # Upload a binary file that can't be extracted
         test_file = UploadFile(
             filename="test.bin",
             file=io.BytesIO(b"\x00\x01\x02\x03" * 100),  # Binary data
             headers={"content-type": "application/octet-stream"}
         )
-        
+
         upload_result = await service.upload_document(
             context_id=test_context_id,
             file=test_file,
             auto_summarize=False
         )
-        
+
         doc_id = upload_result["document_id"]
-        
+
         # Try to summarize - should return None due to no extractable text
         summary = service.summarize_document(doc_id, style="concise")
-        
+
         assert summary is None
 
 

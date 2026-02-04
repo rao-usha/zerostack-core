@@ -322,6 +322,83 @@ async def get_connection(
     )
 
 
+@router.patch("/{connection_id}", response_model=DataConnectionResponse)
+async def update_connection(
+    connection_id: UUID,
+    request: DataConnectionUpdate,
+    session: AsyncSession = Depends(get_async_session)
+):
+    """Update a data connection.
+
+    All fields are optional. Password will be encrypted before storage.
+    """
+    from datetime import datetime
+    from sqlalchemy import update
+
+    # Check connection exists
+    stmt = select(data_connections).where(data_connections.c.id == connection_id)
+    result = await session.execute(stmt)
+    existing = result.fetchone()
+
+    if not existing:
+        raise HTTPException(status_code=404, detail="Connection not found")
+
+    # Build update values
+    update_values = {"updated_at": datetime.utcnow()}
+
+    if request.name is not None:
+        update_values["name"] = request.name
+    if request.description is not None:
+        update_values["description"] = request.description
+    if request.host is not None:
+        update_values["host"] = request.host
+    if request.port is not None:
+        update_values["port"] = request.port
+    if request.database is not None:
+        update_values["database"] = request.database
+    if request.username is not None:
+        update_values["username"] = request.username
+    if request.password is not None:
+        # Encrypt password before storing
+        update_values["password_encrypted"] = encrypt_password(request.password)
+    if request.extra_config is not None:
+        update_values["extra_config"] = request.extra_config
+
+    # Update the connection
+    await session.execute(
+        update(data_connections)
+        .where(data_connections.c.id == connection_id)
+        .values(**update_values)
+    )
+    await session.commit()
+
+    # Fetch updated connection
+    result = await session.execute(stmt)
+    r = result.fetchone()
+
+    logger.info(f"Updated connection {connection_id}")
+
+    return DataConnectionResponse(
+        id=r.id,
+        name=r.name,
+        description=r.description,
+        connection_type=r.connection_type,
+        host=r.host,
+        port=r.port,
+        database=r.database,
+        username=r.username,
+        status=r.status,
+        last_connected_at=r.last_connected_at,
+        last_error=r.last_error,
+        last_scan_at=r.last_scan_at,
+        scan_status=r.scan_status or "never",
+        tables_count=r.tables_count or 0,
+        total_rows=r.total_rows or 0,
+        created_at=r.created_at,
+        updated_at=r.updated_at
+    )
+
+
 @router.delete("/{connection_id}", status_code=204)
 async def delete_connection(
     connection_id: UUID,
