@@ -24,16 +24,27 @@ router = APIRouter(prefix="/personas", tags=["personas"])
 # SESSION DEPENDENCY
 # ============================================================================
 
+# Module-level engine (shared across all requests)
+_engine = None
+_async_session_factory = None
+
+
+def _get_session_factory():
+    """Get or create the async session factory (singleton pattern)."""
+    global _engine, _async_session_factory
+    if _engine is None:
+        async_url = settings.database_url.replace('postgresql+psycopg', 'postgresql+asyncpg')
+        if 'asyncpg' not in async_url:
+            async_url = settings.database_url.replace('postgresql://', 'postgresql+asyncpg://')
+        _engine = create_async_engine(async_url)
+        _async_session_factory = sessionmaker(_engine, class_=AsyncSession, expire_on_commit=False)
+    return _async_session_factory
+
+
 async def get_async_session():
     """Get async database session."""
-    async_url = settings.database_url.replace('postgresql+psycopg', 'postgresql+asyncpg')
-    if 'asyncpg' not in async_url:
-        async_url = settings.database_url.replace('postgresql://', 'postgresql+asyncpg://')
-
-    engine = create_async_engine(async_url)
-    async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-
-    async with async_session() as session:
+    session_factory = _get_session_factory()
+    async with session_factory() as session:
         yield session
         await session.commit()
 

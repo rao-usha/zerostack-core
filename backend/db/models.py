@@ -21,8 +21,28 @@ users = Table(
     Column("id", UUID, primary_key=True),
     Column("org_id", UUID, ForeignKey("orgs.id"), nullable=False),
     Column("email", String(320), unique=True, nullable=False),
+    Column("username", String(255), unique=True, nullable=True),
+    Column("password_hash", Text, nullable=True),
+    Column("full_name", String(500), nullable=True),
     Column("role", String(64), nullable=False, default="member"),
+    Column("is_active", Boolean, nullable=False, server_default="true"),
     Column("created_at", TIMESTAMP(timezone=True), server_default=func.now()),
+    Column("updated_at", TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now()),
+)
+
+
+refresh_tokens = Table(
+    "refresh_tokens",
+    METADATA,
+    Column("id", UUID, primary_key=True),
+    Column("user_id", UUID, ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
+    Column("token_hash", String(255), nullable=False, unique=True),
+    Column("expires_at", TIMESTAMP(timezone=True), nullable=False),
+    Column("revoked", Boolean, nullable=False, server_default="false"),
+    Column("revoked_at", TIMESTAMP(timezone=True), nullable=True),
+    Column("created_at", TIMESTAMP(timezone=True), server_default=func.now()),
+    Column("user_agent", String(500), nullable=True),
+    Column("ip_address", String(45), nullable=True),
 )
 
 

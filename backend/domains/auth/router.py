@@ -1,76 +1,290 @@
-"""Auth API router."""
-from fastapi import APIRouter, HTTPException, Depends
-from typing import List
+"""Auth API router with JWT authentication."""
+from fastapi import APIRouter, HTTPException, Depends, Header
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from typing import List, Optional
 from uuid import UUID
+
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import sessionmaker
+
+from core.config import settings
+from core.jwt import verify_token
 from domains.auth.models import (
-    User, UserCreate, UserLogin, Token, Organization, OrganizationCreate,
-    APIToken, APITokenCreate
+    User, UserCreate, UserLogin, Token, TokenRefreshRequest, TokenRefreshResponse,
+    Organization, OrganizationCreate, APIToken, APITokenCreate
 )
 from domains.auth.service import AuthService, OrganizationService, TokenService
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-
-auth_service = AuthService()
-org_service = OrganizationService()
-token_service = TokenService()
+security = HTTPBearer(auto_error=False)
 
 
-# TODO: Add authentication dependencies
-# def get_current_user() -> User:
-#     """Get current authenticated user."""
-#     pass
+# ============================================================================
+# SESSION DEPENDENCY
+# ============================================================================
 
-# def get_current_org() -> Organization:
-#     """Get current organization context."""
-#     pass
+# Module-level engine (shared across all requests)
+_engine = None
+_async_session_factory = None
 
+
+def _get_session_factory():
+    """Get or create the async session factory (singleton pattern)."""
+    global _engine, _async_session_factory
+    if _engine is None:
+        async_url = settings.database_url.replace('postgresql+psycopg', 'postgresql+asyncpg')
+        if 'asyncpg' not in async_url:
+            async_url = settings.database_url.replace('postgresql://', 'postgresql+asyncpg://')
+        _engine = create_async_engine(async_url)
+        _async_session_factory = sessionmaker(_engine, class_=AsyncSession, expire_on_commit=False)
+    return _async_session_factory
+
+
+async def get_async_session():
+    """Get async database session."""
+    session_factory = _get_session_factory()
+    async with session_factory() as session:
+        yield session
+        await session.commit()
+
+
+# ============================================================================
+# AUTH DEPENDENCIES
+# ============================================================================
+
+async def get_current_user_optional(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    session: AsyncSession = Depends(get_async_session)
+) -> Optional[User]:
+    """Get current user from JWT token (optional - returns None if no token)."""
+    if not credentials:
+        return None
+
+    auth_service = AuthService(session)
+    user = await auth_service.verify_token(credentials.credentials)
+    return user
+
+
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
+    session: AsyncSession = Depends(get_async_session)
+) -> User:
+    """Get current authenticated user (required - raises 401 if not authenticated)."""
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    auth_service = AuthService(session)
+    user = await auth_service.verify_token(credentials.credentials)
+
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="User account is disabled")
+
+    return user
+
+
+# ============================================================================
+# PUBLIC ENDPOINTS
+# ============================================================================
 
 @router.post("/register", response_model=User, status_code=201)
-async def register(user_data: UserCreate):
-    """Register a new user."""
-    raise HTTPException(status_code=501, detail="Not implemented")
+async def register(
+    user_data: UserCreate,
+    session: AsyncSession = Depends(get_async_session)
+):
+    """Register a new user.
+
+    Creates a new user account with hashed password.
+    """
+    auth_service = AuthService(session)
+
+    try:
+        user = await auth_service.register_user(user_data)
+        return user
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.post("/login", response_model=Token)
-async def login(login_data: UserLogin):
-    """Login and get access token."""
-    raise HTTPException(status_code=501, detail="Not implemented")
+async def login(
+    login_data: UserLogin,
+    session: AsyncSession = Depends(get_async_session)
+):
+    """Login and get access token.
 
+    Authenticates user credentials and returns a JWT access token.
+    """
+    auth_service = AuthService(session)
+    token = await auth_service.authenticate_user(login_data)
+
+    if not token:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid email or password"
+        )
+
+    return token
+
+
+# ============================================================================
+# TOKEN REFRESH & LOGOUT
+# ============================================================================
+
+@router.post("/refresh", response_model=TokenRefreshResponse)
+async def refresh_token(
+    request: TokenRefreshRequest,
+    session: AsyncSession = Depends(get_async_session)
+):
+    """Refresh access token using a refresh token.
+
+    The old refresh token is revoked and a new one is issued (token rotation).
+    """
+    auth_service = AuthService(session)
+    result = await auth_service.refresh_access_token(request.refresh_token)
+
+    if not result:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired refresh token"
+        )
+
+    return result
+
+
+@router.post("/logout", status_code=204)
+async def logout(
+    request: TokenRefreshRequest,
+    session: AsyncSession = Depends(get_async_session)
+):
+    """Logout by revoking a refresh token.
+
+    The refresh token will be invalidated. The access token will remain
+    valid until it expires (typically 30 minutes).
+    """
+    auth_service = AuthService(session)
+    await auth_service.logout(request.refresh_token)
+    return None
+
+
+@router.post("/logout-all", status_code=204)
+async def logout_all(
+    session: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
+):
+    """Logout from all devices.
+
+    Revokes all refresh tokens for the current user. Requires authentication.
+    """
+    auth_service = AuthService(session)
+    await auth_service.logout_all(current_user.id)
+    return None
+
+
+# ============================================================================
+# PROTECTED ENDPOINTS
+# ============================================================================
 
 @router.get("/me", response_model=User)
-async def get_current_user():
-    """Get current user info."""
-    # TODO: Use Depends(get_current_user)
-    raise HTTPException(status_code=501, detail="Not implemented")
+async def get_me(current_user: User = Depends(get_current_user)):
+    """Get current user info.
+
+    Returns information about the currently authenticated user.
+    """
+    return current_user
 
 
 @router.post("/organizations", response_model=Organization, status_code=201)
-async def create_organization(org_data: OrganizationCreate):
-    """Create an organization."""
-    raise HTTPException(status_code=501, detail="Not implemented")
+async def create_organization(
+    org_data: OrganizationCreate,
+    session: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
+):
+    """Create an organization.
+
+    Requires authentication. Only admins can create organizations.
+    """
+    # TODO: Add admin role check
+    org_service = OrganizationService(session)
+
+    try:
+        org = await org_service.create_organization(org_data)
+        return org
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("/organizations", response_model=List[Organization])
-async def list_organizations():
-    """List organizations."""
-    raise HTTPException(status_code=501, detail="Not implemented")
+async def list_organizations(
+    session: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
+):
+    """List organizations.
 
+    Returns all organizations the current user has access to.
+    """
+    org_service = OrganizationService(session)
+    return await org_service.list_organizations()
+
+
+@router.get("/organizations/{org_id}", response_model=Organization)
+async def get_organization(
+    org_id: UUID,
+    session: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
+):
+    """Get an organization by ID."""
+    org_service = OrganizationService(session)
+    org = await org_service.get_organization(org_id)
+
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    return org
+
+
+# ============================================================================
+# API TOKEN ENDPOINTS (Placeholder - requires api_tokens table)
+# ============================================================================
 
 @router.post("/tokens", response_model=APIToken, status_code=201)
-async def create_api_token(token_data: APITokenCreate):
-    """Create an API token."""
-    # TODO: Return token only once on creation
-    raise HTTPException(status_code=501, detail="Not implemented")
+async def create_api_token(
+    token_data: APITokenCreate,
+    current_user: User = Depends(get_current_user)
+):
+    """Create an API token.
+
+    Note: This endpoint is not yet implemented. Requires api_tokens table.
+    """
+    raise HTTPException(
+        status_code=501,
+        detail="API tokens not yet implemented. Use JWT authentication."
+    )
 
 
 @router.get("/tokens", response_model=List[APIToken])
-async def list_api_tokens():
-    """List API tokens."""
-    raise HTTPException(status_code=501, detail="Not implemented")
+async def list_api_tokens(current_user: User = Depends(get_current_user)):
+    """List API tokens.
+
+    Note: This endpoint is not yet implemented. Requires api_tokens table.
+    """
+    raise HTTPException(
+        status_code=501,
+        detail="API tokens not yet implemented. Use JWT authentication."
+    )
 
 
 @router.delete("/tokens/{token_id}", status_code=204)
-async def revoke_api_token(token_id: UUID):
-    """Revoke an API token."""
-    raise HTTPException(status_code=501, detail="Not implemented")
+async def revoke_api_token(
+    token_id: UUID,
+    current_user: User = Depends(get_current_user)
+):
+    """Revoke an API token.
 
+    Note: This endpoint is not yet implemented. Requires api_tokens table.
+    """
+    raise HTTPException(
+        status_code=501,
+        detail="API tokens not yet implemented. Use JWT authentication."
+    )

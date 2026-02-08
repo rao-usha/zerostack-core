@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     # Security
     secret_key: Optional[str] = None
     access_token_expire_minutes: int = 30
+    refresh_token_expire_days: int = 7
 
     # Logging
     log_level: str = "INFO"
@@ -57,6 +58,17 @@ class Settings(BaseSettings):
     s3_secret_key: str = "minioadmin"
     s3_bucket: str = "nex-data"
     s3_use_ssl: bool = False
+
+    # ========================================
+    # Upload Limits
+    # ========================================
+    max_upload_size_mb: int = 500  # Max file size in MB (default 500MB)
+    max_upload_size_bytes: int = 500 * 1024 * 1024  # Computed from MB
+
+    @property
+    def max_upload_bytes(self) -> int:
+        """Get max upload size in bytes."""
+        return self.max_upload_size_mb * 1024 * 1024
 
     # ========================================
     # Compute Adapter Configuration

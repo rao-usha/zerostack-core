@@ -48,10 +48,26 @@ class UserLogin(BaseModel):
 
 
 class Token(BaseModel):
-    """Auth token."""
+    """Auth token response with access and refresh tokens."""
     access_token: str
+    refresh_token: Optional[str] = None
     token_type: str = "bearer"
     expires_in: int
+    refresh_expires_in: Optional[int] = None
+
+
+class TokenRefreshRequest(BaseModel):
+    """Request to refresh access token."""
+    refresh_token: str
+
+
+class TokenRefreshResponse(BaseModel):
+    """Response after refreshing tokens."""
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    expires_in: int
+    refresh_expires_in: int
 
 
 class Organization(BaseModel):

@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends, Q
 from sqlalchemy import select, func, update, delete
 from sqlmodel import Session
 
+from core.config import settings
 from db_session import get_session
 from .db_models import datasets, dataset_versions
 from .models import (
@@ -21,6 +22,37 @@ from .storage import get_dataset_storage
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/datasets", tags=["datasets"])
+
+
+async def validate_file_size(file: UploadFile) -> int:
+    """Validate file size is within limits.
+
+    Args:
+        file: The uploaded file
+
+    Returns:
+        File size in bytes
+
+    Raises:
+        HTTPException: If file exceeds size limit
+    """
+    # Read file to get size (FastAPI doesn't provide size directly)
+    content = await file.read()
+    size = len(content)
+
+    # Reset file position for later reading
+    await file.seek(0)
+
+    max_size = settings.max_upload_bytes
+    if size > max_size:
+        max_mb = settings.max_upload_size_mb
+        actual_mb = size / (1024 * 1024)
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large: {actual_mb:.1f}MB exceeds limit of {max_mb}MB"
+        )
+
+    return size
 
 
 @router.post("/upload", response_model=DatasetUploadResponse, status_code=201)
@@ -37,13 +69,16 @@ async def upload_dataset(
     Supported formats: CSV, Parquet, JSON/JSONL, Excel (xlsx/xls)
 
     The file will be:
-    1. Streamed to object storage
+    1. Validated for size (max {settings.max_upload_size_mb}MB)
     2. Converted to Parquet for efficient querying
     3. Schema will be automatically inferred
     4. SHA256 hash computed for versioning/deduplication
     """
     if not file.filename:
         raise HTTPException(status_code=400, detail="No filename provided")
+
+    # Validate file size before processing
+    await validate_file_size(file)
 
     # Parse tags
     tag_list = [t.strip() for t in tags.split(",")] if tags else []
@@ -176,6 +211,9 @@ async def upload_new_version(
 
     if not file.filename:
         raise HTTPException(status_code=400, detail="No filename provided")
+
+    # Validate file size before processing
+    await validate_file_size(file)
 
     # Get next version number
     version_number = (dataset_row.current_version_number or 0) + 1
