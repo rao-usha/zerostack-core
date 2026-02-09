@@ -506,8 +506,8 @@ The Nex platform is a sophisticated AI-native data platform with 28 backend doma
 
 | Page | Status | Action |
 |------|--------|--------|
-| LineageDemo | Mock data only | Connect to real lineage API |
-| LineageFullDemo | Mock data only | Connect to real lineage API |
+| LineageDemo | ✅ Has Demo/Live toggle | Already connected to API |
+| LineageFullDemo | ✅ Uses real API | Already connected to API |
 
 ### 2.4 Frontend Recommendations
 
@@ -649,7 +649,7 @@ The Nex platform is a sophisticated AI-native data platform with 28 backend doma
 | Complete Governance backend | HIGH | MEDIUM | ✅ Done |
 | Complete Personas backend | HIGH | MEDIUM | ✅ Done |
 | Implement notification delivery | HIGH | MEDIUM | ⏳ Pending |
-| Connect Lineage demos to real API | MEDIUM | LOW | ⏳ Pending |
+| Connect Lineage demos to real API | MEDIUM | LOW | ✅ Done (has Demo/Live toggle) |
 
 ### Phase 3: Quality & Polish (Current Focus)
 
@@ -677,7 +677,7 @@ These can be completed in a day or less:
 
 1. **Add password encryption** - Use Fernet or similar for data connections
 2. ~~**Fix MLWorkbench to use API client**~~ ✅ Already done
-3. **Connect LineageDemo to real API** - Replace mock data
+3. ~~**Connect LineageDemo to real API**~~ ✅ Already has Demo/Live toggle
 4. **Add basic rate limiting** - FastAPI middleware
 5. **Add RBAC middleware** - Protect admin endpoints
 6. **Implement notification channels** - Email/Slack/Webhook delivery
