@@ -1,15 +1,15 @@
 """Auth API router with JWT authentication."""
-from fastapi import APIRouter, HTTPException, Depends, Header, Request
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from typing import List, Optional
+from fastapi import APIRouter, HTTPException, Depends, Request
+from typing import List
 from uuid import UUID
 
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
 from core.jwt import verify_token
 from core.rate_limit import limiter
+from core.rbac import require_admin, require_role
+from core.auth_deps import get_current_user, get_current_user_optional, get_async_session
 from domains.auth.models import (
     User, UserCreate, UserLogin, Token, TokenRefreshRequest, TokenRefreshResponse,
     Organization, OrganizationCreate, APIToken, APITokenCreate
@@ -17,73 +17,6 @@ from domains.auth.models import (
 from domains.auth.service import AuthService, OrganizationService, TokenService
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-security = HTTPBearer(auto_error=False)
-
-
-# ============================================================================
-# SESSION DEPENDENCY
-# ============================================================================
-
-# Module-level engine (shared across all requests)
-_engine = None
-_async_session_factory = None
-
-
-def _get_session_factory():
-    """Get or create the async session factory (singleton pattern)."""
-    global _engine, _async_session_factory
-    if _engine is None:
-        async_url = settings.database_url.replace('postgresql+psycopg', 'postgresql+asyncpg')
-        if 'asyncpg' not in async_url:
-            async_url = settings.database_url.replace('postgresql://', 'postgresql+asyncpg://')
-        _engine = create_async_engine(async_url)
-        _async_session_factory = sessionmaker(_engine, class_=AsyncSession, expire_on_commit=False)
-    return _async_session_factory
-
-
-async def get_async_session():
-    """Get async database session."""
-    session_factory = _get_session_factory()
-    async with session_factory() as session:
-        yield session
-        await session.commit()
-
-
-# ============================================================================
-# AUTH DEPENDENCIES
-# ============================================================================
-
-async def get_current_user_optional(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
-    session: AsyncSession = Depends(get_async_session)
-) -> Optional[User]:
-    """Get current user from JWT token (optional - returns None if no token)."""
-    if not credentials:
-        return None
-
-    auth_service = AuthService(session)
-    user = await auth_service.verify_token(credentials.credentials)
-    return user
-
-
-async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
-    session: AsyncSession = Depends(get_async_session)
-) -> User:
-    """Get current authenticated user (required - raises 401 if not authenticated)."""
-    if not credentials:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-
-    auth_service = AuthService(session)
-    user = await auth_service.verify_token(credentials.credentials)
-
-    if not user:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
-
-    if not user.is_active:
-        raise HTTPException(status_code=403, detail="User account is disabled")
-
-    return user
 
 
 # ============================================================================
@@ -209,13 +142,12 @@ async def get_me(current_user: User = Depends(get_current_user)):
 async def create_organization(
     org_data: OrganizationCreate,
     session: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_admin)
 ):
     """Create an organization.
 
-    Requires authentication. Only admins can create organizations.
+    Requires admin role.
     """
-    # TODO: Add admin role check
     org_service = OrganizationService(session)
 
     try:

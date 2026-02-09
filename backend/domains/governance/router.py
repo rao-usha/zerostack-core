@@ -9,6 +9,8 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 
 from core.config import settings
+from core.rbac import require_admin, require_role
+from domains.auth.models import User, Role
 from .models import (
     Policy, PolicyCreate, PolicyUpdate, PolicyType, PolicyStatus, PolicyListResponse,
     Approval, ApprovalCreate, ApprovalStatus, ApprovalListResponse, ApprovalReview,
@@ -51,9 +53,12 @@ async def get_async_session():
 @router.post("/policies", response_model=Policy, status_code=201)
 async def create_policy(
     policy: PolicyCreate,
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(require_admin)
 ):
     """Create a governance policy.
+
+    Requires admin role.
 
     Policies define rules for data access, usage, privacy, quality, and retention.
 
@@ -99,10 +104,12 @@ async def get_policy(
 async def update_policy(
     policy_id: UUID,
     updates: PolicyUpdate,
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(require_admin)
 ):
     """Update a policy.
 
+    Requires admin role.
     All fields are optional. Use status to activate, deactivate, or archive policies.
     """
     service = PolicyService(session)
@@ -118,10 +125,12 @@ async def update_policy(
 @router.delete("/policies/{policy_id}", status_code=204)
 async def delete_policy(
     policy_id: UUID,
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(require_admin)
 ):
     """Delete (archive) a policy.
 
+    Requires admin role.
     Policies are soft-deleted by changing status to 'archived'.
     """
     service = PolicyService(session)

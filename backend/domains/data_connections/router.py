@@ -10,6 +10,8 @@ from sqlalchemy.orm import sessionmaker
 
 from core.config import settings
 from core.encryption import encrypt_password
+from core.rbac import require_role, require_admin
+from domains.auth.models import User, Role
 from .db_models import data_connections, table_scans
 from .models import (
     DataConnectionCreate, DataConnectionUpdate, DataConnectionResponse,
@@ -237,9 +239,13 @@ async def list_connections(
 @router.post("", response_model=DataConnectionResponse, status_code=201)
 async def create_connection(
     request: DataConnectionCreate,
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(require_role(Role.DATA_SCIENTIST))
 ):
-    """Create a new data connection."""
+    """Create a new data connection.
+
+    Requires data_scientist role or higher.
+    """
     conn_id = uuid4()
     
     # Encrypt the password before storage
@@ -326,10 +332,12 @@ async def get_connection(
 async def update_connection(
     connection_id: UUID,
     request: DataConnectionUpdate,
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(require_role(Role.DATA_SCIENTIST))
 ):
     """Update a data connection.
 
+    Requires data_scientist role or higher.
     All fields are optional. Password will be encrypted before storage.
     """
     from datetime import datetime
@@ -402,9 +410,13 @@ async def update_connection(
 @router.delete("/{connection_id}", status_code=204)
 async def delete_connection(
     connection_id: UUID,
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(require_admin)
 ):
-    """Delete a data connection and its scans."""
+    """Delete a data connection and its scans.
+
+    Requires admin role.
+    """
     # Delete scans first (cascade should handle this, but be explicit)
     await session.execute(
         delete(table_scans).where(table_scans.c.connection_id == connection_id)

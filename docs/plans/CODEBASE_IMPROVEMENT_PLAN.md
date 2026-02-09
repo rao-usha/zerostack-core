@@ -584,11 +584,7 @@ The Nex platform is a sophisticated AI-native data platform with 28 backend doma
 
 1. ~~**Authentication Missing**~~ ✅ RESOLVED - JWT auth fully implemented
 
-2. **Password Encryption Missing** - Data connections store plaintext
-   - Risk: Security vulnerability
-   - Effort: LOW
-   - Priority: CRITICAL
-   - Location: `data_connections/router.py:245`
+2. ~~**Password Encryption Missing**~~ ✅ RESOLVED - Fernet encryption in core/encryption.py
 
 ### High Priority Issues
 
@@ -636,9 +632,9 @@ The Nex platform is a sophisticated AI-native data platform with 28 backend doma
 | Task | Priority | Effort | Status |
 |------|----------|--------|--------|
 | Implement JWT authentication | CRITICAL | HIGH | ✅ Done |
-| Add password encryption for connections | CRITICAL | LOW | ⏳ Pending |
+| Add password encryption for connections | CRITICAL | LOW | ✅ Done (Fernet encryption) |
 | Add critical tests (notebooks, synthetic) | CRITICAL | MEDIUM | 🔧 Partial |
-| Implement basic RBAC | HIGH | MEDIUM | ⏳ Pending |
+| Implement basic RBAC | HIGH | MEDIUM | ✅ Done (core/rbac.py + protected endpoints) |
 
 ### Phase 2: Feature Completion ✅ MOSTLY COMPLETE
 
@@ -675,11 +671,11 @@ The Nex platform is a sophisticated AI-native data platform with 28 backend doma
 
 These can be completed in a day or less:
 
-1. **Add password encryption** - Use Fernet or similar for data connections
+1. ~~**Add password encryption**~~ ✅ Already implemented with Fernet
 2. ~~**Fix MLWorkbench to use API client**~~ ✅ Already done
 3. ~~**Connect LineageDemo to real API**~~ ✅ Already has Demo/Live toggle
 4. ~~**Add basic rate limiting**~~ ✅ Already implemented with slowapi, enhanced for auth
-5. **Add RBAC middleware** - Protect admin endpoints
+5. ~~**Add RBAC middleware**~~ ✅ Implemented (core/rbac.py)
 6. **Implement notification channels** - Email/Slack/Webhook delivery
 
 ---
