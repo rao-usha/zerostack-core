@@ -1,5 +1,5 @@
 """Auth API router with JWT authentication."""
-from fastapi import APIRouter, HTTPException, Depends, Header
+from fastapi import APIRouter, HTTPException, Depends, Header, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import List, Optional
 from uuid import UUID
@@ -9,6 +9,7 @@ from sqlalchemy.orm import sessionmaker
 
 from core.config import settings
 from core.jwt import verify_token
+from core.rate_limit import limiter
 from domains.auth.models import (
     User, UserCreate, UserLogin, Token, TokenRefreshRequest, TokenRefreshResponse,
     Organization, OrganizationCreate, APIToken, APITokenCreate
@@ -90,13 +91,16 @@ async def get_current_user(
 # ============================================================================
 
 @router.post("/register", response_model=User, status_code=201)
+@limiter.limit("5/minute")  # Prevent registration spam
 async def register(
+    request: Request,
     user_data: UserCreate,
     session: AsyncSession = Depends(get_async_session)
 ):
     """Register a new user.
 
     Creates a new user account with hashed password.
+    Rate limited to 5 registrations per minute per IP.
     """
     auth_service = AuthService(session)
 
@@ -108,13 +112,16 @@ async def register(
 
 
 @router.post("/login", response_model=Token)
+@limiter.limit("10/minute")  # Prevent brute force attacks
 async def login(
+    request: Request,
     login_data: UserLogin,
     session: AsyncSession = Depends(get_async_session)
 ):
     """Login and get access token.
 
     Authenticates user credentials and returns a JWT access token.
+    Rate limited to 10 attempts per minute per IP.
     """
     auth_service = AuthService(session)
     token = await auth_service.authenticate_user(login_data)
@@ -133,16 +140,19 @@ async def login(
 # ============================================================================
 
 @router.post("/refresh", response_model=TokenRefreshResponse)
+@limiter.limit("30/minute")  # Allow reasonable refresh frequency
 async def refresh_token(
-    request: TokenRefreshRequest,
+    request: Request,
+    refresh_request: TokenRefreshRequest,
     session: AsyncSession = Depends(get_async_session)
 ):
     """Refresh access token using a refresh token.
 
     The old refresh token is revoked and a new one is issued (token rotation).
+    Rate limited to 30 refreshes per minute per IP.
     """
     auth_service = AuthService(session)
-    result = await auth_service.refresh_access_token(request.refresh_token)
+    result = await auth_service.refresh_access_token(refresh_request.refresh_token)
 
     if not result:
         raise HTTPException(
@@ -155,7 +165,7 @@ async def refresh_token(
 
 @router.post("/logout", status_code=204)
 async def logout(
-    request: TokenRefreshRequest,
+    logout_request: TokenRefreshRequest,
     session: AsyncSession = Depends(get_async_session)
 ):
     """Logout by revoking a refresh token.
@@ -164,7 +174,7 @@ async def logout(
     valid until it expires (typically 30 minutes).
     """
     auth_service = AuthService(session)
-    await auth_service.logout(request.refresh_token)
+    await auth_service.logout(logout_request.refresh_token)
     return None
 
 

@@ -657,7 +657,7 @@ The Nex platform is a sophisticated AI-native data platform with 28 backend doma
 |------|----------|--------|--------|
 | Split large frontend components | HIGH | HIGH | ⏳ Pending |
 | Standardize error handling | MEDIUM | MEDIUM | ⏳ Pending |
-| Add API rate limiting | MEDIUM | MEDIUM | ⏳ Pending |
+| Add API rate limiting | MEDIUM | MEDIUM | ✅ Done (slowapi + auth endpoints) |
 | Increase test coverage to 70% | MEDIUM | HIGH | 🔧 In Progress (~65%) |
 
 ### Phase 4: Enhancement
@@ -678,7 +678,7 @@ These can be completed in a day or less:
 1. **Add password encryption** - Use Fernet or similar for data connections
 2. ~~**Fix MLWorkbench to use API client**~~ ✅ Already done
 3. ~~**Connect LineageDemo to real API**~~ ✅ Already has Demo/Live toggle
-4. **Add basic rate limiting** - FastAPI middleware
+4. ~~**Add basic rate limiting**~~ ✅ Already implemented with slowapi, enhanced for auth
 5. **Add RBAC middleware** - Protect admin endpoints
 6. **Implement notification channels** - Email/Slack/Webhook delivery
 

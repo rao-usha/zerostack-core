@@ -15,13 +15,27 @@ def get_rate_limit_key(request: Request) -> str:
     """
     Get rate limit key from request.
 
-    Uses IP address by default, but can be extended to use
-    user ID when authentication is implemented.
+    Uses authenticated user ID if available, falls back to IP address.
+    This provides fairer rate limiting for authenticated users across
+    different IPs (mobile, VPN, etc.) while still limiting anonymous requests.
     """
-    # TODO: When auth is implemented, use user ID if available
-    # user = getattr(request.state, "user", None)
-    # if user:
-    #     return f"user:{user.id}"
+    # Try to get user from request state (set by auth middleware)
+    user = getattr(request.state, "user", None)
+    if user and hasattr(user, "id"):
+        return f"user:{user.id}"
+
+    # Check for JWT token in Authorization header and extract user ID
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        try:
+            from core.jwt import decode_token
+            token = auth_header.split(" ")[1]
+            payload = decode_token(token)
+            if payload and "sub" in payload:
+                return f"user:{payload['sub']}"
+        except Exception:
+            pass  # Invalid token, fall back to IP
+
     return get_remote_address(request)
 
 
