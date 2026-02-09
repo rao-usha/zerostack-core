@@ -597,9 +597,7 @@ The Nex platform is a sophisticated AI-native data platform with 28 backend doma
    - Files: DataDictionary, NotebookPage, DataExplorer
    - Effort: MEDIUM
 
-4. **Inconsistent API Client Usage** - MLWorkbench uses raw fetch
-   - Risk: Error handling inconsistency
-   - Effort: LOW
+4. ~~**Inconsistent API Client Usage**~~ ✅ RESOLVED - MLWorkbench already uses API client
 
 5. **Missing Error States in UI** - Errors logged but not shown
    - Risk: Poor user experience
@@ -678,7 +676,7 @@ The Nex platform is a sophisticated AI-native data platform with 28 backend doma
 These can be completed in a day or less:
 
 1. **Add password encryption** - Use Fernet or similar for data connections
-2. **Fix MLWorkbench to use API client** - Simple refactor
+2. ~~**Fix MLWorkbench to use API client**~~ ✅ Already done
 3. **Connect LineageDemo to real API** - Replace mock data
 4. **Add basic rate limiting** - FastAPI middleware
 5. **Add RBAC middleware** - Protect admin endpoints
