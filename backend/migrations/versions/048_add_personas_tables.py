@@ -1,7 +1,7 @@
-"""Add persona versioning and assignment tables.
+"""Add personas and related tables.
 
-Note: The main 'personas' table already exists in the schema.
-This migration adds supplementary tables for version history and user assignments.
+Creates the main personas table and supplementary tables for version history
+and user assignments.
 
 Revision ID: 048_add_personas_tables
 Revises: 047_add_governance_tables
@@ -19,6 +19,21 @@ depends_on = None
 
 
 def upgrade():
+    # Main personas table
+    op.create_table(
+        'personas',
+        sa.Column('id', UUID, primary_key=True),
+        sa.Column('org_id', UUID),
+        sa.Column('name', sa.String(255), nullable=False),
+        sa.Column('description', sa.Text),
+        sa.Column('constraints', JSONB, server_default='{}'),  # Stores extended fields
+        sa.Column('created_at', TIMESTAMP(timezone=True), server_default=sa.func.now()),
+        sa.Column('updated_at', TIMESTAMP(timezone=True), server_default=sa.func.now()),
+    )
+
+    op.create_index('ix_personas_org_id', 'personas', ['org_id'])
+    op.create_index('ix_personas_name', 'personas', ['name'])
+
     # Persona versions table - tracks history of persona changes
     op.create_table(
         'persona_versions',
@@ -60,3 +75,7 @@ def downgrade():
     op.drop_index('ix_persona_versions_version')
     op.drop_index('ix_persona_versions_persona_id')
     op.drop_table('persona_versions')
+
+    op.drop_index('ix_personas_name')
+    op.drop_index('ix_personas_org_id')
+    op.drop_table('personas')
