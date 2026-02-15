@@ -34,6 +34,7 @@ import {
 import { LucideIcon } from 'lucide-react'
 import { checkBackendHealth } from '../api/health'
 import NavGroup from './NavGroup'
+import ErrorBoundary from './ErrorBoundary'
 
 function HealthIndicator() {
   const [healthy, setHealthy] = useState(true)
@@ -296,7 +297,9 @@ export default function Layout({ children }: LayoutProps) {
 
         {/* Main Content */}
         <main className="flex-1 p-8 bg-dark-bg min-h-screen">
-          {children}
+          <ErrorBoundary>
+            {children}
+          </ErrorBoundary>
         </main>
       </div>
     </div>

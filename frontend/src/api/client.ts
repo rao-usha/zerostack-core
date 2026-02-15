@@ -1,4 +1,4 @@
-import axios from 'axios'
+import axios, { AxiosError } from 'axios'
 
 // Always use empty string for baseURL - this makes requests relative to page origin
 // Vite proxy will handle forwarding /api/* requests to the backend
@@ -8,6 +8,7 @@ const client = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  timeout: 30000, // 30 second default timeout
 })
 
 // Ensure baseURL stays empty - guard against any accidental modification
@@ -16,7 +17,7 @@ if (client.defaults.baseURL !== '') {
   client.defaults.baseURL = ''
 }
 
-// Debug interceptor to verify requests use correct URLs
+// Request interceptor - add auth token and debug logging
 client.interceptors.request.use((config) => {
   // Force relative URLs by ensuring baseURL is empty
   if (config.baseURL && config.baseURL !== '') {
@@ -24,10 +25,54 @@ client.interceptors.request.use((config) => {
     config.baseURL = ''
   }
 
-  console.log('[DEBUG] Request URL:', config.url)
-  console.log('[DEBUG] Page origin:', window.location.origin)
+  // Add auth token if available
+  const token = localStorage.getItem('auth_token')
+  if (token && config.headers) {
+    config.headers.Authorization = `Bearer ${token}`
+  }
+
+  // Debug logging in development
+  if (import.meta.env.DEV) {
+    console.log('[API] Request:', config.method?.toUpperCase(), config.url)
+  }
+
   return config
 })
+
+// Response interceptor - handle common errors
+client.interceptors.response.use(
+  (response) => {
+    return response
+  },
+  (error: AxiosError) => {
+    // Log errors in development
+    if (import.meta.env.DEV) {
+      console.error('[API] Error:', error.config?.url, error.response?.status, error.message)
+    }
+
+    // Handle 401 Unauthorized - redirect to login
+    if (error.response?.status === 401) {
+      // Clear stored token
+      localStorage.removeItem('auth_token')
+      localStorage.removeItem('refresh_token')
+
+      // Redirect to login if not already there
+      if (!window.location.pathname.includes('/login')) {
+        // Store current path for redirect after login
+        sessionStorage.setItem('redirect_after_login', window.location.pathname)
+        // Optionally redirect to login page
+        // window.location.href = '/login'
+      }
+    }
+
+    // Handle 503 Service Unavailable
+    if (error.response?.status === 503) {
+      console.warn('[API] Service unavailable, backend may be down')
+    }
+
+    return Promise.reject(error)
+  }
+)
 
 export default client
 
