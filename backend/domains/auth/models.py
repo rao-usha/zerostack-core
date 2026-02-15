@@ -112,3 +112,24 @@ class APITokenCreate(BaseModel):
     name: str
     expires_in_days: Optional[int] = None
 
+
+class APITokenCreatedResponse(BaseModel):
+    """Response when creating an API token - includes the full token (shown only once)."""
+    id: UUID
+    name: str
+    token: str  # Full token, only shown on creation
+    token_prefix: str
+    user_id: UUID
+    org_id: Optional[UUID] = None
+    expires_at: Optional[datetime] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    class Config:
+        from_attributes = True
+
+
+class APITokenList(BaseModel):
+    """List of API tokens."""
+    tokens: List["APIToken"]
+    total: int
+

@@ -46,6 +46,23 @@ refresh_tokens = Table(
 )
 
 
+api_tokens = Table(
+    "api_tokens",
+    METADATA,
+    Column("id", UUID, primary_key=True),
+    Column("user_id", UUID, ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
+    Column("org_id", UUID, ForeignKey("orgs.id", ondelete="CASCADE"), nullable=True),
+    Column("name", String(255), nullable=False),
+    Column("token_hash", String(255), nullable=False, unique=True),
+    Column("token_prefix", String(12), nullable=False),  # First 8 chars for identification
+    Column("expires_at", TIMESTAMP(timezone=True), nullable=True),  # Null = never expires
+    Column("last_used_at", TIMESTAMP(timezone=True), nullable=True),
+    Column("is_active", Boolean, nullable=False, server_default="true"),
+    Column("revoked_at", TIMESTAMP(timezone=True), nullable=True),
+    Column("created_at", TIMESTAMP(timezone=True), server_default=func.now()),
+)
+
+
 # connectors
 connectors = Table(
     "connectors",

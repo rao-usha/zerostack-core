@@ -10,7 +10,7 @@ from core.jwt import (
 )
 from domains.auth.models import (
     Role, User, UserCreate, UserLogin, Token, TokenRefreshRequest, TokenRefreshResponse,
-    Organization, OrganizationCreate, APIToken, APITokenCreate
+    Organization, OrganizationCreate, APIToken, APITokenCreate, APITokenCreatedResponse
 )
 
 
@@ -387,6 +387,71 @@ class TestAPITokenModels:
         create = APITokenCreate(name="Permanent Token")
         assert create.name == "Permanent Token"
         assert create.expires_in_days is None
+
+    def test_api_token_created_response(self):
+        """Test APITokenCreatedResponse model."""
+        user_id = uuid4()
+        org_id = uuid4()
+        response = APITokenCreatedResponse(
+            id=uuid4(),
+            name="My API Token",
+            token="nex_abc123def456",
+            token_prefix="nex_abc123de",
+            user_id=user_id,
+            org_id=org_id,
+            expires_at=datetime.utcnow() + timedelta(days=30),
+            created_at=datetime.utcnow()
+        )
+        assert response.name == "My API Token"
+        assert response.token == "nex_abc123def456"
+        assert response.token_prefix == "nex_abc123de"
+        assert response.user_id == user_id
+        assert response.org_id == org_id
+        assert response.expires_at is not None
+
+    def test_api_token_created_response_no_expiry(self):
+        """Test APITokenCreatedResponse without expiry."""
+        response = APITokenCreatedResponse(
+            id=uuid4(),
+            name="Permanent Token",
+            token="nex_permanent123",
+            token_prefix="nex_permane",
+            user_id=uuid4(),
+            expires_at=None
+        )
+        assert response.expires_at is None
+        assert response.org_id is None
+
+
+class TestTokenServiceGeneration:
+    """Test TokenService token generation (unit tests, no DB)."""
+
+    def test_token_prefix_format(self):
+        """Test that generated tokens have correct prefix."""
+        from domains.auth.service import TokenService
+
+        # Create a mock service just to test token generation
+        class MockSession:
+            pass
+
+        service = TokenService(MockSession())
+        token = service._generate_token()
+
+        assert token.startswith("nex_")
+        assert len(token) > 20  # Should be substantial
+
+    def test_token_uniqueness(self):
+        """Test that generated tokens are unique."""
+        from domains.auth.service import TokenService
+
+        class MockSession:
+            pass
+
+        service = TokenService(MockSession())
+        token1 = service._generate_token()
+        token2 = service._generate_token()
+
+        assert token1 != token2
 
 
 class TestRouterImports:

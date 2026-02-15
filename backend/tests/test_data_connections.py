@@ -543,5 +543,556 @@ class TestCompatibilityCheckerLogic:
         assert result.status == "met"
 
 
+class TestCompatibilityCheckerEdgeCases:
+    """Test compatibility checker edge cases and scoring."""
+
+    def test_empty_table(self):
+        """Test compatibility with empty table."""
+        from domains.data_connections.compatibility import RecipeCompatibilityChecker
+
+        detail = TableScanDetail(
+            id=uuid4(),
+            connection_id=uuid4(),
+            table_name="empty",
+            full_name="public.empty",
+            row_count=0,
+            column_count=0,
+            columns=[]
+        )
+
+        checker = RecipeCompatibilityChecker(None)
+
+        # Test row count requirement - should be missing
+        row_req = {"id": "sufficient_rows", "type": "row_count", "required": True, "min_rows": 100}
+        result = checker._check_requirement(row_req, detail)
+        assert result.status == "missing"
+
+    def test_table_no_date_column(self):
+        """Test table without date column."""
+        from domains.data_connections.compatibility import RecipeCompatibilityChecker
+
+        detail = TableScanDetail(
+            id=uuid4(),
+            connection_id=uuid4(),
+            table_name="no_dates",
+            full_name="public.no_dates",
+            row_count=1000,
+            column_count=3,
+            columns=[
+                ColumnScan(name="id", data_type="integer", is_numeric=True),
+                ColumnScan(name="name", data_type="varchar", is_text=True),
+                ColumnScan(name="value", data_type="numeric", is_numeric=True),
+            ]
+        )
+
+        checker = RecipeCompatibilityChecker(None)
+        date_req = {"id": "date_column", "type": "date", "required": True, "match_patterns": ["date", "time"]}
+        result = checker._check_requirement(date_req, detail)
+        assert result.status == "missing"
+
+    def test_date_column_by_pattern(self):
+        """Test date column detection by name pattern."""
+        from domains.data_connections.compatibility import RecipeCompatibilityChecker
+
+        detail = TableScanDetail(
+            id=uuid4(),
+            connection_id=uuid4(),
+            table_name="events",
+            full_name="public.events",
+            row_count=1000,
+            columns=[
+                ColumnScan(name="event_timestamp", data_type="varchar", is_text=True),  # Named like date but not marked
+                ColumnScan(name="data", data_type="jsonb"),
+            ]
+        )
+
+        checker = RecipeCompatibilityChecker(None)
+        date_req = {"id": "date_column", "type": "date", "required": True, "match_patterns": ["timestamp", "time"]}
+        result = checker._check_requirement(date_req, detail)
+        # Should match by name pattern
+        assert result.status == "met"
+        assert result.column == "event_timestamp"
+
+    def test_numeric_with_high_nulls(self):
+        """Test numeric column with high null percentage."""
+        from domains.data_connections.compatibility import RecipeCompatibilityChecker
+
+        detail = TableScanDetail(
+            id=uuid4(),
+            connection_id=uuid4(),
+            table_name="sales",
+            full_name="public.sales",
+            row_count=1000,
+            columns=[
+                ColumnScan(name="sales_amount", data_type="numeric", is_numeric=True, nulls_pct=45.0),
+            ]
+        )
+
+        checker = RecipeCompatibilityChecker(None)
+        numeric_req = {"id": "target_numeric", "type": "numeric", "required": True, "match_patterns": ["sales", "amount"]}
+        result = checker._check_requirement(numeric_req, detail)
+        assert result.status == "partial"
+        assert "nulls" in result.notes.lower()
+
+    def test_categorical_low_cardinality_text(self):
+        """Test categorical detection for low-cardinality text."""
+        from domains.data_connections.compatibility import RecipeCompatibilityChecker
+
+        detail = TableScanDetail(
+            id=uuid4(),
+            connection_id=uuid4(),
+            table_name="orders",
+            full_name="public.orders",
+            row_count=10000,
+            columns=[
+                ColumnScan(name="store_id", data_type="varchar", is_text=True, is_categorical=False, cardinality=50),
+            ]
+        )
+
+        checker = RecipeCompatibilityChecker(None)
+        cat_req = {"id": "group_columns", "type": "categorical", "required": False, "match_patterns": ["store", "item"]}
+        result = checker._check_requirement(cat_req, detail)
+        assert result.status == "met"
+        assert "store_id" in result.column
+
+    def test_min_columns_insufficient(self):
+        """Test min columns requirement - insufficient."""
+        from domains.data_connections.compatibility import RecipeCompatibilityChecker
+
+        detail = TableScanDetail(
+            id=uuid4(),
+            connection_id=uuid4(),
+            table_name="tiny",
+            full_name="public.tiny",
+            row_count=1000,
+            column_count=2,
+            columns=[
+                ColumnScan(name="id", data_type="integer"),
+                ColumnScan(name="value", data_type="numeric"),
+            ]
+        )
+
+        checker = RecipeCompatibilityChecker(None)
+        col_req = {"id": "feature_columns", "type": "min_columns", "required": True, "min_count": 5}
+        result = checker._check_requirement(col_req, detail)
+        assert result.status == "missing"
+        assert "5" in result.notes
+
+    def test_categorical_or_boolean_target(self):
+        """Test categorical or boolean target detection."""
+        from domains.data_connections.compatibility import RecipeCompatibilityChecker
+
+        # Test with boolean column
+        detail = TableScanDetail(
+            id=uuid4(),
+            connection_id=uuid4(),
+            table_name="users",
+            full_name="public.users",
+            row_count=1000,
+            columns=[
+                ColumnScan(name="target_label", data_type="boolean", is_boolean=True),
+            ]
+        )
+
+        checker = RecipeCompatibilityChecker(None)
+        target_req = {"id": "target_column", "type": "categorical_or_boolean", "required": True, "match_patterns": ["target", "label"]}
+        result = checker._check_requirement(target_req, detail)
+        assert result.status == "met"
+
+    def test_unknown_requirement_type(self):
+        """Test handling of unknown requirement type."""
+        from domains.data_connections.compatibility import RecipeCompatibilityChecker
+
+        detail = TableScanDetail(
+            id=uuid4(),
+            connection_id=uuid4(),
+            table_name="test",
+            full_name="public.test",
+            row_count=1000,
+            columns=[]
+        )
+
+        checker = RecipeCompatibilityChecker(None)
+        unknown_req = {"id": "unknown", "type": "unknown_type", "required": True}
+        result = checker._check_requirement(unknown_req, detail)
+        assert result.status == "missing"
+        assert "unknown" in result.notes.lower()
+
+
+class TestCompatibilityScoring:
+    """Test compatibility score calculation."""
+
+    @pytest.mark.asyncio
+    async def test_full_compatibility_score(self):
+        """Test score calculation with all requirements met."""
+        from domains.data_connections.compatibility import RecipeCompatibilityChecker
+
+        detail = TableScanDetail(
+            id=uuid4(),
+            connection_id=uuid4(),
+            table_name="perfect_table",
+            full_name="public.perfect_table",
+            row_count=50000,
+            column_count=10,
+            date_column="order_date",
+            date_span_days=365,
+            columns=[
+                ColumnScan(name="order_date", data_type="timestamp", is_date=True),
+                ColumnScan(name="sales_amount", data_type="numeric", is_numeric=True, nulls_pct=0),
+                ColumnScan(name="store_id", data_type="varchar", is_text=True, is_categorical=True, cardinality=50),
+                ColumnScan(name="item_id", data_type="varchar", is_text=True, is_categorical=True, cardinality=100),
+                ColumnScan(name="sell_price", data_type="numeric", is_numeric=True, nulls_pct=0),
+            ]
+        )
+
+        checker = RecipeCompatibilityChecker(None)
+        result = await checker.check_compatibility(detail, "recipe_forecasting_base")
+
+        assert result.compatibility_score >= 70
+        assert result.status in ["ready", "partial"]
+        assert result.can_run is True
+
+    @pytest.mark.asyncio
+    async def test_low_compatibility_score(self):
+        """Test score calculation with missing requirements."""
+        from domains.data_connections.compatibility import RecipeCompatibilityChecker
+
+        detail = TableScanDetail(
+            id=uuid4(),
+            connection_id=uuid4(),
+            table_name="bad_table",
+            full_name="public.bad_table",
+            row_count=50,  # Too few rows
+            column_count=2,
+            columns=[
+                ColumnScan(name="id", data_type="integer", is_numeric=True),
+                ColumnScan(name="name", data_type="varchar", is_text=True),
+            ]
+        )
+
+        checker = RecipeCompatibilityChecker(None)
+        result = await checker.check_compatibility(detail, "recipe_forecasting_base")
+
+        assert result.compatibility_score < 60
+        assert result.status == "incompatible"
+        assert len(result.requirements_missing) > 0
+
+    @pytest.mark.asyncio
+    async def test_check_all_recipes(self):
+        """Test checking all recipes at once."""
+        from domains.data_connections.compatibility import RecipeCompatibilityChecker
+
+        detail = TableScanDetail(
+            id=uuid4(),
+            connection_id=uuid4(),
+            table_name="test_table",
+            full_name="public.test_table",
+            row_count=5000,
+            column_count=8,
+            date_column="created_at",
+            date_span_days=120,
+            columns=[
+                ColumnScan(name="id", data_type="integer", is_numeric=True, cardinality=5000),
+                ColumnScan(name="value", data_type="numeric", is_numeric=True, cardinality=1000),
+                ColumnScan(name="created_at", data_type="timestamp", is_date=True),
+                ColumnScan(name="category", data_type="varchar", is_text=True, is_categorical=True, cardinality=10),
+                ColumnScan(name="target_class", data_type="varchar", is_categorical=True, cardinality=3),
+            ]
+        )
+
+        checker = RecipeCompatibilityChecker(None)
+        result = await checker.check_all_recipes(detail)
+
+        assert result.table_name == "public.test_table"
+        assert len(result.recipes) >= 3
+        # Results should be sorted by score descending
+        scores = [r.compatibility_score for r in result.recipes]
+        assert scores == sorted(scores, reverse=True)
+
+    @pytest.mark.asyncio
+    async def test_unknown_recipe_raises_error(self):
+        """Test that unknown recipe raises ValueError."""
+        from domains.data_connections.compatibility import RecipeCompatibilityChecker
+
+        detail = TableScanDetail(
+            id=uuid4(),
+            connection_id=uuid4(),
+            table_name="test",
+            full_name="public.test",
+            row_count=100
+        )
+
+        checker = RecipeCompatibilityChecker(None)
+        with pytest.raises(ValueError, match="Unknown recipe"):
+            await checker.check_compatibility(detail, "non_existent_recipe")
+
+
+class TestQualityIssueDetection:
+    """Test quality issue detection logic."""
+
+    def test_high_nulls_detection(self):
+        """Test high null percentage detection threshold."""
+        # Quality issue should be raised when nulls > 50%
+        col_high_nulls = ColumnScan(
+            name="description",
+            data_type="text",
+            nulls_pct=65.5
+        )
+        assert col_high_nulls.nulls_pct > 50
+
+        col_low_nulls = ColumnScan(
+            name="name",
+            data_type="text",
+            nulls_pct=10.0
+        )
+        assert col_low_nulls.nulls_pct <= 50
+
+    def test_low_cardinality_detection(self):
+        """Test low cardinality detection for numeric columns."""
+        # Low cardinality numeric might indicate categorical
+        col = ColumnScan(
+            name="rating",
+            data_type="integer",
+            is_numeric=True,
+            cardinality=5
+        )
+        # With only 5 unique values, this is likely categorical
+        assert col.cardinality < 10
+        assert col.is_numeric
+
+    def test_quality_issue_severity_levels(self):
+        """Test various quality issue severity levels."""
+        warning = QualityIssue(
+            severity="warning",
+            issue_type="high_nulls",
+            column="col1",
+            message="High nulls"
+        )
+        assert warning.severity == "warning"
+
+        error = QualityIssue(
+            severity="error",
+            issue_type="all_nulls",
+            column="col2",
+            message="All values are null"
+        )
+        assert error.severity == "error"
+
+        info = QualityIssue(
+            severity="info",
+            issue_type="low_cardinality",
+            column="col3",
+            message="Consider as categorical"
+        )
+        assert info.severity == "info"
+
+
+class TestCompletenessCalculation:
+    """Test completeness score calculation."""
+
+    def test_completeness_perfect(self):
+        """Test completeness with no nulls."""
+        columns = [
+            ColumnScan(name="col1", data_type="int", nulls_pct=0.0),
+            ColumnScan(name="col2", data_type="int", nulls_pct=0.0),
+            ColumnScan(name="col3", data_type="int", nulls_pct=0.0),
+        ]
+        avg_nulls_pct = sum(c.nulls_pct for c in columns) / len(columns)
+        completeness = 1 - (avg_nulls_pct / 100)
+        assert completeness == 1.0
+
+    def test_completeness_half_null(self):
+        """Test completeness with 50% nulls on average."""
+        columns = [
+            ColumnScan(name="col1", data_type="int", nulls_pct=50.0),
+            ColumnScan(name="col2", data_type="int", nulls_pct=50.0),
+        ]
+        avg_nulls_pct = sum(c.nulls_pct for c in columns) / len(columns)
+        completeness = 1 - (avg_nulls_pct / 100)
+        assert completeness == 0.5
+
+    def test_completeness_mixed(self):
+        """Test completeness with mixed null percentages."""
+        columns = [
+            ColumnScan(name="col1", data_type="int", nulls_pct=0.0),
+            ColumnScan(name="col2", data_type="int", nulls_pct=25.0),
+            ColumnScan(name="col3", data_type="int", nulls_pct=75.0),
+        ]
+        avg_nulls_pct = sum(c.nulls_pct for c in columns) / len(columns)  # ~33.33%
+        completeness = 1 - (avg_nulls_pct / 100)
+        assert 0.66 < completeness < 0.67
+
+    def test_table_scan_completeness_field(self):
+        """Test TableScanSummary completeness_score field."""
+        summary = TableScanSummary(
+            id=uuid4(),
+            connection_id=uuid4(),
+            table_name="test",
+            full_name="public.test",
+            completeness_score=0.85
+        )
+        assert summary.completeness_score == 0.85
+
+
+class TestDataScannerColumnTypeDetection:
+    """Test column type detection logic used by scanner."""
+
+    def test_date_type_detection(self):
+        """Test date type column detection."""
+        date_types = ['date', 'timestamp', 'timestamp with time zone', 'timestamp without time zone']
+        for dt in date_types:
+            col = ColumnScan(name="date_col", data_type=dt, is_date=True)
+            assert col.is_date is True
+
+    def test_numeric_type_detection(self):
+        """Test numeric type column detection."""
+        numeric_types = ['integer', 'bigint', 'smallint', 'decimal', 'numeric', 'real', 'double precision']
+        for nt in numeric_types:
+            col = ColumnScan(name="num_col", data_type=nt, is_numeric=True)
+            assert col.is_numeric is True
+
+    def test_text_type_detection(self):
+        """Test text type column detection."""
+        text_types = ['text', 'character varying', 'varchar', 'char']
+        for tt in text_types:
+            col = ColumnScan(name="text_col", data_type=tt, is_text=True)
+            assert col.is_text is True
+
+    def test_boolean_type_detection(self):
+        """Test boolean type column detection."""
+        col = ColumnScan(name="bool_col", data_type="boolean", is_boolean=True)
+        assert col.is_boolean is True
+
+    def test_categorical_detection_by_cardinality(self):
+        """Test categorical detection based on cardinality."""
+        # Low cardinality text = categorical
+        col = ColumnScan(
+            name="category",
+            data_type="varchar",
+            is_text=True,
+            cardinality=20,
+            is_categorical=True
+        )
+        assert col.is_categorical is True
+        assert col.cardinality < 100
+
+
+class TestDataScannerSampleDataSerialization:
+    """Test sample data serialization for various types."""
+
+    def test_datetime_serialization_format(self):
+        """Test that datetime can be serialized."""
+        dt = datetime(2024, 1, 15, 10, 30, 45)
+        serialized = dt.isoformat()
+        assert serialized == "2024-01-15T10:30:45"
+
+    def test_sample_rows_structure(self):
+        """Test sample rows structure in TableScanDetail."""
+        detail = TableScanDetail(
+            id=uuid4(),
+            connection_id=uuid4(),
+            table_name="test",
+            full_name="public.test",
+            sample_rows=[
+                {"id": 1, "name": "Test", "value": 100.5},
+                {"id": 2, "name": "Test2", "value": 200.0}
+            ]
+        )
+        assert len(detail.sample_rows) == 2
+        assert detail.sample_rows[0]["id"] == 1
+
+    def test_column_sample_values(self):
+        """Test column sample values storage."""
+        col = ColumnScan(
+            name="status",
+            data_type="varchar",
+            sample_values=["active", "pending", "completed", "cancelled"]
+        )
+        assert len(col.sample_values) == 4
+        assert "active" in col.sample_values
+
+
+class TestScannerStatisticsComputation:
+    """Test statistics computation logic patterns."""
+
+    def test_null_percentage_calculation(self):
+        """Test null percentage calculation."""
+        total_rows = 1000
+        null_count = 250
+        nulls_pct = (null_count / total_rows) * 100
+        assert nulls_pct == 25.0
+
+    def test_null_percentage_zero_rows(self):
+        """Test null percentage with zero rows."""
+        total_rows = 0
+        null_count = 0
+        nulls_pct = (null_count / total_rows) * 100 if total_rows > 0 else 0
+        assert nulls_pct == 0
+
+    def test_date_span_calculation(self):
+        """Test date span calculation in days."""
+        date_min = datetime(2024, 1, 1)
+        date_max = datetime(2024, 12, 31)
+        span = (date_max - date_min).days
+        assert span == 365
+
+    def test_size_bytes_conversion(self):
+        """Test size bytes handling."""
+        detail = TableScanDetail(
+            id=uuid4(),
+            connection_id=uuid4(),
+            table_name="test",
+            full_name="public.test",
+            size_bytes=104857600  # 100 MB
+        )
+        assert detail.size_bytes == 104857600
+        # Verify it's stored as integer
+        assert isinstance(detail.size_bytes, int)
+
+
+class TestConnectionPasswordHandling:
+    """Test connection password handling patterns."""
+
+    def test_password_not_in_response(self):
+        """Test that password is not included in response."""
+        response = DataConnectionResponse(
+            id=uuid4(),
+            name="Test Connection",
+            connection_type="postgresql",
+            host="localhost",
+            port=5432,
+            database="testdb",
+            username="user",
+            status="connected",
+            scan_status="never",
+            tables_count=0,
+            total_rows=0,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        )
+        # Password should not be in the response model
+        assert not hasattr(response, 'password')
+        assert not hasattr(response, 'password_encrypted')
+
+    def test_connection_create_accepts_password(self):
+        """Test that create model accepts password."""
+        create = DataConnectionCreate(
+            name="New Connection",
+            connection_type=ConnectionType.POSTGRESQL,
+            host="localhost",
+            password="secret123"
+        )
+        assert create.password == "secret123"
+
+    def test_connection_update_accepts_password(self):
+        """Test that update model accepts optional password."""
+        update = DataConnectionUpdate(password="new_secret")
+        assert update.password == "new_secret"
+
+        # Also test without password
+        update_no_pass = DataConnectionUpdate(name="Updated")
+        assert update_no_pass.password is None
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

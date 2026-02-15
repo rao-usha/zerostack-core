@@ -3,6 +3,13 @@ import pytest
 from uuid import uuid4
 from datetime import datetime
 
+# Check if pandas is available for certain tests
+try:
+    import pandas as pd
+    PANDAS_AVAILABLE = True
+except ImportError:
+    PANDAS_AVAILABLE = False
+
 from domains.notebooks.models import (
     CellType, RunStatus,
     CellCreate, CellUpdate, CellResponse, CellExecuteRequest, CellExecuteResponse,
@@ -343,6 +350,540 @@ class TestRouterImports:
         """Verify dataset exporter can be imported."""
         from domains.notebooks.dataset_exporter import DatasetExporter
         assert DatasetExporter is not None
+
+
+class TestSQLExecutorTypeConversion:
+    """Test SQL executor type conversion utilities."""
+
+    def setup_method(self):
+        """Setup mock executor for testing utility methods."""
+        from domains.notebooks.executor import SQLExecutor
+
+        class MockSession:
+            pass
+
+        self.executor = SQLExecutor(MockSession())
+
+    def test_get_type_name_none(self):
+        """Test type detection for None."""
+        assert self.executor._get_type_name(None) == "unknown"
+
+    def test_get_type_name_boolean(self):
+        """Test type detection for booleans."""
+        assert self.executor._get_type_name(True) == "boolean"
+        assert self.executor._get_type_name(False) == "boolean"
+
+    def test_get_type_name_integer(self):
+        """Test type detection for integers."""
+        assert self.executor._get_type_name(42) == "integer"
+        assert self.executor._get_type_name(-100) == "integer"
+
+    def test_get_type_name_float(self):
+        """Test type detection for floats."""
+        assert self.executor._get_type_name(3.14) == "float"
+        assert self.executor._get_type_name(-2.5) == "float"
+
+    def test_get_type_name_string(self):
+        """Test type detection for strings."""
+        assert self.executor._get_type_name("hello") == "string"
+        assert self.executor._get_type_name("") == "string"
+
+    def test_get_type_name_datetime(self):
+        """Test type detection for datetime."""
+        assert self.executor._get_type_name(datetime.utcnow()) == "timestamp"
+
+    def test_get_type_name_bytes(self):
+        """Test type detection for bytes."""
+        assert self.executor._get_type_name(b"data") == "bytes"
+        assert self.executor._get_type_name(bytearray(b"data")) == "bytes"
+
+    def test_get_type_name_list(self):
+        """Test type detection for arrays."""
+        assert self.executor._get_type_name([1, 2, 3]) == "array"
+        assert self.executor._get_type_name((1, 2, 3)) == "array"
+
+    def test_get_type_name_dict(self):
+        """Test type detection for dicts."""
+        assert self.executor._get_type_name({"key": "value"}) == "json"
+
+    def test_to_json_safe_primitives(self):
+        """Test JSON conversion for primitives."""
+        assert self.executor._to_json_safe(None) is None
+        assert self.executor._to_json_safe(True) is True
+        assert self.executor._to_json_safe(42) == 42
+        assert self.executor._to_json_safe(3.14) == 3.14
+        assert self.executor._to_json_safe("hello") == "hello"
+
+    def test_to_json_safe_datetime(self):
+        """Test JSON conversion for datetime."""
+        dt = datetime(2024, 1, 15, 10, 30, 45)
+        result = self.executor._to_json_safe(dt)
+        assert result == "2024-01-15T10:30:45"
+
+    def test_to_json_safe_bytes(self):
+        """Test JSON conversion for bytes."""
+        result = self.executor._to_json_safe(b"\x00\x01\x02")
+        assert result == "000102"
+
+    def test_to_json_safe_nested_list(self):
+        """Test JSON conversion for nested lists."""
+        result = self.executor._to_json_safe([1, [2, 3], datetime(2024, 1, 1)])
+        assert result == [1, [2, 3], "2024-01-01T00:00:00"]
+
+    def test_to_json_safe_nested_dict(self):
+        """Test JSON conversion for nested dicts."""
+        result = self.executor._to_json_safe({
+            "num": 42,
+            "nested": {"dt": datetime(2024, 1, 1)},
+            "list": [1, 2, 3]
+        })
+        assert result["num"] == 42
+        assert result["nested"]["dt"] == "2024-01-01T00:00:00"
+        assert result["list"] == [1, 2, 3]
+
+
+class TestPythonExecutorExecution:
+    """Test Python executor code execution."""
+
+    def setup_method(self):
+        """Setup clean executor for each test."""
+        from domains.notebooks.python_executor import PythonExecutor, _notebook_sessions
+        # Clear all sessions before each test
+        _notebook_sessions.clear()
+        self.notebook_id = uuid4()
+        self.executor = PythonExecutor(self.notebook_id)
+
+    def teardown_method(self):
+        """Cleanup after each test."""
+        from domains.notebooks.python_executor import _notebook_sessions
+        _notebook_sessions.clear()
+
+    def test_simple_expression(self):
+        """Test evaluating a simple expression."""
+        result = self.executor.execute("1 + 1")
+        assert result['status'] == 'success'
+        assert result['result'] == 2
+        assert result['error'] is None
+
+    def test_assignment(self):
+        """Test variable assignment."""
+        result = self.executor.execute("x = 42")
+        assert result['status'] == 'success'
+        assert 'x' in result['variables']
+
+    def test_variable_persistence(self):
+        """Test that variables persist between executions."""
+        self.executor.execute("x = 10")
+        result = self.executor.execute("x * 2")
+        assert result['status'] == 'success'
+        assert result['result'] == 20
+
+    def test_stdout_capture(self):
+        """Test stdout capture."""
+        result = self.executor.execute("print('Hello, World!')")
+        assert result['status'] == 'success'
+        assert 'Hello, World!' in result['stdout']
+
+    def test_multiline_code(self):
+        """Test multiline code execution."""
+        code = """
+def add(a, b):
+    return a + b
+
+result = add(3, 4)
+result
+"""
+        result = self.executor.execute(code)
+        assert result['status'] == 'success'
+        assert result['result'] == 7
+
+    def test_syntax_error(self):
+        """Test syntax error handling."""
+        result = self.executor.execute("def broken(")
+        assert result['status'] == 'error'
+        assert 'Syntax error' in result['error']
+
+    def test_runtime_error(self):
+        """Test runtime error handling."""
+        result = self.executor.execute("1 / 0")
+        assert result['status'] == 'error'
+        assert result['traceback'] is not None
+
+    def test_name_error(self):
+        """Test undefined variable error."""
+        result = self.executor.execute("undefined_var")
+        assert result['status'] == 'error'
+        assert 'NameError' in result['traceback'] or 'undefined' in str(result['error'])
+
+    def test_duration_tracking(self):
+        """Test that execution duration is tracked."""
+        result = self.executor.execute("x = 1")
+        assert 'duration_ms' in result
+        assert result['duration_ms'] >= 0
+
+    @pytest.mark.skipif(not PANDAS_AVAILABLE, reason="pandas not installed")
+    def test_preloaded_imports(self):
+        """Test that pandas and numpy are preloaded (when import is allowed)."""
+        # Check if preloading succeeded first
+        result = self.executor.execute("'pd' in dir()")
+        if result['result'] is True:
+            result = self.executor.execute("pd.__name__")
+            assert result['status'] == 'success'
+            assert result['result'] == 'pandas'
+        else:
+            # Preloading failed due to sandbox, skip
+            pytest.skip("Preloaded imports not available in sandboxed environment")
+
+    def test_datetime_preloaded(self):
+        """Test that datetime is preloaded (when import is allowed)."""
+        # Check if preloading succeeded
+        result = self.executor.execute("'datetime' in dir()")
+        if result['result'] is True:
+            result = self.executor.execute("datetime.now().year")
+            assert result['status'] == 'success'
+            assert result['result'] >= 2024
+        else:
+            # Preloading failed due to sandbox, skip
+            pytest.skip("Preloaded imports not available in sandboxed environment")
+
+    def test_reset_session(self):
+        """Test session reset clears variables."""
+        self.executor.execute("x = 100")
+        self.executor.reset_session()
+        result = self.executor.execute("x")
+        assert result['status'] == 'error'  # x should not exist
+
+    def test_get_variables(self):
+        """Test getting session variables."""
+        self.executor.execute("x = 42")
+        self.executor.execute("name = 'test'")
+        variables = self.executor.get_variables()
+
+        var_names = [v['name'] for v in variables]
+        assert 'x' in var_names
+        assert 'name' in var_names
+
+    def test_variable_info_types(self):
+        """Test variable info includes correct types."""
+        self.executor.execute("num = 42")
+        self.executor.execute("text = 'hello'")
+        self.executor.execute("items = [1, 2, 3]")
+        variables = self.executor.get_variables()
+
+        var_dict = {v['name']: v for v in variables}
+        assert var_dict['num']['type'] == 'int'
+        assert var_dict['text']['type'] == 'str'
+        assert var_dict['items']['type'] == 'list'
+
+
+class TestPythonExecutorSerialization:
+    """Test Python executor value serialization."""
+
+    def setup_method(self):
+        """Setup executor for testing."""
+        from domains.notebooks.python_executor import PythonExecutor, _notebook_sessions
+        _notebook_sessions.clear()
+        self.executor = PythonExecutor(uuid4())
+
+    def teardown_method(self):
+        """Cleanup after each test."""
+        from domains.notebooks.python_executor import _notebook_sessions
+        _notebook_sessions.clear()
+
+    def test_serialize_none(self):
+        """Test serializing None."""
+        assert self.executor._serialize_value(None) is None
+
+    def test_serialize_primitives(self):
+        """Test serializing primitive types."""
+        assert self.executor._serialize_value(True) is True
+        assert self.executor._serialize_value(42) == 42
+        assert self.executor._serialize_value(3.14) == 3.14
+        assert self.executor._serialize_value("hello") == "hello"
+
+    def test_serialize_datetime(self):
+        """Test serializing datetime."""
+        dt = datetime(2024, 1, 15, 10, 30, 45)
+        result = self.executor._serialize_value(dt)
+        assert result == "2024-01-15T10:30:45"
+
+    def test_serialize_bytes(self):
+        """Test serializing bytes."""
+        result = self.executor._serialize_value(b"\xde\xad\xbe\xef")
+        assert result == "deadbeef"
+
+    def test_serialize_list(self):
+        """Test serializing lists."""
+        result = self.executor._serialize_value([1, "two", 3.0])
+        assert result == [1, "two", 3.0]
+
+    def test_serialize_nested(self):
+        """Test serializing nested structures."""
+        result = self.executor._serialize_value({
+            "a": 1,
+            "b": {"c": 2},
+            "d": [1, 2, 3]
+        })
+        assert result == {"a": 1, "b": {"c": 2}, "d": [1, 2, 3]}
+
+    def test_get_preview_string(self):
+        """Test preview for strings."""
+        short = self.executor._get_preview("hello")
+        assert short == '"hello"'
+
+        long = self.executor._get_preview("x" * 100)
+        assert "..." in long
+        assert len(long) < 60
+
+    def test_get_preview_number(self):
+        """Test preview for numbers."""
+        assert self.executor._get_preview(42) == "42"
+        assert self.executor._get_preview(3.14) == "3.14"
+
+    def test_get_preview_list(self):
+        """Test preview for lists."""
+        result = self.executor._get_preview([1, 2, 3, 4, 5])
+        assert "list[5]" in result
+
+    def test_get_preview_dict(self):
+        """Test preview for dicts."""
+        result = self.executor._get_preview({"a": 1, "b": 2})
+        assert "dict[2]" in result
+
+
+@pytest.mark.skipif(not PANDAS_AVAILABLE, reason="pandas not installed")
+class TestPythonExecutorDataFrames:
+    """Test Python executor DataFrame handling."""
+
+    def setup_method(self):
+        """Setup executor for testing."""
+        from domains.notebooks.python_executor import PythonExecutor, _notebook_sessions
+        _notebook_sessions.clear()
+        self.executor = PythonExecutor(uuid4())
+        # Check if pandas is available in the executor
+        result = self.executor.execute("'pd' in dir()")
+        self.pandas_preloaded = result.get('result', False) is True
+
+    def teardown_method(self):
+        """Cleanup after each test."""
+        from domains.notebooks.python_executor import _notebook_sessions
+        _notebook_sessions.clear()
+
+    def test_is_dataframe_positive(self):
+        """Test DataFrame detection."""
+        if not self.pandas_preloaded:
+            pytest.skip("pandas not preloaded in sandboxed environment")
+
+        # Execute code to create a DataFrame
+        result = self.executor.execute("df = pd.DataFrame({'a': [1, 2], 'b': [3, 4]})")
+        assert result['status'] == 'success'
+
+        # Check that it was detected
+        variables = self.executor.get_variables()
+        df_var = next((v for v in variables if v['name'] == 'df'), None)
+        assert df_var is not None
+        assert df_var['type'] == 'DataFrame'
+        assert df_var['shape'] == [2, 2]
+
+    def test_dataframe_auto_display(self):
+        """Test that DataFrames are auto-displayed."""
+        if not self.pandas_preloaded:
+            pytest.skip("pandas not preloaded in sandboxed environment")
+
+        result = self.executor.execute("pd.DataFrame({'x': [1, 2, 3]})")
+        assert result['status'] == 'success'
+        # Should have an output
+        assert len(result['outputs']) > 0
+        assert result['outputs'][0]['type'] == 'dataframe'
+
+    def test_dataframe_output_format(self):
+        """Test DataFrame output format."""
+        if not self.pandas_preloaded:
+            pytest.skip("pandas not preloaded in sandboxed environment")
+
+        result = self.executor.execute("pd.DataFrame({'col1': [1, 2], 'col2': ['a', 'b']})")
+        assert result['status'] == 'success'
+
+        output = result['outputs'][0]
+        assert output['type'] == 'dataframe'
+        assert 'col1' in output['columns']
+        assert 'col2' in output['columns']
+        assert output['shape'] == [2, 2]
+        assert len(output['data']) == 2
+
+    def test_dataframe_preview(self):
+        """Test DataFrame preview in variables."""
+        if not self.pandas_preloaded:
+            pytest.skip("pandas not preloaded in sandboxed environment")
+
+        self.executor.execute("df = pd.DataFrame({'a': range(100)})")
+        variables = self.executor.get_variables()
+
+        df_var = next((v for v in variables if v['name'] == 'df'), None)
+        assert df_var is not None
+        assert 'DataFrame' in df_var['preview']
+        assert df_var['shape'] == [100, 1]
+
+
+class TestPythonExecutorOutputs:
+    """Test Python executor rich output handling."""
+
+    def setup_method(self):
+        """Setup executor for testing."""
+        from domains.notebooks.python_executor import PythonExecutor, _notebook_sessions
+        _notebook_sessions.clear()
+        self.executor = PythonExecutor(uuid4())
+        # Check if pandas is available in the executor
+        result = self.executor.execute("'pd' in dir()")
+        self.pandas_preloaded = result.get('result', False) is True
+
+    def teardown_method(self):
+        """Cleanup after each test."""
+        from domains.notebooks.python_executor import _notebook_sessions
+        _notebook_sessions.clear()
+
+    def test_display_function(self):
+        """Test display() helper function."""
+        result = self.executor.execute("display({'key': 'value'})")
+        assert result['status'] == 'success'
+        assert len(result['outputs']) > 0
+
+    def test_text_output(self):
+        """Test text output creation."""
+        result = self.executor.execute("display('hello')")
+        assert result['status'] == 'success'
+        output = result['outputs'][0]
+        assert output['type'] == 'text'
+
+    @pytest.mark.skipif(not PANDAS_AVAILABLE, reason="pandas not installed")
+    def test_show_df_function(self):
+        """Test show_df() helper function."""
+        if not self.pandas_preloaded:
+            pytest.skip("pandas not preloaded in sandboxed environment")
+
+        result = self.executor.execute("""
+df = pd.DataFrame({'x': [1, 2, 3]})
+show_df(df, 'my_dataframe')
+""")
+        assert result['status'] == 'success'
+        outputs = result['outputs']
+        assert len(outputs) > 0
+        # Should have named DataFrame output
+        df_output = next((o for o in outputs if o.get('name') == 'my_dataframe'), None)
+        assert df_output is not None
+
+    @pytest.mark.skipif(not PANDAS_AVAILABLE, reason="pandas not installed")
+    def test_multiple_outputs(self):
+        """Test multiple outputs in one cell."""
+        if not self.pandas_preloaded:
+            pytest.skip("pandas not preloaded in sandboxed environment")
+
+        result = self.executor.execute("""
+display("First output")
+display("Second output")
+pd.DataFrame({'a': [1]})
+""")
+        assert result['status'] == 'success'
+        # Should have at least 3 outputs
+        assert len(result['outputs']) >= 3
+
+
+class TestPythonExecutorSecurity:
+    """Test Python executor security restrictions."""
+
+    def setup_method(self):
+        """Setup executor for testing."""
+        from domains.notebooks.python_executor import PythonExecutor, _notebook_sessions
+        _notebook_sessions.clear()
+        self.executor = PythonExecutor(uuid4())
+
+    def teardown_method(self):
+        """Cleanup after each test."""
+        from domains.notebooks.python_executor import _notebook_sessions
+        _notebook_sessions.clear()
+
+    def test_blocked_exec(self):
+        """Test that exec is blocked."""
+        result = self.executor.execute("exec('print(1)')")
+        assert result['status'] == 'error'
+
+    def test_blocked_eval(self):
+        """Test that eval is blocked."""
+        result = self.executor.execute("eval('1+1')")
+        assert result['status'] == 'error'
+
+    def test_blocked_open(self):
+        """Test that open is blocked."""
+        result = self.executor.execute("open('/etc/passwd')")
+        assert result['status'] == 'error'
+
+    def test_blocked_import(self):
+        """Test that __import__ is blocked."""
+        result = self.executor.execute("__import__('os')")
+        assert result['status'] == 'error'
+
+
+class TestPythonExecutorSessionManagement:
+    """Test Python executor session management."""
+
+    def test_separate_notebook_sessions(self):
+        """Test that different notebooks have separate sessions."""
+        from domains.notebooks.python_executor import PythonExecutor, _notebook_sessions
+        _notebook_sessions.clear()
+
+        notebook1 = uuid4()
+        notebook2 = uuid4()
+
+        exec1 = PythonExecutor(notebook1)
+        exec2 = PythonExecutor(notebook2)
+
+        # Set variable in notebook 1
+        exec1.execute("x = 'notebook1'")
+
+        # Variable should not exist in notebook 2
+        result = exec2.execute("x")
+        assert result['status'] == 'error'
+
+        # Set different value in notebook 2
+        exec2.execute("x = 'notebook2'")
+
+        # Verify isolation
+        result1 = exec1.execute("x")
+        result2 = exec2.execute("x")
+        assert result1['result'] == 'notebook1'
+        assert result2['result'] == 'notebook2'
+
+        _notebook_sessions.clear()
+
+    def test_get_executor_factory(self):
+        """Test get_executor factory function."""
+        from domains.notebooks.python_executor import get_executor, _notebook_sessions
+        _notebook_sessions.clear()
+
+        notebook_id = uuid4()
+        executor = get_executor(notebook_id)
+
+        assert executor is not None
+        assert executor.notebook_id == str(notebook_id)
+
+        _notebook_sessions.clear()
+
+    def test_clear_all_sessions(self):
+        """Test clearing all sessions."""
+        from domains.notebooks.python_executor import PythonExecutor, _notebook_sessions
+        _notebook_sessions.clear()
+
+        # Create some sessions
+        exec1 = PythonExecutor(uuid4())
+        exec2 = PythonExecutor(uuid4())
+        exec1.execute("x = 1")
+        exec2.execute("y = 2")
+
+        assert len(_notebook_sessions) == 2
+
+        PythonExecutor.clear_all_sessions()
+
+        assert len(_notebook_sessions) == 0
 
 
 if __name__ == "__main__":

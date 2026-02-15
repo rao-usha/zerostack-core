@@ -7,7 +7,7 @@ from datetime import datetime
 from sqlalchemy import select, insert, update, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.models import users, orgs, refresh_tokens
+from db.models import users, orgs, refresh_tokens, api_tokens
 from core.password import hash_password, verify_password
 from core.jwt import (
     create_access_token, create_refresh_token, verify_token,
@@ -15,7 +15,8 @@ from core.jwt import (
 )
 from .models import (
     User, UserCreate, UserLogin, Token, TokenRefreshResponse,
-    Organization, OrganizationCreate, APIToken, APITokenCreate, Role
+    Organization, OrganizationCreate, APIToken, APITokenCreate,
+    APITokenCreatedResponse, Role
 )
 
 
@@ -487,37 +488,233 @@ class OrganizationService:
 
 
 class TokenService:
-    """API token management service.
+    """API token management service for programmatic access."""
 
-    Note: Full implementation requires an api_tokens table.
-    This is a partial implementation for JWT-based auth.
-    """
+    # Token prefix for API tokens (helps identify token type)
+    TOKEN_PREFIX = "nex_"
 
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    def create_api_token(
+    def _generate_token(self) -> str:
+        """Generate a secure random API token."""
+        import secrets
+        # Generate 32 bytes of random data, encode as hex (64 chars)
+        random_part = secrets.token_hex(32)
+        return f"{self.TOKEN_PREFIX}{random_part}"
+
+    async def create_api_token(
         self,
         user_id: UUID,
         token_data: APITokenCreate,
         org_id: Optional[UUID] = None
-    ) -> tuple[APIToken, str]:
-        """Create an API token.
+    ) -> APITokenCreatedResponse:
+        """Create a new API token.
 
-        Returns: (APIToken, full_token_string)
+        Args:
+            user_id: ID of the user creating the token
+            token_data: Token creation request data
+            org_id: Optional organization ID
 
-        Note: Full implementation requires api_tokens table.
+        Returns:
+            APITokenCreatedResponse with the full token (only shown once)
         """
-        raise NotImplementedError("API tokens require additional database table")
+        # Generate the token
+        full_token = self._generate_token()
+        token_hash = _hash_token(full_token)
+        token_prefix = full_token[:12]  # Store first 12 chars for identification
 
-    def verify_api_token(self, token: str) -> Optional[APIToken]:
-        """Verify an API token."""
-        raise NotImplementedError("API tokens require additional database table")
+        # Calculate expiration if specified
+        expires_at = None
+        if token_data.expires_in_days:
+            from datetime import timedelta
+            expires_at = datetime.utcnow() + timedelta(days=token_data.expires_in_days)
 
-    def revoke_api_token(self, token_id: UUID) -> bool:
-        """Revoke an API token."""
-        raise NotImplementedError("API tokens require additional database table")
+        token_id = uuid4()
+        now = datetime.utcnow()
 
-    def list_api_tokens(self, user_id: UUID) -> list[APIToken]:
-        """List API tokens for a user."""
-        raise NotImplementedError("API tokens require additional database table")
+        await self.session.execute(
+            insert(api_tokens).values(
+                id=token_id,
+                user_id=user_id,
+                org_id=org_id,
+                name=token_data.name,
+                token_hash=token_hash,
+                token_prefix=token_prefix,
+                expires_at=expires_at,
+                is_active=True,
+                created_at=now,
+            )
+        )
+        await self.session.commit()
+
+        return APITokenCreatedResponse(
+            id=token_id,
+            name=token_data.name,
+            token=full_token,
+            token_prefix=token_prefix,
+            user_id=user_id,
+            org_id=org_id,
+            expires_at=expires_at,
+            created_at=now,
+        )
+
+    async def verify_api_token(self, token: str) -> Optional[User]:
+        """Verify an API token and return the associated user.
+
+        Args:
+            token: The full API token
+
+        Returns:
+            User if token is valid and active, None otherwise
+        """
+        token_hash = _hash_token(token)
+
+        # Find the token
+        result = await self.session.execute(
+            select(api_tokens).where(
+                api_tokens.c.token_hash == token_hash,
+                api_tokens.c.is_active == True,
+            )
+        )
+        token_row = result.first()
+
+        if not token_row:
+            return None
+
+        # Check expiration
+        if token_row.expires_at and token_row.expires_at < datetime.utcnow():
+            return None
+
+        # Update last_used_at
+        await self.session.execute(
+            update(api_tokens)
+            .where(api_tokens.c.id == token_row.id)
+            .values(last_used_at=datetime.utcnow())
+        )
+        await self.session.commit()
+
+        # Get the user
+        user_result = await self.session.execute(
+            select(users).where(users.c.id == token_row.user_id)
+        )
+        user_row = user_result.first()
+
+        if not user_row or not user_row.is_active:
+            return None
+
+        return User(
+            id=user_row.id,
+            email=user_row.email,
+            username=user_row.username or user_row.email.split('@')[0],
+            full_name=user_row.full_name,
+            role=Role(user_row.role) if user_row.role in [r.value for r in Role] else Role.VIEWER,
+            org_id=user_row.org_id,
+            is_active=user_row.is_active,
+            created_at=user_row.created_at,
+            updated_at=user_row.updated_at if hasattr(user_row, 'updated_at') else user_row.created_at,
+        )
+
+    async def revoke_api_token(self, token_id: UUID, user_id: UUID) -> bool:
+        """Revoke an API token.
+
+        Args:
+            token_id: ID of the token to revoke
+            user_id: ID of the user (for authorization)
+
+        Returns:
+            True if token was revoked, False if not found or not authorized
+        """
+        result = await self.session.execute(
+            update(api_tokens)
+            .where(
+                api_tokens.c.id == token_id,
+                api_tokens.c.user_id == user_id,
+                api_tokens.c.is_active == True,
+            )
+            .values(is_active=False, revoked_at=datetime.utcnow())
+        )
+        await self.session.commit()
+
+        return result.rowcount > 0
+
+    async def list_api_tokens(self, user_id: UUID) -> list[APIToken]:
+        """List all API tokens for a user.
+
+        Args:
+            user_id: ID of the user
+
+        Returns:
+            List of API tokens (without the actual token values)
+        """
+        result = await self.session.execute(
+            select(api_tokens)
+            .where(api_tokens.c.user_id == user_id)
+            .order_by(api_tokens.c.created_at.desc())
+        )
+        rows = result.fetchall()
+
+        return [
+            APIToken(
+                id=row.id,
+                name=row.name,
+                token_prefix=row.token_prefix,
+                user_id=row.user_id,
+                org_id=row.org_id,
+                expires_at=row.expires_at,
+                last_used_at=row.last_used_at,
+                created_at=row.created_at,
+                is_active=row.is_active,
+            )
+            for row in rows
+        ]
+
+    async def get_api_token(self, token_id: UUID, user_id: UUID) -> Optional[APIToken]:
+        """Get a specific API token.
+
+        Args:
+            token_id: ID of the token
+            user_id: ID of the user (for authorization)
+
+        Returns:
+            APIToken if found and authorized, None otherwise
+        """
+        result = await self.session.execute(
+            select(api_tokens).where(
+                api_tokens.c.id == token_id,
+                api_tokens.c.user_id == user_id,
+            )
+        )
+        row = result.first()
+
+        if not row:
+            return None
+
+        return APIToken(
+            id=row.id,
+            name=row.name,
+            token_prefix=row.token_prefix,
+            user_id=row.user_id,
+            org_id=row.org_id,
+            expires_at=row.expires_at,
+            last_used_at=row.last_used_at,
+            created_at=row.created_at,
+            is_active=row.is_active,
+        )
+
+    async def cleanup_expired_tokens(self) -> int:
+        """Deactivate expired API tokens.
+
+        Returns:
+            Number of tokens deactivated
+        """
+        result = await self.session.execute(
+            update(api_tokens)
+            .where(
+                api_tokens.c.expires_at < datetime.utcnow(),
+                api_tokens.c.is_active == True,
+            )
+            .values(is_active=False)
+        )
+        await self.session.commit()
+        return result.rowcount

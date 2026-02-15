@@ -42,17 +42,37 @@ async def get_async_session():
         await session.commit()
 
 
+async def _verify_token_or_api_key(token: str, session: AsyncSession) -> Optional[User]:
+    """Try to verify as JWT first, then as API token.
+
+    Args:
+        token: The bearer token (could be JWT or API token)
+        session: Database session
+
+    Returns:
+        User if authentication succeeds, None otherwise
+    """
+    from domains.auth.service import AuthService, TokenService
+
+    # Check if it looks like an API token (starts with nex_)
+    if token.startswith("nex_"):
+        token_service = TokenService(session)
+        return await token_service.verify_api_token(token)
+
+    # Otherwise, try JWT verification
+    auth_service = AuthService(session)
+    return await auth_service.verify_token(token)
+
+
 async def get_current_user_optional(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
     session: AsyncSession = Depends(get_async_session)
 ) -> Optional[User]:
-    """Get current user from JWT token (optional - returns None if no token)."""
+    """Get current user from JWT token or API key (optional - returns None if no token)."""
     if not credentials:
         return None
 
-    from domains.auth.service import AuthService
-    auth_service = AuthService(session)
-    user = await auth_service.verify_token(credentials.credentials)
+    user = await _verify_token_or_api_key(credentials.credentials, session)
     return user
 
 
@@ -60,13 +80,14 @@ async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
     session: AsyncSession = Depends(get_async_session)
 ) -> User:
-    """Get current authenticated user (required - raises 401 if not authenticated)."""
+    """Get current authenticated user (required - raises 401 if not authenticated).
+
+    Supports both JWT tokens and API keys (starting with 'nex_').
+    """
     if not credentials:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    from domains.auth.service import AuthService
-    auth_service = AuthService(session)
-    user = await auth_service.verify_token(credentials.credentials)
+    user = await _verify_token_or_api_key(credentials.credentials, session)
 
     if not user:
         raise HTTPException(status_code=401, detail="Invalid or expired token")

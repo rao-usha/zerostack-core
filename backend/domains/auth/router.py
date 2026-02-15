@@ -12,7 +12,7 @@ from core.rbac import require_admin, require_role
 from core.auth_deps import get_current_user, get_current_user_optional, get_async_session
 from domains.auth.models import (
     User, UserCreate, UserLogin, Token, TokenRefreshRequest, TokenRefreshResponse,
-    Organization, OrganizationCreate, APIToken, APITokenCreate
+    Organization, OrganizationCreate, APIToken, APITokenCreate, APITokenCreatedResponse
 )
 from domains.auth.service import AuthService, OrganizationService, TokenService
 
@@ -187,46 +187,80 @@ async def get_organization(
 
 
 # ============================================================================
-# API TOKEN ENDPOINTS (Placeholder - requires api_tokens table)
+# API TOKEN ENDPOINTS
 # ============================================================================
 
-@router.post("/tokens", response_model=APIToken, status_code=201)
+@router.post("/tokens", response_model=APITokenCreatedResponse, status_code=201)
 async def create_api_token(
     token_data: APITokenCreate,
+    session: AsyncSession = Depends(get_async_session),
     current_user: User = Depends(get_current_user)
 ):
-    """Create an API token.
+    """Create an API token for programmatic access.
 
-    Note: This endpoint is not yet implemented. Requires api_tokens table.
+    Creates a new API token that can be used to authenticate API requests.
+    The full token is only shown once in the response - store it securely.
+
+    Tokens can optionally have an expiration date (expires_in_days).
+    If not specified, the token never expires but can be revoked.
     """
-    raise HTTPException(
-        status_code=501,
-        detail="API tokens not yet implemented. Use JWT authentication."
+    token_service = TokenService(session)
+    token = await token_service.create_api_token(
+        user_id=current_user.id,
+        token_data=token_data,
+        org_id=current_user.org_id
     )
+    return token
 
 
 @router.get("/tokens", response_model=List[APIToken])
-async def list_api_tokens(current_user: User = Depends(get_current_user)):
-    """List API tokens.
+async def list_api_tokens(
+    session: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
+):
+    """List all API tokens for the current user.
 
-    Note: This endpoint is not yet implemented. Requires api_tokens table.
+    Returns token metadata (name, prefix, expiration, etc.) but NOT
+    the actual token values for security reasons.
     """
-    raise HTTPException(
-        status_code=501,
-        detail="API tokens not yet implemented. Use JWT authentication."
-    )
+    token_service = TokenService(session)
+    return await token_service.list_api_tokens(current_user.id)
+
+
+@router.get("/tokens/{token_id}", response_model=APIToken)
+async def get_api_token(
+    token_id: UUID,
+    session: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user)
+):
+    """Get details of a specific API token.
+
+    Returns token metadata but NOT the actual token value.
+    """
+    token_service = TokenService(session)
+    token = await token_service.get_api_token(token_id, current_user.id)
+
+    if not token:
+        raise HTTPException(status_code=404, detail="Token not found")
+
+    return token
 
 
 @router.delete("/tokens/{token_id}", status_code=204)
 async def revoke_api_token(
     token_id: UUID,
+    session: AsyncSession = Depends(get_async_session),
     current_user: User = Depends(get_current_user)
 ):
     """Revoke an API token.
 
-    Note: This endpoint is not yet implemented. Requires api_tokens table.
+    The token will be immediately invalidated and can no longer be used
+    for authentication.
     """
-    raise HTTPException(
-        status_code=501,
-        detail="API tokens not yet implemented. Use JWT authentication."
-    )
+    token_service = TokenService(session)
+    revoked = await token_service.revoke_api_token(token_id, current_user.id)
+
+    if not revoked:
+        raise HTTPException(status_code=404, detail="Token not found")
+
+    return None
