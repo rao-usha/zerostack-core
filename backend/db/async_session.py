@@ -27,7 +27,7 @@ def _get_async_url(sync_url: str) -> str:
 
 # Create async engine
 _async_url = _get_async_url(settings.database_url)
-_async_engine = create_async_engine(_async_url, echo=settings.debug)
+_async_engine = create_async_engine(_async_url, echo=False)
 
 # Create async session maker
 async_session_maker = async_sessionmaker(

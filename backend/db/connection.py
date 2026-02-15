@@ -10,7 +10,7 @@ from typing import Generator
 from core.config import settings
 
 # Create SQLAlchemy engine
-_engine = create_engine(settings.database_url, echo=settings.debug)
+_engine = create_engine(settings.database_url, echo=False)
 
 
 def get_db_connection() -> Generator[Connection, None, None]:

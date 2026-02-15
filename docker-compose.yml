@@ -96,7 +96,7 @@ services:
       - DEBUG=true
       - DATABASE_URL=postgresql+psycopg://nex:nex@db:5432/nex
       - SECRET_KEY=dev-secret-key
-      - LOG_LEVEL=DEBUG
+      - LOG_LEVEL=WARNING
       - CORS_ORIGINS=http://localhost:3000,http://localhost:5173,http://localhost:80
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       # Data Explorer databases
@@ -148,7 +148,7 @@ services:
       - ./backend:/app
       - ./backend/data_storage:/app/data_storage
       - ${USERPROFILE}/.ssh:/root/.ssh:ro  # Mount SSH keys for RunPod pod access (Windows)
-    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload --log-level warning
     restart: unless-stopped
     networks:
       - nex-network

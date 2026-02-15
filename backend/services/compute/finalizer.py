@@ -100,7 +100,8 @@ class RunFinalizer:
             result = await session.execute(stmt)
             runs = result.fetchall()
             
-            logger.debug(f"Checking {len(runs)} active runs")
+            if runs:
+                logger.debug(f"Checking {len(runs)} active runs")
             
             for run in runs:
                 try:
